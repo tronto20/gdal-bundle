@@ -11,8 +11,20 @@ import org.gdal.gdal.Dataset as NativeDataset
 import org.gdal.gdal.InfoOptions
 import org.gdal.gdal.gdal
 import org.gdal.gdalconst.gdalconstConstants
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import java.io.BufferedInputStream
+import java.io.EOFException
 import java.io.File
+import java.io.FileInputStream
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
 import java.util.Vector
+import java.security.MessageDigest
 
 actual object Gdal4kBinary {
     @Volatile
@@ -143,7 +155,7 @@ private class JvmGdalRuntime private constructor() : GdalRuntime {
             }
 
             for (candidate in candidates) {
-                normalizeBundleDir(candidate, platform)?.let { return it }
+                resolveBundleCandidate(candidate, platform)?.let { return it }
             }
 
             val checked = candidates.joinToString("\n") { "- ${it.absolutePath}" }
@@ -158,6 +170,158 @@ private class JvmGdalRuntime private constructor() : GdalRuntime {
                     }
                 },
             )
+        }
+
+        private fun resolveBundleCandidate(candidate: File, platform: String): File? {
+            if (!candidate.exists()) {
+                return null
+            }
+
+            if (candidate.isFile) {
+                if (isTxzArchive(candidate)) {
+                    return extractTxzArchive(candidate, platform)
+                }
+                return null
+            }
+
+            findArchiveCandidate(candidate, platform)?.let { archive ->
+                return extractTxzArchive(archive, platform)
+            }
+
+            return normalizeBundleDir(candidate, platform)
+        }
+
+        private fun findArchiveCandidate(directory: File, platform: String): File? {
+            val candidates = listOf(
+                File(directory, "gdal.txz"),
+                File(directory, "$platform.txz"),
+                File(File(directory, platform), "gdal.txz"),
+                File(File(directory, "gdal"), "$platform.txz"),
+            )
+
+            return candidates.firstOrNull { it.isFile && isTxzArchive(it) }
+        }
+
+        private fun isTxzArchive(file: File): Boolean {
+            val name = file.name.lowercase()
+            return name.endsWith(".txz") || name.endsWith(".tar.xz")
+        }
+
+        private fun extractTxzArchive(archive: File, platform: String): File {
+            val cacheRoot = File(File(System.getProperty("java.io.tmpdir"), "gdal4k-cache"), platform)
+            val cacheKey = sha256(archive)
+            val extractRoot = File(cacheRoot, cacheKey)
+            val marker = File(extractRoot, ".complete")
+
+            if (marker.isFile) {
+                return requireNotNull(normalizeBundleDir(extractRoot, platform)) {
+                    "Cached GDAL bundle extraction is incomplete: ${extractRoot.absolutePath}"
+                }
+            }
+
+            extractRoot.deleteRecursively()
+            extractRoot.mkdirs()
+            unpackTxz(archive, extractRoot.toPath())
+            marker.writeText("${archive.absolutePath}\n${archive.length()}\n${archive.lastModified()}")
+
+            return requireNotNull(normalizeBundleDir(extractRoot, platform)) {
+                "Extracted GDAL bundle is missing expected files: ${extractRoot.absolutePath}"
+            }
+        }
+
+        private fun unpackTxz(archive: File, destination: Path) {
+            val destinationRoot = destination.toAbsolutePath().normalize()
+            FileInputStream(archive).use { fileInput ->
+                BufferedInputStream(fileInput).use { buffered ->
+                    XZCompressorInputStream(buffered).use { xzInput ->
+                        TarArchiveInputStream(xzInput).use { tarInput ->
+                            while (true) {
+                                val entry = tarInput.nextTarEntry ?: break
+                                val outputPath = destinationRoot.resolve(entry.name).normalize()
+                                require(outputPath.startsWith(destinationRoot)) {
+                                    "Blocked suspicious archive entry: ${entry.name}"
+                                }
+                                extractTarEntry(tarInput, entry, outputPath)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private fun extractTarEntry(tarInput: TarArchiveInputStream, entry: TarArchiveEntry, outputPath: Path) {
+            when {
+                entry.isDirectory -> {
+                    Files.createDirectories(outputPath)
+                    applyPermissions(outputPath, entry.mode)
+                }
+
+                entry.isSymbolicLink -> {
+                    Files.createDirectories(outputPath.parent)
+                    Files.deleteIfExists(outputPath)
+                    Files.createSymbolicLink(outputPath, Paths.get(entry.linkName))
+                }
+
+                else -> {
+                    Files.createDirectories(outputPath.parent)
+                    Files.newOutputStream(outputPath).use { output ->
+                        copyLimited(tarInput, output, entry.size)
+                    }
+                    applyPermissions(outputPath, entry.mode)
+                }
+            }
+        }
+
+        private fun copyLimited(input: TarArchiveInputStream, output: java.io.OutputStream, size: Long) {
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            var remaining = size
+            while (remaining > 0) {
+                val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                val read = input.read(buffer, 0, toRead)
+                if (read < 0) {
+                    throw EOFException("Unexpected end of archive while extracting GDAL bundle.")
+                }
+                output.write(buffer, 0, read)
+                remaining -= read.toLong()
+            }
+        }
+
+        private fun applyPermissions(path: Path, mode: Int) {
+            if (Files.getFileAttributeView(path, PosixFileAttributeView::class.java) == null) {
+                return
+            }
+            val permissions = mutableSetOf<PosixFilePermission>()
+
+            if (mode and 0b100_000_000 != 0) permissions += PosixFilePermission.OWNER_READ
+            if (mode and 0b010_000_000 != 0) permissions += PosixFilePermission.OWNER_WRITE
+            if (mode and 0b001_000_000 != 0) permissions += PosixFilePermission.OWNER_EXECUTE
+            if (mode and 0b000_100_000 != 0) permissions += PosixFilePermission.GROUP_READ
+            if (mode and 0b000_010_000 != 0) permissions += PosixFilePermission.GROUP_WRITE
+            if (mode and 0b000_001_000 != 0) permissions += PosixFilePermission.GROUP_EXECUTE
+            if (mode and 0b000_000_100 != 0) permissions += PosixFilePermission.OTHERS_READ
+            if (mode and 0b000_000_010 != 0) permissions += PosixFilePermission.OTHERS_WRITE
+            if (mode and 0b000_000_001 != 0) permissions += PosixFilePermission.OTHERS_EXECUTE
+
+            try {
+                Files.setPosixFilePermissions(path, permissions)
+            } catch (_: UnsupportedOperationException) {
+                // Windows and some non-POSIX filesystems do not support permission attributes.
+            }
+        }
+
+        private fun sha256(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) {
+                        break
+                    }
+                    digest.update(buffer, 0, read)
+                }
+            }
+            return digest.digest().joinToString(separator = "") { byte -> "%02x".format(byte) }
         }
 
         private fun normalizeBundleDir(directory: File, platform: String): File? {

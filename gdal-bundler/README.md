@@ -3,7 +3,8 @@
 GDAL JNI 동적 라이브러리와 의존 라이브러리, 드라이버 플러그인, 데이터(`share/gdal`, `share/proj`)를
 Conda 환경에서 추출해 앱 번들에 넣기 위한 모듈입니다. macOS에서는 `install_name_tool`로
 의존 경로를 `@loader_path` 기반으로 패치하고, Linux에서는 동일한 소스 빌드 결과를 그대로
-수집합니다.
+수집합니다. 최종 배포 산출물은 `txz` 아카이브이며, JVM 런타임은 이를 로컬 캐시에
+압축 해제한 뒤 사용합니다.
 
 ## 요구 사항
 - macOS (Apple Silicon) 또는 Linux (amd64/arm64)
@@ -82,7 +83,8 @@ Conda 환경이 활성화되지 않았다면 prefix를 지정하세요.
   --output-dir=/path/to/output
 ```
 
-기본 출력은 `gdal-bundler/build/gdal-bundle/<classifier>/gdal` 입니다.
+기본 출력은 `gdal-bundler/build/gdal-bundle/<classifier>/gdal` 이고,
+배포용 압축 파일은 `gdal-bundler/build/published-bundles/gdal4k-binary-<classifier>.txz` 입니다.
 
 ## Compose Desktop DMG에 포함하기 (예시)
 Compose Desktop(1.9.x 기준)는 `appResourcesRootDir` 아래의
@@ -133,3 +135,6 @@ gdal.AllRegister()
 ```
 
 필요 시 `org.gdal:gdal` 의존성(버전은 기존 카탈로그)에 추가하세요.
+
+`Gdal4kBinary.runtime()`에는 압축 해제된 디렉터리뿐 아니라 `.txz` 파일 경로도 넘길 수 있습니다.
+아카이브를 넘기면 첫 사용 시 임시 캐시에 압축을 푼 뒤 그 디렉터리를 사용합니다.

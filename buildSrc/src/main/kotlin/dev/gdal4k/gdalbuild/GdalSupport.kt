@@ -21,8 +21,6 @@ fun defaultCondaInstallerUrl(): String {
             "${baseUrl}Miniforge3-Linux-aarch64.sh"
         os.contains("linux") && (arch == "x86_64" || arch == "amd64") ->
             "${baseUrl}Miniforge3-Linux-x86_64.sh"
-        os.contains("win") && (arch == "arm64" || arch == "aarch64") ->
-            "${baseUrl}Miniforge3-Windows-arm64.exe"
         os.contains("win") && (arch == "x86_64" || arch == "amd64") ->
             "${baseUrl}Miniforge3-Windows-x86_64.exe"
         else ->

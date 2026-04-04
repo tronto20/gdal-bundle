@@ -7,9 +7,11 @@ import org.gradle.api.file.ProjectLayout
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
@@ -266,6 +268,44 @@ abstract class GdalBundleTask @Inject constructor(
         execOps.exec {
             executable = pythonExe
             args(args)
+            workingDir = layout.projectDirectory.asFile
+        }
+    }
+}
+
+abstract class GdalTxzPackageTask @Inject constructor(
+    private val execOps: ExecOperations,
+    @get:Internal
+    protected val layout: ProjectLayout,
+) : DefaultTask() {
+    @get:InputFile
+    abstract val scriptFile: RegularFileProperty
+
+    @get:InputDirectory
+    abstract val sourceDir: DirectoryProperty
+
+    @get:OutputFile
+    abstract val outputFile: RegularFileProperty
+
+    @get:Input
+    abstract val arcname: Property<String>
+
+    @get:Input
+    abstract val pythonExecutable: Property<String>
+
+    @TaskAction
+    fun packageArchive() {
+        execOps.exec {
+            executable = pythonExecutable.get()
+            args(
+                scriptFile.get().asFile.absolutePath,
+                "--source-dir",
+                sourceDir.get().asFile.absolutePath,
+                "--output-file",
+                outputFile.get().asFile.absolutePath,
+                "--arcname",
+                arcname.get(),
+            )
             workingDir = layout.projectDirectory.asFile
         }
     }

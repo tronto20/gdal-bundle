@@ -75,12 +75,6 @@ jobs:
             runner: windows-latest
             python-version: '3.12'
             allow-failure: false
-          # Miniforge currently does not publish a Windows arm64 installer.
-          # Keep the row visible for future support, but do not block the rest of CI.
-          - classifier: windows-arm64
-            runner: windows-11-arm
-            python-version: '3.12'
-            allow-failure: true
     continue-on-error: ${{ matrix.allow-failure }}
     steps:
       - name: Checkout
@@ -159,12 +153,6 @@ jobs:
         with:
           name: gdal-bundle-windows-amd64
           path: gdal-bundler/build/gdal-bundle/windows-amd64
-
-      - name: Download Windows arm64 bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gdal-bundle-windows-arm64
-          path: gdal-bundler/build/gdal-bundle/windows-arm64
 
       - name: Publish runtime and binary packages
         run: >

@@ -20,12 +20,9 @@ actual object GdalPlatform {
             os.contains("win") && arch == "amd64" ->
                 GdalPlatformInfo("windows-amd64", "windows", "amd64")
 
-            os.contains("win") && arch == "arm64" ->
-                GdalPlatformInfo("windows-arm64", "windows", "arm64")
-
             else -> error(
                 "Unsupported OS/arch: ${System.getProperty("os.name")} / ${System.getProperty("os.arch")}. " +
-                    "Supported classifiers are macos-arm64, linux-amd64, linux-arm64, windows-amd64, windows-arm64.",
+                    "Supported classifiers are macos-arm64, linux-amd64, linux-arm64, windows-amd64.",
             )
         }
     }

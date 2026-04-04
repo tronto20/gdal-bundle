@@ -44,6 +44,8 @@ spatialk = "0.6.1"
 # JVM
 argon2-jvm = "2.12"
 jib = "3.5.2"
+commons-compress = "1.28.0"
+xz = "1.11"
 
 # logging
 kotlin-logging = "7.0.13"
@@ -157,6 +159,7 @@ compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", ver
 kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "kotlin-logging" }
 gdal = { module = "org.gdal:gdal", version.ref = "gdal" }
 gdal-gdal = { module = "org.gdal:gdal", version.ref = "gdal" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 locationtech-proj4j = { module = "org.locationtech.proj4j:proj4j", version.ref = "locationtech-proj4j" }
 locationtech-jts-core = { module = "org.locationtech.jts:jts-core", version.ref = "locationtech-jts" }
 locationtech-jts-io-common = { module = "org.locationtech.jts.io:jts-io-common", version.ref = "locationtech-jts" }
@@ -189,6 +192,7 @@ kourier-client-opentelemetry = { module = "dev.kourier:amqp-client-opentelemetry
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-io-bytestring = { module = "org.jetbrains.kotlinx:kotlinx-io-bytestring", version.ref = "kotlinx-io" }
 kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.ref = "kotlinx-io" }
+xz = { module = "org.tukaani:xz", version.ref = "xz" }
 rabbitmq-client-amqp = { module = "com.rabbitmq:amqp-client", version.ref = "rabbitmq-client" }
 konform = { module = "io.konform:konform", version.ref = "konform" }
 spatialk = { module = "org.maplibre.spatialk:geojson", version.ref = "spatialk" }

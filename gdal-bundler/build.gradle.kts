@@ -1,6 +1,7 @@
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.tasks.bundling.Zip
+import org.gradle.api.file.Directory
+import org.gradle.api.provider.Provider
 import dev.gdal4k.gdalbuild.*
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -20,8 +21,7 @@ kotlin {
     jvm()
 
     sourceSets {
-        val gdalPlatform = currentGdalPlatform()
-        val gdalBundleRoot = layout.buildDirectory.dir("gdal-bundle/${gdalPlatform.classifier}/gdal")
+        val gdalBundleRoot = layout.buildDirectory.dir("gdal-bundle/${currentGdalPlatform().classifier}/gdal")
         val gdalJarDir = gdalBundleRoot.map { it.dir("share/java") }
         val gdalJarFiles = fileTree(gdalJarDir.get()) {
             include("gdal*.jar")
@@ -34,15 +34,21 @@ kotlin {
 
         jvmMain.dependencies {
             api(gdalJarFiles)
+            implementation(libs.commons.compress)
+            implementation(libs.xz)
         }
     }
 }
 
+private val currentPlatform = currentGdalPlatform()
 val skipNativeBundleBuild = providers.gradleProperty("skipNativeBundleBuild")
     .map { it.equals("true", ignoreCase = true) }
     .orElse(false)
 val defaultWorkDir = layout.buildDirectory.dir("gdal-work").map { it.asFile.absolutePath }
-val defaultOutputDir = layout.buildDirectory.dir("gdal-bundle/${currentGdalPlatform().classifier}")
+val defaultOutputDir = layout.buildDirectory.dir("gdal-bundle/${currentPlatform.classifier}")
+val defaultPythonExecutable = providers.provider {
+    findPythonInPath() ?: if (isWindows()) "python" else "python3"
+}
 val defaultCondaInstallDir = layout.buildDirectory.dir("conda")
 val defaultCondaInstallDirProvider = providers.environmentVariable("GDAL4K_CONDA_INSTALL_DIR")
     .map { layout.projectDirectory.dir(it) }
@@ -75,54 +81,59 @@ tasks.withType<GdalBundleTask>().configureEach {
     codesignIdentity.convention(providers.environmentVariable("CODESIGN_IDENTITY"))
 }
 
-val linuxAmd64BundleZip by tasks.registering(Zip::class) {
-    group = "publishing"
-    description = "Package the Linux amd64 GDAL bundle as a ZIP archive."
-    from(layout.buildDirectory.dir("gdal-bundle/linux-amd64"))
-    archiveBaseName.set("gdal4k-binary")
-    archiveClassifier.set("linux-amd64")
-    archiveExtension.set("zip")
-    destinationDirectory.set(layout.buildDirectory.dir("published-bundles"))
+tasks.withType<GdalTxzPackageTask>().configureEach {
+    mustRunAfter(bundleGdal)
 }
 
-val linuxArm64BundleZip by tasks.registering(Zip::class) {
+fun registerBundleArchive(
+    taskName: String,
+    classifier: String,
+    sourceDir: Provider<Directory>,
+    descriptionText: String,
+) = tasks.register(taskName, GdalTxzPackageTask::class) {
     group = "publishing"
-    description = "Package the Linux arm64 GDAL bundle as a ZIP archive."
-    from(layout.buildDirectory.dir("gdal-bundle/linux-arm64"))
-    archiveBaseName.set("gdal4k-binary")
-    archiveClassifier.set("linux-arm64")
-    archiveExtension.set("zip")
-    destinationDirectory.set(layout.buildDirectory.dir("published-bundles"))
+    description = descriptionText
+    scriptFile.set(layout.projectDirectory.file("scripts/package_gdal_txz.py"))
+    this.sourceDir.set(sourceDir)
+    outputFile.set(layout.buildDirectory.file("published-bundles/gdal4k-binary-$classifier.txz"))
+    arcname.set("")
+    pythonExecutable.convention(defaultPythonExecutable)
 }
 
-val macosArm64BundleZip by tasks.registering(Zip::class) {
-    group = "publishing"
-    description = "Package the macOS arm64 GDAL bundle as a ZIP archive."
-    from(layout.buildDirectory.dir("gdal-bundle/macos-arm64"))
-    archiveBaseName.set("gdal4k-binary")
-    archiveClassifier.set("macos-arm64")
-    archiveExtension.set("zip")
-    destinationDirectory.set(layout.buildDirectory.dir("published-bundles"))
-}
+val linuxAmd64BundleTxz = registerBundleArchive(
+    taskName = "linuxAmd64BundleTxz",
+    classifier = "linux-amd64",
+    sourceDir = layout.buildDirectory.dir("gdal-bundle/linux-amd64/gdal"),
+    descriptionText = "Package the Linux amd64 GDAL bundle as a compressed TXZ archive.",
+)
 
-val windowsAmd64BundleZip by tasks.registering(Zip::class) {
-    group = "publishing"
-    description = "Package the Windows amd64 GDAL bundle as a ZIP archive."
-    from(layout.buildDirectory.dir("gdal-bundle/windows-amd64"))
-    archiveBaseName.set("gdal4k-binary")
-    archiveClassifier.set("windows-amd64")
-    archiveExtension.set("zip")
-    destinationDirectory.set(layout.buildDirectory.dir("published-bundles"))
-}
+val linuxArm64BundleTxz = registerBundleArchive(
+    taskName = "linuxArm64BundleTxz",
+    classifier = "linux-arm64",
+    sourceDir = layout.buildDirectory.dir("gdal-bundle/linux-arm64/gdal"),
+    descriptionText = "Package the Linux arm64 GDAL bundle as a compressed TXZ archive.",
+)
 
-val windowsArm64BundleZip by tasks.registering(Zip::class) {
-    group = "publishing"
-    description = "Package the Windows arm64 GDAL bundle as a ZIP archive."
-    from(layout.buildDirectory.dir("gdal-bundle/windows-arm64"))
-    archiveBaseName.set("gdal4k-binary")
-    archiveClassifier.set("windows-arm64")
-    archiveExtension.set("zip")
-    destinationDirectory.set(layout.buildDirectory.dir("published-bundles"))
+val macosArm64BundleTxz = registerBundleArchive(
+    taskName = "macosArm64BundleTxz",
+    classifier = "macos-arm64",
+    sourceDir = layout.buildDirectory.dir("gdal-bundle/macos-arm64/gdal"),
+    descriptionText = "Package the macOS arm64 GDAL bundle as a compressed TXZ archive.",
+)
+
+val windowsAmd64BundleTxz = registerBundleArchive(
+    taskName = "windowsAmd64BundleTxz",
+    classifier = "windows-amd64",
+    sourceDir = layout.buildDirectory.dir("gdal-bundle/windows-amd64/gdal"),
+    descriptionText = "Package the Windows amd64 GDAL bundle as a compressed TXZ archive.",
+)
+
+val currentBundleArchive = when (currentPlatform.classifier) {
+    "linux-amd64" -> linuxAmd64BundleTxz
+    "linux-arm64" -> linuxArm64BundleTxz
+    "macos-arm64" -> macosArm64BundleTxz
+    "windows-amd64" -> windowsAmd64BundleTxz
+    else -> error("Unsupported current platform classifier: ${currentPlatform.classifier}")
 }
 
 val cleanGdalWorkDir by tasks.registering(GdalCleanTask::class) {
@@ -166,8 +177,8 @@ val bundleGdal by tasks.registering(GdalBundleTask::class) {
 
 val buildAndBundleGdal by tasks.registering {
     group = "gdal"
-    description = "Build GDAL from source and bundle the current platform artifacts."
-    dependsOn(buildGdal, bundleGdal)
+    description = "Build GDAL from source, bundle the current platform artifacts, and package a TXZ archive."
+    dependsOn(buildGdal, bundleGdal, currentBundleArchive)
 }
 
 val buildLibkmlMacos by tasks.registering {
@@ -212,14 +223,21 @@ tasks.withType<KotlinCompile>().configureEach {
 
 extensions.configure<PublishingExtension> {
     publications.withType<MavenPublication>().matching { it.name == "jvm" }.configureEach {
-        artifact(linuxAmd64BundleZip)
-        artifact(linuxArm64BundleZip)
-        artifact(macosArm64BundleZip)
-        artifact(windowsAmd64BundleZip)
-        artifact(windowsArm64BundleZip)
+        artifact(linuxAmd64BundleTxz.flatMap { it.outputFile }) {
+            builtBy(linuxAmd64BundleTxz)
+        }
+        artifact(linuxArm64BundleTxz.flatMap { it.outputFile }) {
+            builtBy(linuxArm64BundleTxz)
+        }
+        artifact(macosArm64BundleTxz.flatMap { it.outputFile }) {
+            builtBy(macosArm64BundleTxz)
+        }
+        artifact(windowsAmd64BundleTxz.flatMap { it.outputFile }) {
+            builtBy(windowsAmd64BundleTxz)
+        }
         pom {
             name.set("gdal4k-binary")
-            description.set("GDAL JVM runtime bridge and published native bundle archives")
+            description.set("GDAL JVM runtime bridge and published native TXZ bundle archives")
         }
     }
 }
