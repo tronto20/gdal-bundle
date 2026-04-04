@@ -333,13 +333,26 @@ PY
 }
 
 install_conda_deps() {
-  retry 3 env CONDA_NO_PLUGINS=true "$conda_exe_path" install -y -p "$conda_prefix" -c conda-forge --solver=classic \
-    cmake ninja pkg-config swig ant openjdk \
-    geos proj sqlite libxml2 xerces-c curl openssl \
-    libtiff libjpeg-turbo libpng giflib zlib zstd lz4-c snappy bzip2 xz libdeflate \
-    expat json-c muparser libspatialite freexl pcre2 libiconv \
-    hdf5 libnetcdf cfitsio openjpeg openexr imath libheif libaec geotiff \
-    qhull libarchive libwebp libjxl unixodbc aws-sdk-cpp minizip uriparser boost-cpp
+  local packages=(
+    cmake ninja pkg-config swig ant openjdk
+    geos proj sqlite libxml2 xerces-c curl openssl
+    libtiff libjpeg-turbo libpng giflib zlib zstd lz4-c snappy bzip2 xz libdeflate
+    expat json-c muparser libspatialite freexl pcre2 libiconv
+    hdf5 libnetcdf cfitsio openjpeg openexr imath libheif libaec geotiff
+    qhull libarchive libwebp libjxl aws-sdk-cpp minizip uriparser boost-cpp
+  )
+  if [[ "$is_windows_shell" != "1" ]]; then
+    packages+=(unixodbc)
+  fi
+  retry 3 env CONDA_NO_PLUGINS=true "$conda_exe_path" install -y -p "$conda_prefix" -c conda-forge --solver=classic "${packages[@]}"
+}
+
+cmake_prefix_path() {
+  if [[ "$is_windows_shell" == "1" ]]; then
+    printf '%s;%s' "$conda_prefix/Library" "$conda_prefix"
+  else
+    printf '%s' "$conda_prefix"
+  fi
 }
 
 build_libkml() {
@@ -354,7 +367,7 @@ build_libkml() {
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$conda_prefix" \
-    -DCMAKE_PREFIX_PATH="$conda_prefix" \
+    -DCMAKE_PREFIX_PATH="$(cmake_prefix_path)" \
     -DCMAKE_IGNORE_PATH="/opt/homebrew;/usr/local;/opt/local" \
     -DCMAKE_IGNORE_PREFIX_PATH="/opt/homebrew;/usr/local;/opt/local" \
     -DCMAKE_FIND_FRAMEWORK=LAST \
@@ -382,7 +395,7 @@ build_gdal() {
   "$cmake_bin" -S "$gdal_src" -B "$gdal_build" -GNinja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$conda_prefix" \
-    -DCMAKE_PREFIX_PATH="$conda_prefix" \
+    -DCMAKE_PREFIX_PATH="$(cmake_prefix_path)" \
     -DCMAKE_IGNORE_PATH="/opt/homebrew;/usr/local;/opt/local" \
     -DCMAKE_IGNORE_PREFIX_PATH="/opt/homebrew;/usr/local;/opt/local" \
     -DCMAKE_FIND_FRAMEWORK=LAST \
