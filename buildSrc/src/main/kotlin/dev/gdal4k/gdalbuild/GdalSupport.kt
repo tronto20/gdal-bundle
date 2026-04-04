@@ -68,6 +68,14 @@ fun findBashInPath(): String? {
         ?.absolutePath
 }
 
+fun resolveBashExecutable(): String {
+    if (!isWindows()) {
+        return "bash"
+    }
+    return findBashInPath()
+        ?: throw IllegalStateException("Git Bash not found on PATH. Install Git for Windows or adjust PATH.")
+}
+
 fun gitForWindowsBinDirs(): List<String> {
     if (!isWindows()) return emptyList()
     val programFilesCandidates = listOfNotNull(

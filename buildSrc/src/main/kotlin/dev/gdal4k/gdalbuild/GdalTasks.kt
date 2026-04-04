@@ -252,7 +252,7 @@ abstract class GdalBuildTask @Inject constructor(
         }
         execOps.exec {
             configureWindowsShellEnvironment()
-            executable = "bash"
+            executable = resolveBashExecutable()
             args(args)
             workingDir = layout.projectDirectory.asFile
         }
