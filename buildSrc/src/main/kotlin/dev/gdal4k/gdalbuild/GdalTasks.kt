@@ -204,6 +204,9 @@ abstract class GdalBuildTask @Inject constructor(
     @get:Input
     abstract val workDir: Property<String>
 
+    @get:Input
+    abstract val skipCondaDepsInstall: Property<Boolean>
+
     @Option(option = "gdal-version", description = "GDAL version to build")
     fun setGdalVersionOption(value: String) {
         gdalVersion.set(value)
@@ -219,9 +222,18 @@ abstract class GdalBuildTask @Inject constructor(
         workDir.set(resolvePath(value).absolutePath)
     }
 
+    @Option(option = "skip-conda-deps-install", description = "Skip the conda dependency installation step")
+    fun setSkipCondaDepsInstallOption(value: Boolean) {
+        skipCondaDepsInstall.set(value)
+    }
+
     @TaskAction
     fun runBuild() {
         val prefix = requireCondaPrefix()
+        if (step.get() == "deps" && skipCondaDepsInstall.get()) {
+            logger.lifecycle("Skipping conda dependency installation because it was handled externally.")
+            return
+        }
         val args = mutableListOf(
             scriptFile.get().asFile.absolutePath,
             "--conda-prefix",

@@ -73,6 +73,7 @@ tasks.withType<GdalBuildTask>().configureEach {
     )
     gdalVersion.convention("3.12.2")
     libkmlVersion.convention("1.3.0")
+    skipCondaDepsInstall.convention(false)
 }
 
 tasks.withType<GdalBundleTask>().configureEach {
