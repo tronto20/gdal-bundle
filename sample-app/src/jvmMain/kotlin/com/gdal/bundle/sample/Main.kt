@@ -43,12 +43,13 @@ import org.cef.CefApp
 import org.cef.CefClient
 import org.cef.CefSettings
 import org.cef.browser.CefBrowser
-import org.gdal.gdal.InfoOptions
+import dev.gdal4k.binary.Gdal4kBinary
 import org.gdal.gdal.ProgressCallback
 import org.gdal.gdal.TranslateOptions
 import org.gdal.gdal.VectorTranslateOptions
 import org.gdal.gdal.gdal
 import org.gdal.gdalconst.gdalconstConstants
+import dev.gdal4k.runtime.use
 import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 
@@ -58,6 +59,8 @@ private data class GdalEnvironment(
     val projDir: File,
     val pluginsDir: File?,
 )
+
+private lateinit var gdalRuntime: dev.gdal4k.runtime.GdalRuntime
 
 private object GdalRuntime {
     @Volatile
@@ -79,25 +82,12 @@ private object GdalRuntime {
 
     private fun initialize(): GdalEnvironment {
         val gdalDir = locateGdalDir()
-        val jniLibrary = File(gdalDir, "lib/libgdalalljni.dylib")
-        require(jniLibrary.exists()) {
-            "JNI library not found: ${jniLibrary.absolutePath}"
-        }
-
-        System.load(jniLibrary.absolutePath)
+        gdalRuntime = Gdal4kBinary.runtime(gdalDir.absolutePath)
 
         val dataDir = File(gdalDir, "share/gdal")
         val projDir = File(gdalDir, "share/proj")
-        gdal.SetConfigOption("GDAL_DATA", dataDir.absolutePath)
-        gdal.SetConfigOption("PROJ_DATA", projDir.absolutePath)
-
-        val pluginsDir = File(gdalDir, "gdalplugins")
-        if (pluginsDir.exists()) {
-            gdal.SetConfigOption("GDAL_DRIVER_PATH", pluginsDir.absolutePath)
-        }
-
-        gdal.AllRegister()
-        return GdalEnvironment(gdalDir, dataDir, projDir, pluginsDir.takeIf { it.exists() })
+        val pluginsDir = File(gdalDir, "gdalplugins").takeIf { it.exists() }
+        return GdalEnvironment(gdalDir, dataDir, projDir, pluginsDir)
     }
 
     private fun locateGdalDir(): File {
@@ -258,21 +248,10 @@ private fun parseCreationOptions(rawOptions: String): List<String> {
 }
 
 private fun loadGdalInfo(file: File): String {
-    gdal.ErrorReset()
+    GdalRuntime.ensureInitialized()
 
-    val dataset = gdal.Open(file.absolutePath)
-        ?: throw IllegalStateException(
-            "Unable to open file: ${file.absolutePath}\n${gdal.GetLastErrorMsg()}",
-        )
-
-    val options = InfoOptions(Vector<String>())
-    return try {
-        val info = gdal.GDALInfo(dataset, options)
-        info?.trimEnd()?.ifBlank { "gdalinfo returned empty output." }
-            ?: "gdalinfo returned empty output."
-    } finally {
-        options.delete()
-        dataset.delete()
+    return gdalRuntime.openDataset(file.absolutePath).use { dataset ->
+        gdalRuntime.datasetInfo(dataset).trimEnd().ifBlank { "gdalinfo returned empty output." }
     }
 }
 

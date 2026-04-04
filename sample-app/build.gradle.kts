@@ -15,6 +15,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.zip.ZipFile
+import dev.gdal4k.gdalbuild.currentGdalPlatform
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -30,7 +31,9 @@ repositories {
 }
 
 
-val gdalBundleRoot = project(":gdal-bundler").layout.buildDirectory.dir("gdal-bundle/gdal")
+val gdalBundleRoot = project(":gdal4k-binary").layout.buildDirectory.dir(
+    "gdal-bundle/${currentGdalPlatform().classifier}/gdal",
+)
 val appResourceRoot = layout.buildDirectory.dir("app-resources")
 val gdalResourcesDir = appResourceRoot.map { it.dir("macos/gdal") }
 val jcefVersion = providers.gradleProperty("jcefVersion")
@@ -48,11 +51,6 @@ val jcefArch = providers.gradleProperty("jcefArch")
 val jcefNativeArchive = jcefArch.map { "native_osx_${it}.tar.gz" }
 val jcefBundleRoot = layout.buildDirectory.dir("jcef-bundle/jcef")
 val jcefResourcesDir = appResourceRoot.map { it.dir("macos/jcef") }
-val gdalJarDir = gdalBundleRoot.map { it.dir("share/java") }
-val gdalJarFiles = fileTree(gdalJarDir.get()) {
-    include("gdal*.jar")
-    exclude("*-sources.jar", "*-javadoc.jar")
-}
 val jcefBundler by configurations.creating {
     isCanBeConsumed = false
     isCanBeResolved = true
@@ -121,12 +119,12 @@ abstract class JcefBundleTask : DefaultTask() {
 }
 
 val makeGdalResourcesWritable by tasks.registering(EnsureWritableTask::class) {
-    dependsOn(":gdal-bundler:bundleGdalMacos")
+    dependsOn(":gdal4k-binary:buildAndBundleGdal")
     directory.set(gdalBundleRoot)
 }
 
 val syncGdalResources by tasks.registering(Sync::class) {
-    dependsOn(":gdal-bundler:bundleGdalMacos", makeGdalResourcesWritable)
+    dependsOn(":gdal4k-binary:buildAndBundleGdal", makeGdalResourcesWritable)
     from(gdalBundleRoot)
     into(gdalResourcesDir)
     exclude("*.jar")
@@ -156,7 +154,7 @@ kotlin {
         }
 
         jvmMain.dependencies {
-            implementation(gdalJarFiles)
+            implementation(project(":gdal4k-binary"))
             implementation("org.jetbrains.intellij.deps.jcef:jcef:${jcefVersion.get()}")
 
         }
@@ -172,29 +170,6 @@ tasks.withType<KotlinCompile>().configureEach {
 
 tasks.withType<JavaCompile>().configureEach {
     options.release.set(libs.versions.jvm.compatibility.get().toInt())
-}
-
-val verifyGdalJar by tasks.registering {
-    doLast {
-        val jarDir = gdalJarDir.get().asFile
-        val jars = jarDir.listFiles { file ->
-            file.isFile &&
-                file.name.startsWith("gdal") &&
-                file.name.endsWith(".jar") &&
-                !file.name.endsWith("-sources.jar") &&
-                !file.name.endsWith("-javadoc.jar")
-        } ?: emptyArray()
-        if (!jarDir.exists() || jars.isEmpty()) {
-            throw GradleException(
-                "GDAL Java jar not found in ${jarDir.absolutePath}. " +
-                    "Run :gdal-bundler:bundleGdalMacos to build the 3.12.2 bundle first.",
-            )
-        }
-    }
-}
-
-tasks.withType<KotlinCompile>().configureEach {
-    dependsOn(verifyGdalJar)
 }
 
 compose.desktop {
@@ -229,7 +204,7 @@ compose.desktop {
 //)
 //
 //tasks.matching { it.name in gdalBundleTasks }.configureEach {
-//    dependsOn(":gdal-bundler:bundleGdalMacos")
+//    dependsOn(":gdal4k-binary:bundleGdal")
 //}
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
