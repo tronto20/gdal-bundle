@@ -44,6 +44,9 @@ private val currentPlatform = currentGdalPlatform()
 val skipNativeBundleBuild = providers.gradleProperty("skipNativeBundleBuild")
     .map { it.equals("true", ignoreCase = true) }
     .orElse(false)
+val skipCondaDepsInstallFlag = providers.gradleProperty("skipCondaDepsInstall")
+    .map { it.equals("true", ignoreCase = true) }
+    .orElse(false)
 val defaultWorkDir = layout.buildDirectory.dir("gdal-work").map { it.asFile.absolutePath }
 val defaultOutputDir = layout.buildDirectory.dir("gdal-bundle/${currentPlatform.classifier}")
 val defaultPythonExecutable = providers.provider {
@@ -73,7 +76,7 @@ tasks.withType<GdalBuildTask>().configureEach {
     )
     gdalVersion.convention("3.12.2")
     libkmlVersion.convention("1.3.0")
-    skipCondaDepsInstall.convention(false)
+    skipCondaDepsInstall.convention(skipCondaDepsInstallFlag)
 }
 
 tasks.withType<GdalBundleTask>().configureEach {
