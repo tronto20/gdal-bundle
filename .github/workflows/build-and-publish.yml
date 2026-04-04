@@ -100,7 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gdal-bundle-${{ matrix.classifier }}
-          path: gdal-bundler/build/gdal-bundle/${{ matrix.classifier }}/gdal
+          path: gdal-bundler/build/gdal-bundle/${{ matrix.classifier }}/gdal/**
           if-no-files-found: error
           retention-days: 7
 
