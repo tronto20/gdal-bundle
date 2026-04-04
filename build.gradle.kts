@@ -1,6 +1,34 @@
 
+import org.gradle.api.publish.PublishingExtension
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.kotlin.plugin.compose) apply false
+}
+
+allprojects {
+    group = "dev.gdal4k"
+    version = providers.gradleProperty("gdal4kVersion").orElse("0.1.0-SNAPSHOT").get()
+}
+
+subprojects {
+    plugins.withId("maven-publish") {
+        extensions.configure<PublishingExtension> {
+            val githubPackagesUrl = providers.environmentVariable("GITHUB_PACKAGES_URL").orNull
+                ?: providers.environmentVariable("GITHUB_REPOSITORY").orNull?.let { "https://maven.pkg.github.com/$it" }
+            if (!githubPackagesUrl.isNullOrBlank()) {
+                repositories {
+                    maven {
+                        name = "GitHubPackages"
+                        url = uri(githubPackagesUrl)
+                        credentials {
+                            username = providers.environmentVariable("GITHUB_ACTOR").orNull
+                            password = providers.environmentVariable("GITHUB_TOKEN").orNull
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

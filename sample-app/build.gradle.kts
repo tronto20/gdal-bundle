@@ -15,6 +15,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.zip.ZipFile
+import dev.gdal4k.gdalbuild.currentGdalPlatform
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -30,7 +31,9 @@ repositories {
 }
 
 
-val gdalBundleRoot = project(":gdal4k-binary").layout.buildDirectory.dir("gdal-bundle/gdal")
+val gdalBundleRoot = project(":gdal4k-binary").layout.buildDirectory.dir(
+    "gdal-bundle/${currentGdalPlatform().classifier}/gdal",
+)
 val appResourceRoot = layout.buildDirectory.dir("app-resources")
 val gdalResourcesDir = appResourceRoot.map { it.dir("macos/gdal") }
 val jcefVersion = providers.gradleProperty("jcefVersion")
@@ -116,12 +119,12 @@ abstract class JcefBundleTask : DefaultTask() {
 }
 
 val makeGdalResourcesWritable by tasks.registering(EnsureWritableTask::class) {
-    dependsOn(":gdal4k-binary:bundleGdalMacos")
+    dependsOn(":gdal4k-binary:buildAndBundleGdal")
     directory.set(gdalBundleRoot)
 }
 
 val syncGdalResources by tasks.registering(Sync::class) {
-    dependsOn(":gdal4k-binary:bundleGdalMacos", makeGdalResourcesWritable)
+    dependsOn(":gdal4k-binary:buildAndBundleGdal", makeGdalResourcesWritable)
     from(gdalBundleRoot)
     into(gdalResourcesDir)
     exclude("*.jar")
@@ -201,7 +204,7 @@ compose.desktop {
 //)
 //
 //tasks.matching { it.name in gdalBundleTasks }.configureEach {
-//    dependsOn(":gdal4k-binary:bundleGdalMacos")
+//    dependsOn(":gdal4k-binary:bundleGdal")
 //}
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {

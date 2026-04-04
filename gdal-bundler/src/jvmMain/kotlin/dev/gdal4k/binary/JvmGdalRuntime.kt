@@ -5,6 +5,7 @@ import dev.gdal4k.runtime.DatasetAccessMode
 import dev.gdal4k.runtime.DatasetInfoOptions
 import dev.gdal4k.runtime.DatasetKind
 import dev.gdal4k.runtime.DatasetOpenOptions
+import dev.gdal4k.runtime.GdalPlatform
 import dev.gdal4k.runtime.GdalRuntime
 import org.gdal.gdal.Dataset as NativeDataset
 import org.gdal.gdal.InfoOptions
@@ -124,45 +125,67 @@ private class JvmGdalRuntime private constructor() : GdalRuntime {
         }
 
         private fun locateBundleDir(bundleDir: String?): File {
-            bundleDir?.takeIf { it.isNotBlank() }?.let {
-                return normalizeBundleDir(File(it))
-            }
+            val platform = System.getProperty("gdal.bundle.platform")
+                ?.takeIf { it.isNotBlank() }
+                ?: GdalPlatform.current().classifier
+
+            val candidates = linkedSetOf<File>()
+            bundleDir?.takeIf { it.isNotBlank() }?.let { candidates += File(it) }
 
             val explicit = System.getProperty("gdal.bundle.dir") ?: System.getenv("GDAL_BUNDLE_DIR")
             if (!explicit.isNullOrBlank()) {
-                return normalizeBundleDir(File(explicit))
+                candidates += File(explicit)
             }
 
             val resourcesDir = System.getProperty("compose.application.resources.dir")
             if (!resourcesDir.isNullOrBlank()) {
-                val candidate = File(resourcesDir, "gdal")
-                if (candidate.exists()) {
-                    return candidate
-                }
+                candidates += File(resourcesDir)
             }
 
+            for (candidate in candidates) {
+                normalizeBundleDir(candidate, platform)?.let { return it }
+            }
+
+            val checked = candidates.joinToString("\n") { "- ${it.absolutePath}" }
             throw IllegalStateException(
-                "GDAL bundle not found. Set gdal.bundle.dir or GDAL_BUNDLE_DIR, or pass bundleDir to Gdal4kBinary.runtime().",
+                buildString {
+                    append("GDAL bundle not found for platform ")
+                    append(platform)
+                    append(". Set gdal.bundle.dir or GDAL_BUNDLE_DIR, or pass bundleDir to Gdal4kBinary.runtime().")
+                    if (checked.isNotBlank()) {
+                        append("\nChecked roots:\n")
+                        append(checked)
+                    }
+                },
             )
         }
 
-        private fun normalizeBundleDir(directory: File): File {
-            if (directory.name == "gdal" && directory.exists()) {
-                return directory
-            }
+        private fun normalizeBundleDir(directory: File, platform: String): File? {
+            val candidates = listOf(
+                directory,
+                File(directory, "gdal"),
+                File(directory, platform),
+                File(directory, "$platform/gdal"),
+                File(File(directory, "gdal"), platform),
+                File(File(directory, platform), "gdal"),
+            )
 
-            val nested = File(directory, "gdal")
-            if (nested.exists()) {
-                return nested
-            }
-
-            return directory
+            return candidates.firstOrNull { isBundleLayout(it) }
         }
 
         private fun stringVector(values: List<String>): Vector<String> {
             return Vector<String>().apply {
                 values.forEach { add(it) }
             }
+        }
+
+        private fun isBundleLayout(directory: File): Boolean {
+            if (!directory.exists() || !directory.isDirectory) {
+                return false
+            }
+
+            val nativeLibraryName = System.mapLibraryName("gdalalljni")
+            return File(directory, "lib/$nativeLibraryName").exists()
         }
     }
 }

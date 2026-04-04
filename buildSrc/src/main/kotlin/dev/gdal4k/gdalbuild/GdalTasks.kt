@@ -251,6 +251,8 @@ abstract class GdalBundleTask @Inject constructor(
 
     @TaskAction
     fun runBundle() {
+        val pythonExe = findPythonInPath()
+            ?: throw GradleException("python3 or python not found on PATH.")
         val args = mutableListOf(
             scriptFile.get().asFile.absolutePath,
             "--conda-prefix",
@@ -262,7 +264,7 @@ abstract class GdalBundleTask @Inject constructor(
             args.addAll(listOf("--codesign-identity", identity))
         }
         execOps.exec {
-            executable = "python3"
+            executable = pythonExe
             args(args)
             workingDir = layout.projectDirectory.asFile
         }

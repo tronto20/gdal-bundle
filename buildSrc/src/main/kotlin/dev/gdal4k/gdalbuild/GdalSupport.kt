@@ -38,6 +38,22 @@ fun isWindows(): Boolean {
     return os.contains("win")
 }
 
+fun findPythonInPath(): String? {
+    val candidates = if (isWindows()) {
+        listOf("python.exe", "python3.exe", "python", "python3")
+    } else {
+        listOf("python3", "python")
+    }
+    val pathValue = System.getenv("PATH") ?: return null
+    return pathValue.split(File.pathSeparator)
+        .asSequence()
+        .flatMap { dir ->
+            candidates.asSequence().map { name -> File(dir, name) }
+        }
+        .firstOrNull { isExecutable(it) }
+        ?.absolutePath
+}
+
 fun condaExecutableNames(): List<String> {
     return if (isWindows()) {
         listOf("conda.exe", "conda.bat", "conda.cmd")
@@ -114,9 +130,25 @@ fun findCondaInPrefix(prefix: String): String? {
 }
 
 fun downloadInstaller(url: String, output: File) {
-    URL(url).openStream().use { input ->
-        Files.copy(input, output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    var lastError: Exception? = null
+    repeat(3) { attempt ->
+        try {
+            val connection = URL(url).openConnection()
+            connection.connectTimeout = 30_000
+            connection.readTimeout = 30_000
+            connection.getInputStream().use { input ->
+                Files.copy(input, output.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            return
+        } catch (e: Exception) {
+            lastError = e
+            if (attempt == 2) {
+                throw e
+            }
+            Thread.sleep((attempt + 1L) * 5_000L)
+        }
     }
+    throw lastError ?: IllegalStateException("Failed to download installer: $url")
 }
 
 fun sha256Hex(file: File): String {
