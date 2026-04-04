@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: build_and_bundle_gdal_macos.sh [options]
+Usage: build_and_bundle_gdal_linux.sh [options]
 
 Options:
   --conda-prefix <path>    Conda environment prefix (required)

@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: build_and_bundle_gdal_macos.sh [options]
+Usage: build_and_bundle_gdal_windows.sh [options]
 
 Options:
   --conda-prefix <path>    Conda environment prefix (required)
@@ -349,6 +349,45 @@ download_gdal() {
   fi
 }
 
+patch_gdal_windows_sources() {
+  if [[ "$is_windows_shell" != "1" ]]; then
+    return 0
+  fi
+
+  local cpl_vsil_win32="$gdal_src/port/cpl_vsil_win32.cpp"
+  if [[ -f "$cpl_vsil_win32" ]]; then
+    CPL_VSIL_WIN32="$cpl_vsil_win32" "$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ["CPL_VSIL_WIN32"])
+text = path.read_text()
+old = "_wstat64(pwszFilename, pStatBuf)"
+new = "_wstat64(pwszFilename, reinterpret_cast<struct _stat64 *>(pStatBuf))"
+if old in text and new not in text:
+    path.write_text(text.replace(old, new))
+PY
+  fi
+
+  local r2000_cpp="$gdal_src/ogr/ogrsf_frmts/cad/libopencad/dwg/r2000.cpp"
+  if [[ -f "$r2000_cpp" ]]; then
+    R2000_CPP="$r2000_cpp" "$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ["R2000_CPP"])
+text = path.read_text()
+if '#include <cstdint>' not in text:
+    if '#include <memory>\n' in text:
+        path.write_text(text.replace('#include <memory>\n', '#include <memory>\n#include <cstdint>\n', 1))
+    elif '#include <string>\n' in text:
+        path.write_text(text.replace('#include <string>\n', '#include <string>\n#include <cstdint>\n', 1))
+    else:
+        path.write_text('#include <cstdint>\n' + text)
+PY
+  fi
+}
+
 patch_libkml_minizip() {
   local minizip_cmake="$libkml_src/cmake/External_minizip.cmake"
   if [[ -f "$minizip_cmake" ]] && ! grep -q "CMAKE_POLICY_VERSION_MINIMUM" "$minizip_cmake"; then
@@ -381,9 +420,9 @@ if old in text and new not in text:
 PY
     fi
 
-    local file_win32="$libkml_src/src/kml/base/file_win32.cc"
-    if [[ -f "$file_win32" ]]; then
-      FILE_WIN32="$file_win32" "$python_bin" - <<'PY'
+  local file_win32="$libkml_src/src/kml/base/file_win32.cc"
+  if [[ -f "$file_win32" ]]; then
+    FILE_WIN32="$file_win32" "$python_bin" - <<'PY'
 from pathlib import Path
 import os
 
@@ -408,6 +447,8 @@ if updated != text:
 PY
     fi
   fi
+
+  local r2000_cpp="$gdal_src/ogr/ogrsf_frmts/cad/libopencad/dwg/r2000.cpp"
 }
 
 install_conda_deps() {
@@ -533,8 +574,10 @@ build_libkml() {
 
 build_gdal() {
   resolve_cmake_bin
+  resolve_python_bin
   ensure_jobs
   download_gdal
+  patch_gdal_windows_sources
   setup_build_env
 
   local gdal_args=(
@@ -552,13 +595,23 @@ build_gdal() {
     -DGDAL_USE_ARROW=OFF \
     -DGDAL_USE_PARQUET=OFF \
     -DGDAL_USE_SFCGAL=OFF \
-    -DGDAL_USE_POPPLER=OFF \
-    -DGDAL_USE_NETCDF=OFF \
-    -DGDAL_USE_LIBKML=ON
+    -DGDAL_USE_POPPLER=OFF
   )
   if [[ "$is_windows_shell" == "1" ]]; then
     gdal_args+=(
+      -DGDAL_USE_NETCDF=OFF
       -DGDAL_USE_HDF4=OFF
+      -DGDAL_USE_OPENEXR=OFF
+      -DGDAL_USE_POSTGRESQL=OFF
+      -DGDAL_USE_MUPARSER=OFF
+      -DGDAL_USE_XERCESC=OFF
+      -DGDAL_USE_LIBKML=ON
+      -DGDAL_USE_OPENCAD=OFF
+      -DGDAL_USE_OPENCAD_INTERNAL=ON
+    )
+  else
+    gdal_args+=(
+      -DGDAL_USE_LIBKML=ON
     )
   fi
 

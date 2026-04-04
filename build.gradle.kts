@@ -1,6 +1,11 @@
 
 import org.gradle.api.publish.PublishingExtension
 
+val gdalPackageVersion = providers.gradleProperty("gdalVersion")
+    .orElse(providers.gradleProperty("gdal4kVersion"))
+    .orElse("3.9.0")
+    .get()
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.compose.multiplatform) apply false
@@ -9,7 +14,7 @@ plugins {
 
 allprojects {
     group = "dev.gdal4k"
-    version = providers.gradleProperty("gdal4kVersion").orElse("0.1.0-SNAPSHOT").get()
+    version = gdalPackageVersion
 }
 
 subprojects {

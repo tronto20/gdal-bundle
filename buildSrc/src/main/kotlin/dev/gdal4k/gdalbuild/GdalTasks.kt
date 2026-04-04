@@ -90,7 +90,7 @@ abstract class CondaInstallTask @Inject constructor(
     @get:Input
     abstract val installerSha256: Property<String>
 
-    @get:OutputDirectory
+    @get:Internal
     abstract val installDir: DirectoryProperty
 
     @Option(option = "installer-url", description = "Conda installer URL")

@@ -89,6 +89,7 @@ grpc-compatibility = "1.68.1"
 armeria = "1.35.0"
 
 shadow = "9.1.0"
+badass-runtime = "2.0.1"
 
 hibernate-types = "3.15.1"
 embedded-postgres-zonky = "2.2.0"
@@ -120,6 +121,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+beryx-runtime = { id = "org.beryx.runtime", version.ref = "badass-runtime" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor" }
 metro = { id = "dev.zacsweers.metro", version.ref = "metro" }

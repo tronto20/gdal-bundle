@@ -389,16 +389,15 @@ def main():
             for path in plugin_out.glob("*"):
                 if path.is_file() and is_shared_library_file(path):
                     fix_install_names(path, "gdalplugins", locations)
-            if args.codesign_identity or os.environ.get("CODESIGN_IDENTITY", ""):
-                identity = args.codesign_identity or os.environ.get("CODESIGN_IDENTITY", "")
-                codesign_files(
-                    [
-                        path
-                        for path in list(lib_out.glob("*")) + list(plugin_out.glob("*"))
-                        if path.is_file() and is_shared_library_file(path)
-                    ],
-                    identity,
-                )
+            identity = args.codesign_identity or os.environ.get("CODESIGN_IDENTITY", "") or "-"
+            codesign_files(
+                [
+                    path
+                    for path in list(lib_out.glob("*")) + list(plugin_out.glob("*"))
+                    if path.is_file() and is_shared_library_file(path)
+                ],
+                identity,
+            )
 
     copy_data_dirs(conda_prefix, bundle_root)
 

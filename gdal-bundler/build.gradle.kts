@@ -1,7 +1,10 @@
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.file.Directory
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.compile.JavaCompile
 import dev.gdal4k.gdalbuild.*
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -21,12 +24,17 @@ kotlin {
     jvm()
 
     sourceSets {
+        val commonMain by getting
+        val jvmMain by getting
+        jvmMain.dependsOn(commonMain)
+
         val gdalBundleRoot = layout.buildDirectory.dir("gdal-bundle/${currentGdalPlatform().classifier}/gdal")
         val gdalJarDir = gdalBundleRoot.map { it.dir("share/java") }
         val gdalJarFiles = fileTree(gdalJarDir.get()) {
             include("gdal*.jar")
             exclude("*-sources.jar", "*-javadoc.jar")
         }
+        val gdalJavaJar = providers.provider { gdalJarFiles.singleFile }
 
         commonMain.dependencies {
             api(project(":gdal4k-runtime"))
@@ -34,19 +42,39 @@ kotlin {
 
         jvmMain.dependencies {
             api(gdalJarFiles)
-            implementation(libs.commons.compress)
-            implementation(libs.xz)
+            api(libs.commons.compress)
+            api(libs.xz)
+        }
+
+        tasks.named<Jar>("jvmJar").configure {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            from(gdalJavaJar.map { zipTree(it).matching { exclude("org/gdal/gdal/gdalJNI.class") } }) {
+                exclude("META-INF/MANIFEST.MF")
+            }
         }
     }
 }
 
 private val currentPlatform = currentGdalPlatform()
+private val buildAndBundleScript = when (currentPlatform.classifier) {
+    "macos-arm64" -> layout.projectDirectory.file("scripts/build_and_bundle_gdal_macos.sh")
+    "linux-amd64", "linux-arm64" ->
+        layout.projectDirectory.file("scripts/build_and_bundle_gdal_linux.sh")
+    "windows-amd64" -> layout.projectDirectory.file("scripts/build_and_bundle_gdal_windows.sh")
+    else -> error("Unsupported current platform classifier: ${currentPlatform.classifier}")
+}
 val skipNativeBundleBuild = providers.gradleProperty("skipNativeBundleBuild")
+    .map { it.equals("true", ignoreCase = true) }
+    .orElse(false)
+val publishAllPlatformBundles = providers.gradleProperty("publishAllPlatformBundles")
     .map { it.equals("true", ignoreCase = true) }
     .orElse(false)
 val skipCondaDepsInstallFlag = providers.gradleProperty("skipCondaDepsInstall")
     .map { it.equals("true", ignoreCase = true) }
     .orElse(false)
+val defaultGdalVersion = providers.gradleProperty("gdalVersion")
+    .orElse(providers.gradleProperty("gdal4kVersion"))
+    .orElse("3.9.0")
 val defaultWorkDir = layout.buildDirectory.dir("gdal-work").map { it.asFile.absolutePath }
 val defaultOutputDir = layout.buildDirectory.dir("gdal-bundle/${currentPlatform.classifier}")
 val defaultPythonExecutable = providers.provider {
@@ -57,9 +85,10 @@ val defaultCondaInstallDirProvider = providers.environmentVariable("GDAL4K_CONDA
     .map { layout.projectDirectory.dir(it) }
     .orElse(defaultCondaInstallDir)
 val defaultCondaInstallerUrlProvider = providers.provider { defaultCondaInstallerUrl() }
+// Prefer a local prefix so CI and developer machines do not write into a shared
+// system conda installation when one happens to be present on PATH.
 val defaultCondaPrefixProvider = providers.provider {
-    findCondaInPath()?.let { resolveCondaBase(it) }
-        ?: defaultCondaInstallDir.get().asFile.absolutePath
+    defaultCondaInstallDir.get().asFile.absolutePath
 }
 
 tasks.withType<GdalBaseTask>().configureEach {
@@ -70,11 +99,11 @@ tasks.withType<GdalBaseTask>().configureEach {
 }
 
 tasks.withType<GdalBuildTask>().configureEach {
-    scriptFile.set(layout.projectDirectory.file("scripts/build_and_bundle_gdal_macos.sh"))
+    scriptFile.set(buildAndBundleScript)
     workDir.convention(
         providers.environmentVariable("GDAL4K_WORK_DIR").orElse(defaultWorkDir),
     )
-    gdalVersion.convention("3.12.2")
+    gdalVersion.convention(defaultGdalVersion)
     libkmlVersion.convention("1.3.0")
     skipCondaDepsInstall.convention(skipCondaDepsInstallFlag)
 }
@@ -102,6 +131,50 @@ fun registerBundleArchive(
     outputFile.set(layout.buildDirectory.file("published-bundles/gdal4k-binary-$classifier.txz"))
     arcname.set("")
     pythonExecutable.convention(defaultPythonExecutable)
+}
+
+val embeddedRuntimeJarFiles = providers.provider {
+    configurations.getByName("jvmRuntimeClasspath").files.filter { file ->
+        val name = file.name
+        file.isFile && name.endsWith(".jar") && (
+            name.startsWith("commons-compress-") ||
+                name.startsWith("commons-io-") ||
+                name.startsWith("commons-lang3-") ||
+                name.startsWith("commons-codec-") ||
+                name.startsWith("xz-")
+            )
+    }
+}
+
+evaluationDependsOn(":gdal4k-runtime")
+val runtimeJvmJar = project(":gdal4k-runtime").tasks.named<Jar>("jvmJar")
+
+fun registerBundleJar(
+    taskName: String,
+    classifier: String,
+    bundleArchiveTask: Provider<out GdalTxzPackageTask>,
+    descriptionText: String,
+) = tasks.register(taskName, Jar::class) {
+    group = "publishing"
+    description = descriptionText
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveBaseName.set("gdal4k-binary")
+    archiveClassifier.set(classifier)
+    dependsOn(bundleArchiveTask, runtimeJvmJar)
+    from(tasks.named<Jar>("jvmJar").flatMap { it.archiveFile }.map { zipTree(it) }) {
+        exclude("META-INF/MANIFEST.MF")
+    }
+    from(runtimeJvmJar.flatMap { it.archiveFile }.map { zipTree(it) }) {
+        exclude("META-INF/MANIFEST.MF")
+    }
+    from(embeddedRuntimeJarFiles.map { jarFiles -> jarFiles.map { zipTree(it) } }) {
+        exclude("META-INF/MANIFEST.MF")
+        exclude("org/gdal/gdal/gdalJNI.class")
+    }
+    from(bundleArchiveTask.flatMap { it.outputFile }) {
+        into("gdal")
+        rename { "gdal-bundle.txz" }
+    }
 }
 
 val linuxAmd64BundleTxz = registerBundleArchive(
@@ -132,11 +205,47 @@ val windowsAmd64BundleTxz = registerBundleArchive(
     descriptionText = "Package the Windows amd64 GDAL bundle as a compressed TXZ archive.",
 )
 
+val linuxAmd64BundleJar = registerBundleJar(
+    taskName = "linuxAmd64BundleJar",
+    classifier = "linux-amd64",
+    bundleArchiveTask = linuxAmd64BundleTxz,
+    descriptionText = "Package the Linux amd64 GDAL runtime as a classifier-specific JAR.",
+)
+
+val linuxArm64BundleJar = registerBundleJar(
+    taskName = "linuxArm64BundleJar",
+    classifier = "linux-arm64",
+    bundleArchiveTask = linuxArm64BundleTxz,
+    descriptionText = "Package the Linux arm64 GDAL runtime as a classifier-specific JAR.",
+)
+
+val macosArm64BundleJar = registerBundleJar(
+    taskName = "macosArm64BundleJar",
+    classifier = "macos-arm64",
+    bundleArchiveTask = macosArm64BundleTxz,
+    descriptionText = "Package the macOS arm64 GDAL runtime as a classifier-specific JAR.",
+)
+
+val windowsAmd64BundleJar = registerBundleJar(
+    taskName = "windowsAmd64BundleJar",
+    classifier = "windows-amd64",
+    bundleArchiveTask = windowsAmd64BundleTxz,
+    descriptionText = "Package the Windows amd64 GDAL runtime as a classifier-specific JAR.",
+)
+
 val currentBundleArchive = when (currentPlatform.classifier) {
     "linux-amd64" -> linuxAmd64BundleTxz
     "linux-arm64" -> linuxArm64BundleTxz
     "macos-arm64" -> macosArm64BundleTxz
     "windows-amd64" -> windowsAmd64BundleTxz
+    else -> error("Unsupported current platform classifier: ${currentPlatform.classifier}")
+}
+
+val currentBundleJar = when (currentPlatform.classifier) {
+    "linux-amd64" -> linuxAmd64BundleJar
+    "linux-arm64" -> linuxArm64BundleJar
+    "macos-arm64" -> macosArm64BundleJar
+    "windows-amd64" -> windowsAmd64BundleJar
     else -> error("Unsupported current platform classifier: ${currentPlatform.classifier}")
 }
 
@@ -225,23 +334,51 @@ tasks.withType<KotlinCompile>().configureEach {
     }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(libs.versions.jvm.compatibility.get().toInt())
+}
+
 extensions.configure<PublishingExtension> {
     publications.withType<MavenPublication>().matching { it.name == "jvm" }.configureEach {
-        artifact(linuxAmd64BundleTxz.flatMap { it.outputFile }) {
-            builtBy(linuxAmd64BundleTxz)
+        artifactId = "gdal4k-binary"
+        artifacts.removeIf { artifact ->
+            artifact.extension == "jar" && artifact.classifier.isNullOrBlank()
         }
-        artifact(linuxArm64BundleTxz.flatMap { it.outputFile }) {
-            builtBy(linuxArm64BundleTxz)
+
+        if (publishAllPlatformBundles.get()) {
+            artifact(linuxAmd64BundleJar.flatMap { it.archiveFile }) {
+                builtBy(linuxAmd64BundleJar)
+                classifier = "linux-amd64"
+            }
+
+            artifact(linuxArm64BundleJar.flatMap { it.archiveFile }) {
+                builtBy(linuxArm64BundleJar)
+                classifier = "linux-arm64"
+            }
+
+            artifact(macosArm64BundleJar.flatMap { it.archiveFile }) {
+                builtBy(macosArm64BundleJar)
+                classifier = "macos-arm64"
+            }
+
+            artifact(windowsAmd64BundleJar.flatMap { it.archiveFile }) {
+                builtBy(windowsAmd64BundleJar)
+                classifier = "windows-amd64"
+            }
+        } else {
+            artifact(currentBundleJar.flatMap { it.archiveFile }) {
+                builtBy(currentBundleJar)
+                classifier = currentPlatform.classifier
+            }
         }
-        artifact(macosArm64BundleTxz.flatMap { it.outputFile }) {
-            builtBy(macosArm64BundleTxz)
-        }
-        artifact(windowsAmd64BundleTxz.flatMap { it.outputFile }) {
-            builtBy(windowsAmd64BundleTxz)
-        }
+
         pom {
             name.set("gdal4k-binary")
-            description.set("GDAL JVM runtime bridge and published native TXZ bundle archives")
+            description.set("GDAL JVM runtime bridge and published platform-specific bundle JARs")
         }
     }
+}
+
+tasks.matching { it.name == "generateMetadataFileForJvmPublication" }.configureEach {
+    enabled = false
 }

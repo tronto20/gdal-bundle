@@ -13,6 +13,7 @@ repositories {
 
 extensions.configure<PublishingExtension> {
     publications.withType<org.gradle.api.publish.maven.MavenPublication>().configureEach {
+        artifactId = "gdal4k-runtime"
         pom {
             name.set("gdal4k-runtime")
             description.set("Kotlin Multiplatform runtime API for GDAL")
