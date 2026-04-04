@@ -346,6 +346,21 @@ if old in text and new not in text:
     path.write_text(text.replace(old, new, 1))
 PY
     fi
+
+    local file_win32="$libkml_src/src/kml/base/file_win32.cc"
+    if [[ -f "$file_win32" ]] && grep -q '#include <xstring>' "$file_win32"; then
+      FILE_WIN32="$file_win32" "$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ["FILE_WIN32"])
+text = path.read_text()
+old = "#include <xstring>"
+new = "#include <string>"
+if old in text and new not in text:
+    path.write_text(text.replace(old, new, 1))
+PY
+    fi
   fi
 }
 
