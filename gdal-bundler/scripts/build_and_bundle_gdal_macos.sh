@@ -355,6 +355,49 @@ cmake_prefix_path() {
   fi
 }
 
+resolve_minizip_paths() {
+  if [[ "$is_windows_shell" != "1" ]]; then
+    return 1
+  fi
+
+  local include_dir=""
+  for candidate in \
+    "$conda_prefix/Library/include" \
+    "$conda_prefix/include"; do
+    if [[ -d "$candidate/minizip" ]] && { [[ -f "$candidate/minizip/unzip.h" ]] || [[ -f "$candidate/minizip/zip.h" ]]; }; then
+      include_dir="$candidate"
+      break
+    fi
+  done
+
+  local library_path=""
+  for candidate in \
+    "$conda_prefix/Library/lib/minizip.lib" \
+    "$conda_prefix/Library/lib/libminizip.lib" \
+    "$conda_prefix/Library/lib/minizip.dll.a" \
+    "$conda_prefix/Library/lib/libminizip.dll.a" \
+    "$conda_prefix/Library/lib/minizip.a" \
+    "$conda_prefix/Library/lib/libminizip.a" \
+    "$conda_prefix/Library/lib/minizip" \
+    "$conda_prefix/Library/lib/libminizip"; do
+    if [[ -f "$candidate" ]]; then
+      library_path="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$library_path" ]] && [[ -d "$conda_prefix/Library/lib" ]]; then
+    library_path="$(find "$conda_prefix/Library/lib" -maxdepth 1 -type f \( -iname 'minizip*' -o -iname 'libminizip*' \) | head -n 1)"
+  fi
+
+  if [[ -z "$include_dir" || -z "$library_path" ]]; then
+    echo "Minizip package not found in $conda_prefix/Library." >&2
+    return 1
+  fi
+
+  MINIZIP_INCLUDE_DIR="$include_dir"
+  MINIZIP_LIBRARY="$library_path"
+}
+
 build_libkml() {
   resolve_cmake_bin
   resolve_python_bin
@@ -362,6 +405,19 @@ build_libkml() {
   download_libkml
   patch_libkml_minizip
   setup_build_env
+
+  local minizip_args=(
+    -DMINIZIP_INCLUDE_DIR=MINIZIP_INCLUDE_DIR-NOTFOUND
+    -DMINIZIP_LIBRARY=MINIZIP_LIBRARY-NOTFOUND
+    -DMINIZIP_FOUND=FALSE
+  )
+  if [[ "$is_windows_shell" == "1" ]]; then
+    resolve_minizip_paths
+    minizip_args=(
+      -DMINIZIP_INCLUDE_DIR="$MINIZIP_INCLUDE_DIR"
+      -DMINIZIP_LIBRARY="$MINIZIP_LIBRARY"
+    )
+  fi
 
   "$cmake_bin" -S "$libkml_src" -B "$libkml_build" -GNinja \
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -378,9 +434,7 @@ build_libkml() {
     -DWITH_SWIG=OFF \
     -DWITH_PYTHON=OFF \
     -DWITH_JAVA=OFF \
-    -DMINIZIP_INCLUDE_DIR=MINIZIP_INCLUDE_DIR-NOTFOUND \
-    -DMINIZIP_LIBRARY=MINIZIP_LIBRARY-NOTFOUND \
-    -DMINIZIP_FOUND=FALSE
+    "${minizip_args[@]}"
 
   "$cmake_bin" --build "$libkml_build" --parallel "$jobs"
   "$cmake_bin" --install "$libkml_build"
