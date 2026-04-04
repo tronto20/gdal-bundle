@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import lzma
 import tarfile
 from pathlib import Path
 
@@ -30,7 +31,8 @@ def main() -> None:
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    with tarfile.open(output_file, mode="w:xz", preset=9) as archive:
+    # Use the strongest practical xz preset to minimize distribution size.
+    with tarfile.open(output_file, mode="w:xz", preset=9 | lzma.PRESET_EXTREME) as archive:
         for child in sorted(source_dir.iterdir(), key=lambda path: path.name):
             arcname = child.name if not arcname_prefix else f"{arcname_prefix}/{child.name}"
             archive.add(child, arcname=arcname, recursive=True)

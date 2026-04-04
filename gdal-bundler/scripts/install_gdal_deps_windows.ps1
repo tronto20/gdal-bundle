@@ -88,7 +88,6 @@ $packages = @(
     "libarchive"
     "libwebp"
     "libjxl"
-    "unixodbc"
     "aws-sdk-cpp"
     "minizip"
     "uriparser"
