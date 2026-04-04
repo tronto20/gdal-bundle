@@ -1,0 +1,187 @@
+package dev.gdal4k.binary
+
+import dev.gdal4k.runtime.Dataset
+import dev.gdal4k.runtime.DatasetAccessMode
+import dev.gdal4k.runtime.DatasetInfoOptions
+import dev.gdal4k.runtime.DatasetKind
+import dev.gdal4k.runtime.DatasetOpenOptions
+import dev.gdal4k.runtime.GdalRuntime
+import org.gdal.gdal.Dataset as NativeDataset
+import org.gdal.gdal.InfoOptions
+import org.gdal.gdal.gdal
+import org.gdal.gdalconst.gdalconstConstants
+import java.io.File
+import java.util.Vector
+
+actual object Gdal4kBinary {
+    @Volatile
+    private var runtime: GdalRuntime? = null
+
+    actual fun runtime(bundleDir: String?): GdalRuntime {
+        runtime?.let { return it }
+        synchronized(this) {
+            runtime?.let { return it }
+            val loaded = JvmGdalRuntime.initialize(bundleDir)
+            runtime = loaded
+            return loaded
+        }
+    }
+}
+
+private class JvmGdalRuntime private constructor() : GdalRuntime {
+    override fun openDataset(source: String, options: DatasetOpenOptions): Dataset {
+        val nativeDataset = openNativeDataset(source, options)
+        return JvmDataset(nativeDataset)
+    }
+
+    override fun datasetInfo(dataset: Dataset, options: DatasetInfoOptions): String {
+        val nativeDataset = (dataset as? JvmDataset)?.delegate
+            ?: throw IllegalArgumentException("Dataset was not created by the JVM GDAL runtime.")
+
+        val infoOptions = InfoOptions(stringVector(options.arguments))
+        return try {
+            gdal.GDALInfo(nativeDataset, infoOptions)
+                ?.trimEnd()
+                ?.ifBlank { "gdalinfo returned empty output." }
+                ?: "gdalinfo returned empty output."
+        } finally {
+            infoOptions.delete()
+        }
+    }
+
+    companion object {
+        fun initialize(bundleDir: String?): GdalRuntime {
+            val gdalDir = locateBundleDir(bundleDir)
+            loadBundle(gdalDir)
+            return JvmGdalRuntime()
+        }
+
+        private fun openNativeDataset(source: String, options: DatasetOpenOptions): NativeDataset {
+            val dataset = if (options.kind == DatasetKind.Any && options.openOptions.isEmpty()) {
+                when (options.accessMode) {
+                    DatasetAccessMode.ReadOnly -> gdal.Open(source)
+                    DatasetAccessMode.Update -> gdal.Open(source, gdalconstConstants.GA_Update)
+                }
+            } else {
+                val flags = openFlags(options)
+                val openOptions = options.openOptions.takeIf { it.isNotEmpty() }?.let(::stringVector)
+                if (openOptions != null) {
+                    gdal.OpenEx(source, flags, null, openOptions)
+                } else {
+                    gdal.OpenEx(source, flags)
+                }
+            }
+
+            return dataset
+                ?: throw IllegalStateException("Unable to open dataset: $source\n${gdal.GetLastErrorMsg()}")
+        }
+
+        private fun openFlags(options: DatasetOpenOptions): Long {
+            var flags = gdalconstConstants.OF_VERBOSE_ERROR.toLong()
+            flags = flags or when (options.accessMode) {
+                DatasetAccessMode.ReadOnly -> gdalconstConstants.OF_READONLY.toLong()
+                DatasetAccessMode.Update -> gdalconstConstants.OF_UPDATE.toLong()
+            }
+            flags = flags or when (options.kind) {
+                DatasetKind.Any -> 0L
+                DatasetKind.Raster -> gdalconstConstants.OF_RASTER.toLong()
+                DatasetKind.Vector -> gdalconstConstants.OF_VECTOR.toLong()
+            }
+            return flags
+        }
+
+        private fun loadBundle(bundleDir: File) {
+            require(bundleDir.exists() && bundleDir.isDirectory) {
+                "GDAL bundle directory not found: ${bundleDir.absolutePath}"
+            }
+
+            val nativeLibraryName = System.mapLibraryName("gdalalljni")
+            val nativeLibrary = File(bundleDir, "lib/$nativeLibraryName")
+            require(nativeLibrary.exists()) {
+                "JNI library not found: ${nativeLibrary.absolutePath}"
+            }
+
+            System.load(nativeLibrary.absolutePath)
+
+            val dataDir = File(bundleDir, "share/gdal")
+            val projDir = File(bundleDir, "share/proj")
+            require(dataDir.exists()) {
+                "GDAL data directory not found: ${dataDir.absolutePath}"
+            }
+            require(projDir.exists()) {
+                "PROJ data directory not found: ${projDir.absolutePath}"
+            }
+
+            gdal.SetConfigOption("GDAL_DATA", dataDir.absolutePath)
+            gdal.SetConfigOption("PROJ_DATA", projDir.absolutePath)
+
+            val pluginsDir = File(bundleDir, "gdalplugins")
+            if (pluginsDir.exists()) {
+                gdal.SetConfigOption("GDAL_DRIVER_PATH", pluginsDir.absolutePath)
+            }
+
+            gdal.AllRegister()
+        }
+
+        private fun locateBundleDir(bundleDir: String?): File {
+            bundleDir?.takeIf { it.isNotBlank() }?.let {
+                return normalizeBundleDir(File(it))
+            }
+
+            val explicit = System.getProperty("gdal.bundle.dir") ?: System.getenv("GDAL_BUNDLE_DIR")
+            if (!explicit.isNullOrBlank()) {
+                return normalizeBundleDir(File(explicit))
+            }
+
+            val resourcesDir = System.getProperty("compose.application.resources.dir")
+            if (!resourcesDir.isNullOrBlank()) {
+                val candidate = File(resourcesDir, "gdal")
+                if (candidate.exists()) {
+                    return candidate
+                }
+            }
+
+            throw IllegalStateException(
+                "GDAL bundle not found. Set gdal.bundle.dir or GDAL_BUNDLE_DIR, or pass bundleDir to Gdal4kBinary.runtime().",
+            )
+        }
+
+        private fun normalizeBundleDir(directory: File): File {
+            if (directory.name == "gdal" && directory.exists()) {
+                return directory
+            }
+
+            val nested = File(directory, "gdal")
+            if (nested.exists()) {
+                return nested
+            }
+
+            return directory
+        }
+
+        private fun stringVector(values: List<String>): Vector<String> {
+            return Vector<String>().apply {
+                values.forEach { add(it) }
+            }
+        }
+    }
+}
+
+private class JvmDataset(
+    val delegate: NativeDataset,
+) : Dataset {
+    @Volatile
+    private var closed = false
+
+    override fun close() {
+        if (closed) {
+            return
+        }
+        synchronized(this) {
+            if (!closed) {
+                delegate.delete()
+                closed = true
+            }
+        }
+    }
+}

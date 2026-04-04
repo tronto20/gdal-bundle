@@ -1,4 +1,4 @@
-# gdal-bundler
+# gdal4k-binary
 
 macOS용 GDAL JNI 동적 라이브러리와 의존 dylib, 드라이버 플러그인, 데이터(`share/gdal`, `share/proj`)를
 Conda 환경에서 추출해 앱 번들에 넣기 위한 모듈입니다. `install_name_tool`로 의존 경로를
@@ -15,7 +15,7 @@ GDAL과 LIBKML을 소스 빌드한 뒤 번들링까지 한 번에 수행합니�
 
 ```bash
 cd ovision-ui
-./gradlew :gdal-bundler:buildAndBundleGdalMacos \
+./gradlew :gdal4k-binary:buildAndBundleGdalMacos \
   --conda-prefix=/path/to/conda/env \
   --conda-exe=/path/to/conda
 ```
@@ -31,51 +31,51 @@ cd ovision-ui
 `buildLibkmlMacos`, `buildGdalMacos`, `buildAndBundleGdalMacos`는 `installGdalDeps`를 먼저 수행합니다.
 
 ### 단계별 실행
-필요한 단계만 따로 실행할 수 있습니다. 작업 디렉터리를 지우려면 `:gdal-bundler:cleanGdalWorkDir`를 실행하세요.
+필요한 단계만 따로 실행할 수 있습니다. 작업 디렉터리를 지우려면 `:gdal4k-binary:cleanGdalWorkDir`를 실행하세요.
 
 ```bash
-./gradlew :gdal-bundler:installGdalDeps \
+./gradlew :gdal4k-binary:installGdalDeps \
   --conda-prefix=/path/to/conda/env \
   --conda-exe=/path/to/conda
 ```
 
 ```bash
-./gradlew :gdal-bundler:cleanGdalWorkDir \
+./gradlew :gdal4k-binary:cleanGdalWorkDir \
   --work-dir=/path/to/work
 ```
 
 ```bash
-./gradlew :gdal-bundler:buildLibkmlMacos \
+./gradlew :gdal4k-binary:buildLibkmlMacos \
   --conda-prefix=/path/to/conda/env
 ```
 
 ```bash
-./gradlew :gdal-bundler:buildGdalMacos \
+./gradlew :gdal4k-binary:buildGdalMacos \
   --conda-prefix=/path/to/conda/env
 ```
 
 ### 번들링만
 ```bash
 cd ovision-ui
-./gradlew :gdal-bundler:bundleGdalMacos
+./gradlew :gdal4k-binary:bundleGdalMacos
 ```
 
 Conda 환경이 활성화되지 않았다면 prefix를 지정하세요.
 ```bash
-./gradlew :gdal-bundler:bundleGdalMacos \
+./gradlew :gdal4k-binary:bundleGdalMacos \
   --conda-prefix=/path/to/conda/env
 ```
 
 배포용으로 dylib를 재서명하려면:
 ```bash
-./gradlew :gdal-bundler:bundleGdalMacos \
+./gradlew :gdal4k-binary:bundleGdalMacos \
   --conda-prefix=/path/to/conda/env \
   --codesign-identity="Developer ID Application: ..."
 ```
 
 출력 경로를 바꾸려면:
 ```bash
-./gradlew :gdal-bundler:bundleGdalMacos \
+./gradlew :gdal4k-binary:bundleGdalMacos \
   --output-dir=/path/to/output
 ```
 
@@ -88,11 +88,11 @@ Compose Desktop(1.9.x 기준)는 `appResourcesRootDir` 아래의
 그래서 GDAL 번들은 `macos/gdal`에 복사해야 합니다.
 
 ```kotlin
-val gdalBundleDir = project(":gdal-bundler").layout.buildDirectory.dir("gdal-bundle")
+val gdalBundleDir = project(":gdal4k-binary").layout.buildDirectory.dir("gdal-bundle")
 val gdalResourcesRoot = layout.buildDirectory.dir("app-resources")
 
 val syncGdalResources by tasks.registering(Sync::class) {
-    dependsOn(":gdal-bundler:bundleGdalMacos")
+    dependsOn(":gdal4k-binary:bundleGdalMacos")
     from(gdalBundleDir.map { it.dir("gdal") })
     into(gdalResourcesRoot.map { it.dir("macos/gdal") })
 }
