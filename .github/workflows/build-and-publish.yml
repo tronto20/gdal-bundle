@@ -62,18 +62,26 @@ jobs:
           - classifier: linux-amd64
             runner: ubuntu-24.04
             python-version: '3.12'
+            allow-failure: false
           - classifier: linux-arm64
             runner: ubuntu-24.04-arm
             python-version: '3.12'
+            allow-failure: false
           - classifier: macos-arm64
             runner: macos-latest
             python-version: '3.12'
+            allow-failure: false
           - classifier: windows-amd64
             runner: windows-latest
             python-version: '3.12'
+            allow-failure: false
+          # Miniforge currently does not publish a Windows arm64 installer.
+          # Keep the row visible for future support, but do not block the rest of CI.
           - classifier: windows-arm64
             runner: windows-11-arm
             python-version: '3.12'
+            allow-failure: true
+    continue-on-error: ${{ matrix.allow-failure }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
