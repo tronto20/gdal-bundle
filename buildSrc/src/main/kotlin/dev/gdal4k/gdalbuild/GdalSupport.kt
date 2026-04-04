@@ -52,6 +52,40 @@ fun findPythonInPath(): String? {
         ?.absolutePath
 }
 
+fun findBashInPath(): String? {
+    val candidates = if (isWindows()) {
+        listOf("bash.exe", "bash")
+    } else {
+        listOf("bash")
+    }
+    val pathValue = System.getenv("PATH") ?: return null
+    return pathValue.split(File.pathSeparator)
+        .asSequence()
+        .flatMap { dir ->
+            candidates.asSequence().map { name -> File(dir, name) }
+        }
+        .firstOrNull { isExecutable(it) }
+        ?.absolutePath
+}
+
+fun gitForWindowsBinDirs(): List<String> {
+    if (!isWindows()) return emptyList()
+    val programFilesCandidates = listOfNotNull(
+        System.getenv("ProgramFiles"),
+        System.getenv("ProgramFiles(x86)"),
+    )
+    return programFilesCandidates
+        .flatMap { base ->
+            listOf(
+                File(base, "Git/bin"),
+                File(base, "Git/usr/bin"),
+            )
+        }
+        .filter { it.isDirectory }
+        .map { it.absolutePath }
+        .distinct()
+}
+
 fun condaExecutableNames(): List<String> {
     return if (isWindows()) {
         listOf("conda.exe", "conda.bat", "conda.cmd")

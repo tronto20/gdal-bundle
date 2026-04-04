@@ -16,8 +16,26 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.process.ExecOperations
+import org.gradle.process.ExecSpec
 import java.io.File
 import javax.inject.Inject
+
+private fun ExecSpec.configureWindowsShellEnvironment() {
+    if (!isWindows()) {
+        return
+    }
+
+    findBashInPath()?.let { bashPath ->
+        environment("BASH", bashPath)
+        environment("SHELL", bashPath)
+    }
+
+    val gitBins = gitForWindowsBinDirs()
+    if (gitBins.isNotEmpty()) {
+        val currentPath = System.getenv("PATH").orEmpty()
+        environment("PATH", (gitBins + currentPath).joinToString(File.pathSeparator))
+    }
+}
 
 abstract class GdalBaseTask @Inject constructor(
     @get:Internal
@@ -145,6 +163,7 @@ abstract class CondaInstallTask @Inject constructor(
         }
 
         execOps.exec {
+            configureWindowsShellEnvironment()
             if (isExeInstaller) {
                 executable = installerFile.absolutePath
                 args("/S", "/D=${targetDir.absolutePath}")
@@ -220,6 +239,7 @@ abstract class GdalBuildTask @Inject constructor(
             args.addAll(listOf("--conda-exe", exe))
         }
         execOps.exec {
+            configureWindowsShellEnvironment()
             executable = "bash"
             args(args)
             workingDir = layout.projectDirectory.asFile
@@ -266,6 +286,7 @@ abstract class GdalBundleTask @Inject constructor(
             args.addAll(listOf("--codesign-identity", identity))
         }
         execOps.exec {
+            configureWindowsShellEnvironment()
             executable = pythonExe
             args(args)
             workingDir = layout.projectDirectory.asFile
