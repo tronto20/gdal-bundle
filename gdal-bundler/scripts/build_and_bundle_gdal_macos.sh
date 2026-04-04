@@ -330,6 +330,23 @@ if "CMAKE_POLICY_VERSION_MINIMUM" not in text and needle in text:
     path.write_text(text.replace(needle, insert))
 PY
   fi
+
+  if [[ "$is_windows_shell" == "1" ]]; then
+    local unzip_c="$libkml_src/src/kml/base/contrib/minizip/unzip.c"
+    if [[ -f "$unzip_c" ]] && grep -q '#undef NOUNCRYPT' "$unzip_c"; then
+      UNZIP_C="$unzip_c" "$python_bin" - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ["UNZIP_C"])
+text = path.read_text()
+old = "#undef NOUNCRYPT"
+new = "#define NOUNCRYPT 1"
+if old in text and new not in text:
+    path.write_text(text.replace(old, new, 1))
+PY
+    fi
+  fi
 }
 
 install_conda_deps() {
