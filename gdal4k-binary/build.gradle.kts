@@ -73,7 +73,6 @@ val skipCondaDepsInstallFlag = providers.gradleProperty("skipCondaDepsInstall")
     .map { it.equals("true", ignoreCase = true) }
     .orElse(false)
 val defaultGdalVersion = providers.gradleProperty("gdalVersion")
-    .orElse(providers.gradleProperty("gdal4kVersion"))
     .orElse("3.9.0")
 val defaultWorkDir = layout.buildDirectory.dir("gdal-work").map { it.asFile.absolutePath }
 val defaultOutputDir = layout.buildDirectory.dir("gdal-bundle/${currentPlatform.classifier}")

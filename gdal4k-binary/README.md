@@ -101,10 +101,15 @@ Conda 환경이 활성화되지 않았다면 prefix를 지정하세요.
   --output-dir=/path/to/output
 ```
 
-기본 출력은 `gdal-bundler/build/gdal-bundle/<classifier>/gdal` 이고,
-배포용 압축 파일은 내부적으로 `gdal-bundler/build/published-bundles/gdal4k-binary-<classifier>.txz` 에 생성됩니다.
-최종 Maven 배포물인 `gdal4k-binary:<version>:<classifier>` JAR에는 이 `txz`와 함께
+기본 출력은 `gdal4k-binary/build/gdal-bundle/<classifier>/gdal` 이고,
+배포용 압축 파일은 내부적으로 `gdal4k-binary/build/published-bundles/gdal4k-binary-<classifier>.txz` 에 생성됩니다.
+최종 Maven 배포물인 `dev.tronto.gdal4k:gdal4k-binary:<version>:<classifier>` JAR에는 이 `txz`와 함께
 `gdal4k-runtime` JVM 클래스도 같이 들어가므로, 소비자는 `gdal4k-binary` 하나만 의존해도 됩니다.
+
+## Publishing
+- `publishTarget=mavenCentral`은 Maven Central의 snapshot/release 엔드포인트로 배포하고, 배포 시 artifact를 서명합니다.
+- `publishTarget=githubPackages`는 기존 GitHub Packages 흐름을 유지합니다.
+- 기본 버전은 `gdalVersion`에서 유도한 `gdal4kVersion` snapshot입니다.
 
 ## Compose Desktop 앱에 포함하기 (예시)
 Compose Desktop(1.9.x 기준)는 `appResourcesRootDir` 아래의
@@ -164,5 +169,6 @@ JVM 런타임은 추출된 `libgdalalljni` 경로를 `gdal4k.gdaljni.path` 시�
 패치된 GDAL Java 바인딩이 그 경로를 직접 로드합니다. 그래서 시작 시 `Native library load failed.`
 경고가 뜨지 않습니다.
 
-패키지 버전은 `-PgdalVersion` 값과 같습니다. workflow_dispatch에서는 선택한 GDAL 버전이 그대로
-`gdal4k-runtime`와 `gdal4k-binary`의 Maven 버전이 됩니다.
+패키지 버전은 `gdalVersion-gdal4kVersion` 형태로 계산됩니다. 예를 들어 `gdalVersion=3.9.0`,
+`gdal4kVersion=1.0.1-SNAPSHOT`이면 Maven 버전은 `3.9.0-1.0.1-SNAPSHOT`이 됩니다.
+`-Pgdal4kVersion`으로 명시 오버라이드할 수 있고, workflow_dispatch에서도 이 규칙을 그대로 사용합니다.

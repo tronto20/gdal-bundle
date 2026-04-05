@@ -15,6 +15,7 @@ class SurfaceSmokeService(
         val sections = mutableListOf<String>()
         sections += smokeSpatialReferenceAndTransformation()
         sections += smokeRasterSurface()
+        sections += smokeGcpSurface()
         sections += smokeVectorSurface()
         return buildString {
             appendLine("surface smoke passed")
@@ -144,6 +145,63 @@ class SurfaceSmokeService(
         }
 
         return "Dataset + Band"
+    }
+
+    private fun smokeGcpSurface(): String {
+        val driver = runtime.getDriver("MEM") ?: error("MEM raster driver was not available.")
+        val dataset = driver.create(
+            name = "",
+            xSize = 2,
+            ySize = 2,
+            bandCount = 1,
+            dataType = gdalconstConstants.GDT_Byte,
+            options = emptyList(),
+        ) ?: error("Unable to create a raster dataset for GCP smoke testing.")
+
+        dataset.use { raster ->
+            runtime.createSpatialReference("EPSG:4326").use { spatialReference ->
+                runtime.createGCP(
+                    gcpX = 127.0,
+                    gcpY = 37.5,
+                    gcpZ = 0.0,
+                    gcpPixel = 0.0,
+                    gcpLine = 0.0,
+                    info = "top-left",
+                    id = "tl",
+                ).use { topLeft ->
+                    runtime.createGCP(
+                        gcpX = 127.2,
+                        gcpY = 37.7,
+                        gcpZ = 0.0,
+                        gcpPixel = 1.0,
+                        gcpLine = 1.0,
+                        info = "bottom-right",
+                        id = "br",
+                    ).use { bottomRight ->
+                        check(raster.setGCPs(listOf(topLeft, bottomRight), spatialReference) == 0)
+                    }
+                }
+            }
+
+            check(raster.getGCPCount() == 2)
+            check(raster.getGCPProjection().isNotBlank())
+            raster.getGCPSpatialRef()?.use { gcpSpatialReference ->
+                check(gcpSpatialReference.isGeographic())
+            }
+
+            val gcps = raster.getGCPs()
+            check(gcps.size == 2)
+            check(gcps[0].getId() == "tl")
+            check(gcps[0].getInfo() == "top-left")
+            check(gcps[0].getGCPX() == 127.0)
+            check(gcps[0].getGCPPixel() == 0.0)
+            check(gcps[1].getId() == "br")
+            check(gcps[1].getInfo() == "bottom-right")
+            check(gcps[1].getGCPY() == 37.7)
+            check(gcps[1].getGCPLine() == 1.0)
+        }
+
+        return "Dataset + GCP"
     }
 
     private fun smokeVectorSurface(): String {

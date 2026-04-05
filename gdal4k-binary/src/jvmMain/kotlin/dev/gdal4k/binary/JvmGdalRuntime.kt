@@ -2,6 +2,7 @@ package dev.gdal4k.binary
 
 import dev.gdal4k.runtime.Band
 import dev.gdal4k.runtime.CoordinateTransformation
+import dev.gdal4k.runtime.GCP
 import dev.gdal4k.runtime.Dataset
 import dev.gdal4k.runtime.DatasetAccessMode
 import dev.gdal4k.runtime.DatasetInfoOptions
@@ -18,6 +19,7 @@ import dev.gdal4k.runtime.GdalRuntime
 import dev.gdal4k.runtime.Layer
 import dev.gdal4k.runtime.SpatialReference
 import org.gdal.gdal.Band as NativeBand
+import org.gdal.gdal.GCP as NativeGCP
 import org.gdal.gdal.Driver as NativeDriver
 import org.gdal.gdal.Dataset as NativeDataset
 import org.gdal.gdal.InfoOptions
@@ -56,6 +58,13 @@ private fun stringVector(values: List<String>): Vector<String> {
     }
 }
 
+private fun nativeGcps(gcps: List<GCP>): Array<NativeGCP> {
+    return gcps.map { gcp ->
+        (gcp as? JvmGCP)?.delegate
+            ?: throw IllegalArgumentException("GCP was not created by the JVM GDAL runtime.")
+    }.toTypedArray()
+}
+
 actual object Gdal4kBinary {
     @Volatile
     private var runtime: GdalRuntime? = null
@@ -80,6 +89,18 @@ actual object Gdal4kBinary {
 private class JvmGdalRuntime private constructor() : GdalRuntime {
     override fun getDriver(name: String): Driver? {
         return gdal.GetDriverByName(name)?.let(::JvmDriver)
+    }
+
+    override fun createGCP(
+        gcpX: Double,
+        gcpY: Double,
+        gcpZ: Double,
+        gcpPixel: Double,
+        gcpLine: Double,
+        info: String,
+        id: String,
+    ): GCP {
+        return JvmGCP(NativeGCP(gcpX, gcpY, gcpZ, gcpPixel, gcpLine, info, id))
     }
 
     override fun createSpatialReference(): SpatialReference {
@@ -237,7 +258,7 @@ private class JvmGdalRuntime private constructor() : GdalRuntime {
                     append(platform)
                     append(
                         ". Set gdal.bundle.dir or GDAL_BUNDLE_DIR, pass bundleDir to Gdal4kBinary.prepare(), " +
-                            "or depend on dev.gdal4k:gdal4k-binary:<version>:$platform.",
+                            "or depend on dev.tronto.gdal4k:gdal4k-binary:<version>:$platform.",
                     )
                     if (checked.isNotBlank()) {
                         append("\nChecked roots:\n")
@@ -619,6 +640,26 @@ private class JvmDataset(
         return delegate.GetGCPProjection()
     }
 
+    override fun getGCPSpatialRef(): SpatialReference? {
+        return delegate.GetGCPSpatialRef()?.let(::JvmSpatialReference)
+    }
+
+    override fun getGCPs(): List<GCP> {
+        val gcps = Vector<NativeGCP>()
+        delegate.GetGCPs(gcps)
+        return gcps.map { gcp -> JvmGCP(gcp) }
+    }
+
+    override fun setGCPs(gcps: List<GCP>, projection: String): Int {
+        return delegate.SetGCPs(nativeGcps(gcps), projection)
+    }
+
+    override fun setGCPs(gcps: List<GCP>, spatialReference: SpatialReference): Int {
+        val nativeSpatialReference = (spatialReference as? JvmSpatialReference)?.delegate
+            ?: throw IllegalArgumentException("SpatialReference was not created by the JVM GDAL runtime.")
+        return delegate.SetGCPs2(nativeGcps(gcps), nativeSpatialReference)
+    }
+
     override fun getFileList(): List<String> {
         return delegate.GetFileList().map { it.toString() }
     }
@@ -732,6 +773,81 @@ private class JvmDriver(
 
     override fun deregister() {
         delegate.Deregister()
+    }
+}
+
+private class JvmGCP(
+    val delegate: NativeGCP,
+) : GCP {
+    @Volatile
+    private var closed = false
+
+    override fun close() {
+        if (closed) {
+            return
+        }
+        synchronized(this) {
+            if (!closed) {
+                delegate.delete()
+                closed = true
+            }
+        }
+    }
+
+    override fun getGCPX(): Double {
+        return delegate.getGCPX()
+    }
+
+    override fun setGCPX(value: Double) {
+        delegate.setGCPX(value)
+    }
+
+    override fun getGCPY(): Double {
+        return delegate.getGCPY()
+    }
+
+    override fun setGCPY(value: Double) {
+        delegate.setGCPY(value)
+    }
+
+    override fun getGCPZ(): Double {
+        return delegate.getGCPZ()
+    }
+
+    override fun setGCPZ(value: Double) {
+        delegate.setGCPZ(value)
+    }
+
+    override fun getGCPPixel(): Double {
+        return delegate.getGCPPixel()
+    }
+
+    override fun setGCPPixel(value: Double) {
+        delegate.setGCPPixel(value)
+    }
+
+    override fun getGCPLine(): Double {
+        return delegate.getGCPLine()
+    }
+
+    override fun setGCPLine(value: Double) {
+        delegate.setGCPLine(value)
+    }
+
+    override fun getInfo(): String {
+        return delegate.getInfo()
+    }
+
+    override fun setInfo(info: String) {
+        delegate.setInfo(info)
+    }
+
+    override fun getId(): String {
+        return delegate.getId()
+    }
+
+    override fun setId(id: String) {
+        delegate.setId(id)
     }
 }
 

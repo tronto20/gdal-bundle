@@ -6,6 +6,16 @@ package dev.gdal4k.runtime
 interface GdalRuntime {
     fun getDriver(name: String): Driver?
 
+    fun createGCP(
+        gcpX: Double = 0.0,
+        gcpY: Double = 0.0,
+        gcpZ: Double = 0.0,
+        gcpPixel: Double = 0.0,
+        gcpLine: Double = 0.0,
+        info: String = "",
+        id: String = "",
+    ): GCP
+
     fun createSpatialReference(): SpatialReference
 
     fun createSpatialReference(definition: String): SpatialReference
@@ -72,6 +82,14 @@ interface Dataset {
     fun getGCPCount(): Int
 
     fun getGCPProjection(): String
+
+    fun getGCPSpatialRef(): SpatialReference?
+
+    fun getGCPs(): List<GCP>
+
+    fun setGCPs(gcps: List<GCP>, projection: String): Int
+
+    fun setGCPs(gcps: List<GCP>, spatialReference: SpatialReference): Int
 
     fun getFileList(): List<String>
 

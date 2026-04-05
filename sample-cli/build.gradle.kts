@@ -7,20 +7,39 @@ plugins {
     alias(libs.plugins.beryx.runtime)
 }
 
+val gdalVersion = providers.gradleProperty("gdalVersion")
+    .orElse("3.9.0")
+    .get()
+val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
+    .orElse("1.0.1-SNAPSHOT")
+    .get()
+val gdal4kPackageVersion = "$gdalVersion-$gdal4kVersion"
+
 repositories {
     mavenCentral()
     maven {
-        name = "GitHubPackages"
+        name = "gdal4kPackages"
         val packagesUrl = providers.gradleProperty("gdal4kPackagesUrl")
             .orElse(providers.environmentVariable("GITHUB_PACKAGES_URL"))
-            .orElse("https://maven.pkg.github.com/tronto20/gdal-bundle")
+            .orElse(
+                if (gdal4kPackageVersion.endsWith("SNAPSHOT")) {
+                    "https://central.sonatype.com/repository/maven-snapshots/"
+                } else {
+                    "https://repo1.maven.org/maven2/"
+                },
+            )
             .get()
         url = uri(packagesUrl)
         val githubUsername = providers.gradleProperty("GITHUB_USERNAME").orNull
             ?: providers.environmentVariable("GITHUB_USERNAME").orNull
         val githubToken = providers.gradleProperty("GITHUB_TOKEN").orNull
             ?: providers.environmentVariable("GITHUB_TOKEN").orNull
-        if (uri(packagesUrl).scheme != "file" && !githubUsername.isNullOrBlank() && !githubToken.isNullOrBlank()) {
+        if (
+            uri(packagesUrl).scheme != "file" &&
+            uri(packagesUrl).host?.contains("github", ignoreCase = true) == true &&
+            !githubUsername.isNullOrBlank() &&
+            !githubToken.isNullOrBlank()
+        ) {
             credentials {
                 username = githubUsername
                 password = githubToken
@@ -29,12 +48,11 @@ repositories {
     }
 }
 
-group = "dev.gdal4k.sample"
+group = "dev.tronto.gdal4k.sample"
 version = providers.gradleProperty("sampleCliVersion").orElse("0.1.0-SNAPSHOT").get()
 
-val gdalVersion = providers.gradleProperty("gdalVersion")
-    .orElse(providers.gradleProperty("gdal4kVersion"))
-    .orElse("3.9.0")
+val gdal4kGroup = providers.gradleProperty("gdal4kGroup")
+    .orElse("dev.tronto.gdal4k")
     .get()
 
 fun currentGdalPlatformClassifier(): String {
@@ -90,7 +108,7 @@ fun normalizedJpackageVersion(version: String): String {
 }
 
 dependencies {
-    implementation("dev.gdal4k:gdal4k-binary:$gdalVersion:$currentGdalPlatformClassifier")
+    implementation("$gdal4kGroup:gdal4k-binary:$gdal4kPackageVersion:$currentGdalPlatformClassifier")
 }
 
 kotlin {
