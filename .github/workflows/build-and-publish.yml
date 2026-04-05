@@ -14,7 +14,8 @@ on:
       - 'gradlew.bat'
       - 'buildSrc/**'
       - 'gdal4k-runtime/**'
-      - 'gdal-bundler/**'
+      - 'gdal4k-binary/**'
+      - 'sample-cli/**'
       - 'sample-app/**'
   push:
     branches:
@@ -29,15 +30,34 @@ on:
       - 'gradlew.bat'
       - 'buildSrc/**'
       - 'gdal4k-runtime/**'
-      - 'gdal-bundler/**'
+      - 'gdal4k-binary/**'
+      - 'sample-cli/**'
       - 'sample-app/**'
   workflow_dispatch:
     inputs:
+      gdal_version:
+        description: 'GDAL version to build and publish'
+        required: false
+        type: string
+        default: '3.9.0'
+      gdal4k_version:
+        description: 'gdal4k version suffix to publish'
+        required: false
+        type: string
+        default: '1.0.1-SNAPSHOT'
       publish:
-        description: 'Also publish the GitHub Packages artifacts'
+        description: 'Also publish the Maven artifacts'
         required: false
         type: boolean
         default: false
+      publish_target:
+        description: 'Where to publish the Maven artifacts'
+        required: false
+        type: choice
+        options:
+          - githubPackages
+          - mavenCentral
+        default: githubPackages
 
 permissions:
   contents: read
@@ -55,6 +75,9 @@ jobs:
     name: Build ${{ matrix.classifier }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
+    env:
+      GDAL_VERSION: ${{ inputs.gdal_version || '3.9.0' }}
+      GDAL4K_VERSION: ${{ inputs.gdal4k_version || '1.0.1-SNAPSHOT' }}
     strategy:
       fail-fast: false
       matrix:
@@ -94,7 +117,11 @@ jobs:
 
       - name: Build GDAL bundle
         if: matrix.runner != 'windows-latest'
-        run: ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none :gdal4k-binary:buildAndBundleGdal
+        run: >
+          ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
+          -PgdalVersion=${{ env.GDAL_VERSION }}
+          -Pgdal4kVersion=${{ env.GDAL4K_VERSION }}
+          :gdal4k-binary:buildAndBundleGdal
 
       - name: Install Conda
         if: matrix.runner == 'windows-latest'
@@ -104,37 +131,94 @@ jobs:
       - name: Install GDAL deps
         if: matrix.runner == 'windows-latest'
         shell: pwsh
-        run: .\gdal-bundler\scripts\install_gdal_deps_windows.ps1 -CondaPrefix .\gdal-bundler\build\conda -CondaExe .\gdal-bundler\build\conda\Scripts\conda.exe
+        run: .\gdal4k-binary\scripts\install_gdal_deps_windows.ps1 -CondaPrefix .\gdal4k-binary\build\conda -CondaExe .\gdal4k-binary\build\conda\Scripts\conda.exe
 
       - name: Build GDAL bundle (Windows)
         if: matrix.runner == 'windows-latest'
         shell: pwsh
-        run: .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none -PskipCondaDepsInstall=true :gdal4k-binary:buildAndBundleGdal
+        run: >
+          .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
+          "-PgdalVersion=${{ env.GDAL_VERSION }}"
+          "-Pgdal4kVersion=${{ env.GDAL4K_VERSION }}"
+          -PskipCondaDepsInstall=true
+          :gdal4k-binary:buildAndBundleGdal
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
         with:
           name: gdal-bundle-${{ matrix.classifier }}
-          path: gdal-bundler/build/gdal-bundle/${{ matrix.classifier }}/gdal/**
+          path: gdal4k-binary/build/gdal-bundle/${{ matrix.classifier }}/gdal/**
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish local Maven repo
+        if: matrix.runner != 'windows-latest'
+        run: >
+          ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
+          -PgdalVersion=${{ env.GDAL_VERSION }}
+          -Pgdal4kVersion=${{ env.GDAL4K_VERSION }}
+          -PskipNativeBundleBuild=true
+          :gdal4k-runtime:publishToMavenLocal
+          :gdal4k-binary:publishToMavenLocal
+
+      - name: Stage local Maven repo
+        if: matrix.runner != 'windows-latest'
+        run: |
+          set -euo pipefail
+          mkdir -p build/local-maven-repo/dev/tronto
+          rm -rf build/local-maven-repo/dev/tronto/gdal4k
+          cp -R "$HOME/.m2/repository/dev/tronto/gdal4k" build/local-maven-repo/dev/tronto/
+
+      - name: Publish local Maven repo (Windows)
+        if: matrix.runner == 'windows-latest'
+        shell: pwsh
+        run: |
+          .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none `
+            "-PgdalVersion=${{ env.GDAL_VERSION }}" `
+            "-Pgdal4kVersion=${{ env.GDAL4K_VERSION }}" `
+            -PskipNativeBundleBuild=true `
+            :gdal4k-runtime:publishToMavenLocal `
+            :gdal4k-binary:publishToMavenLocal
+
+          New-Item -ItemType Directory -Force build\local-maven-repo\dev\tronto | Out-Null
+          if (Test-Path build\local-maven-repo\dev\tronto\gdal4k) {
+            Remove-Item -Recurse -Force build\local-maven-repo\dev\tronto\gdal4k
+          }
+          Copy-Item -Recurse "$env:USERPROFILE\.m2\repository\dev\tronto\gdal4k" "build\local-maven-repo\dev\tronto\"
+
+      - name: Upload local Maven repo artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdal-local-maven-${{ matrix.classifier }}
+          path: build/local-maven-repo/**
           if-no-files-found: error
           retention-days: 7
 
   publish-github-packages:
-    name: Publish GitHub Packages
+    name: Publish artifacts
     if: >
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs:
       - build-binary
+      - test-sample-cli
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
       packages: write
     env:
+      GDAL_VERSION: ${{ inputs.gdal_version || '3.9.0' }}
+      GDAL4K_VERSION: ${{ inputs.gdal4k_version || '1.0.1-SNAPSHOT' }}
+      PUBLISH_TARGET: ${{ inputs.publish_target || 'githubPackages' }}
       GITHUB_PACKAGES_URL: https://maven.pkg.github.com/${{ github.repository }}
-      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_USERNAME: ${{ github.actor }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+      SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+      SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -150,30 +234,142 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gdal-bundle-linux-amd64
-          path: gdal-bundler/build/gdal-bundle/linux-amd64
+          path: gdal4k-binary/build/gdal-bundle/linux-amd64/gdal
 
       - name: Download Linux arm64 bundle
         uses: actions/download-artifact@v4
         with:
           name: gdal-bundle-linux-arm64
-          path: gdal-bundler/build/gdal-bundle/linux-arm64
+          path: gdal4k-binary/build/gdal-bundle/linux-arm64/gdal
 
       - name: Download macOS arm64 bundle
         uses: actions/download-artifact@v4
         with:
           name: gdal-bundle-macos-arm64
-          path: gdal-bundler/build/gdal-bundle/macos-arm64
+          path: gdal4k-binary/build/gdal-bundle/macos-arm64/gdal
 
       - name: Download Windows amd64 bundle
         uses: actions/download-artifact@v4
         with:
           name: gdal-bundle-windows-amd64
-          path: gdal-bundler/build/gdal-bundle/windows-amd64
+          path: gdal4k-binary/build/gdal-bundle/windows-amd64/gdal
 
       - name: Publish runtime and binary packages
         run: >
           ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
-          -Pgdal4kVersion=0.1.0-${{ github.sha }}
+          -PgdalVersion=${{ env.GDAL_VERSION }}
+          -Pgdal4kVersion=${{ env.GDAL4K_VERSION }}
+          -PpublishTarget=${{ env.PUBLISH_TARGET }}
           -PskipNativeBundleBuild=true
+          -PpublishAllPlatformBundles=true
           :gdal4k-runtime:publish
           :gdal4k-binary:publish
+
+  test-sample-cli:
+    name: Test sample-cli ${{ matrix.classifier }}
+    needs:
+      - build-binary
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - classifier: linux-amd64
+            runner: ubuntu-24.04
+          - classifier: linux-arm64
+            runner: ubuntu-24.04-arm
+          - classifier: macos-arm64
+            runner: macos-latest
+          - classifier: windows-amd64
+            runner: windows-latest
+    permissions:
+      contents: read
+    env:
+      GDAL_VERSION: ${{ inputs.gdal_version || '3.9.0' }}
+      GDAL4K_VERSION: ${{ inputs.gdal4k_version || '1.0.1-SNAPSHOT' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Download local Maven repo
+        uses: actions/download-artifact@v4
+        with:
+          name: gdal-local-maven-${{ matrix.classifier }}
+          path: local-maven-repo
+
+      - name: Build sample-cli distribution
+        if: runner.os != 'Windows'
+        working-directory: sample-cli
+        run: >
+          ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
+          -PgdalVersion=${{ env.GDAL_VERSION }}
+          -Pgdal4kVersion=${{ env.GDAL4K_VERSION }}
+          -Pgdal4kPackagesUrl=file://${GITHUB_WORKSPACE}/local-maven-repo
+          packageDistribution
+
+      - name: Build sample-cli distribution (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $repoUrl = [System.Uri]::new((Join-Path $env:GITHUB_WORKSPACE 'local-maven-repo')).AbsoluteUri
+          Set-Location sample-cli
+          .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none `
+            "-PgdalVersion=${{ env.GDAL_VERSION }}" `
+            "-Pgdal4kVersion=${{ env.GDAL4K_VERSION }}" `
+            "-Pgdal4kPackagesUrl=$repoUrl" `
+            packageDistribution
+
+      - name: Smoke test installed sample-cli
+        if: runner.os != 'Windows'
+        working-directory: sample-cli
+        run: |
+          set -euo pipefail
+          package="$(find build/distributions -maxdepth 1 \( -name '*.pkg' -o -name '*.deb' \) | sort | head -n 1)"
+          if [[ -z "$package" ]]; then
+            echo "No installer package found in build/distributions" >&2
+            exit 1
+          fi
+
+          if [[ "$package" == *.pkg ]]; then
+            sudo installer -pkg "$package" -target /
+          else
+            sudo dpkg -i "$package"
+          fi
+
+          sample-cli smoke
+
+      - name: Smoke test installed sample-cli
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-Location sample-cli
+          $package = Get-ChildItem build\distributions -Filter *.msi | Select-Object -First 1
+          if (-not $package) {
+            throw "No MSI package found in build\distributions"
+          }
+
+          Start-Process msiexec.exe -Wait -ArgumentList '/i', $package.FullName, '/qn', '/norestart'
+
+          $cli = Get-ChildItem 'C:\Program Files' -Recurse -Filter sample-cli.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $cli) {
+            throw "sample-cli.exe was not found after MSI installation"
+          }
+
+          & $cli.FullName smoke
+
+      - name: Upload sample-cli artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-cli-${{ matrix.classifier }}
+          path: sample-cli/build/distributions/*
+          if-no-files-found: error
+          retention-days: 7
