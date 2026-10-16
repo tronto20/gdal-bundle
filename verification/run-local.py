@@ -29,9 +29,9 @@ def main():
     if bytes(map(int, re.findall(r"\d+", embedded))) != (ROOT / "fixtures/sample.tif").read_bytes():
         raise SystemExit("C and web TIFF fixtures differ")
     (ROOT / "results").mkdir(exist_ok=True)
-    target = {("Darwin", "arm64"): "macosArm64", ("Linux", "x86_64"): "linuxX64", ("Linux", "aarch64"): "linuxArm64", ("Windows", "AMD64"): "mingwX64"}.get((platform.system(), platform.machine()))
+    target = {("Darwin", "arm64"): "macosArm64", ("Linux", "x86_64"): "linuxX64", ("Windows", "AMD64"): "mingwX64"}.get((platform.system(), platform.machine()))
     if target is None:
-        raise SystemExit(f"Unsupported probe host: {platform.system()}/{platform.machine()}")
+        raise SystemExit(f"Unsupported probe build host: {platform.system()}/{platform.machine()}. Linux ARM64 Native executables must be cross-compiled on a Kotlin/Native-supported host.")
     results = []
 
     def run(name, command, runtime=False, env=None):

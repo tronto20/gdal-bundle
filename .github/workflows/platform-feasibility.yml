@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: platform-probe-${{ github.ref }}
+  group: platform-probe-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -28,18 +28,36 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+      - name: Prepare Gradle before native source build
+        run: ./gradlew --version
       - uses: actions/setup-python@v6
         with:
           python-version: '3.14'
       - run: python -m pip install -r requirements.txt
+      - name: Identify iOS SDK
+        id: sdk
+        run: echo "version=$(xcrun --sdk iphonesimulator --show-sdk-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        id: ios-cache
+        with:
+          path: verification/build/vcpkg-binary-cache
+          key: ios-gdal-arm64-3cd21e48a75f67acfef289da52893ce79144aaa1-${{ steps.sdk.outputs.version }}
       - name: Pinned iOS GDAL source build
+        id: ios-gdal
+        env:
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/verification/build/vcpkg-binary-cache
         run: |
-          mkdir -p tools
+          mkdir -p tools build/vcpkg-binary-cache
           git init tools/vcpkg
           git -C tools/vcpkg fetch --depth 1 https://github.com/microsoft/vcpkg.git 3cd21e48a75f67acfef289da52893ce79144aaa1
           git -C tools/vcpkg checkout --detach FETCH_HEAD
           tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
           VCPKG_MAX_CONCURRENCY=3 tools/vcpkg/vcpkg install 'gdal[core]:arm64-ios-simulator-release' --classic --disable-metrics
+      - uses: actions/cache/save@v6
+        if: steps.ios-cache.outputs.cache-hit != 'true'
+        with:
+          path: verification/build/vcpkg-binary-cache
+          key: ${{ steps.ios-cache.outputs.cache-primary-key }}
       - name: Build GDAL C bridge for iOS simulator
         run: |
           cmake -S native -B build/ios-simulator -G Ninja \
