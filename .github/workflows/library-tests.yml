@@ -231,6 +231,39 @@ jobs:
           name: gdal4k-maven
           path: verification/build/staged/complete-maven.tar.gz
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdal4k-jvm-maven
+          path: verification/build/staged/jvm-maven.tar.gz
+          if-no-files-found: error
+
+  jvm-consumers:
+    name: Published JVM on ${{ matrix.os }}
+    needs: assemble
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - uses: actions/download-artifact@v4
+        with: { name: gdal4k-jvm-maven, path: verification/build/downloads }
+      - name: Consume the assembled universal JVM JAR without producer files
+        run: |
+          python -c 'import tarfile; tarfile.open("verification/build/downloads/jvm-maven.tar.gz").extractall(filter="data")'
+          python verification/consumer.py --target jvm --no-publish
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-published-jvm-${{ matrix.os }}
+          path: verification/results/published-consumer-jvm/
+          if-no-files-found: warn
 
   linux-arm64-runtime:
     needs: [native, assemble]

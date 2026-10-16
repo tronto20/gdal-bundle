@@ -118,6 +118,7 @@ def main():
         run(sys.executable, ROOT/'verification/publish.py','--repo',REPO,'--destination',published)
         run(sys.executable, ROOT/'verification/consumer.py','--target','jvm','--no-publish','--repo',published)
         stage('complete-maven',targets=[*PLATFORMS,'js','wasmJs','jvm','android'],include_root=True)
+        stage('jvm-maven',targets=['jvm'],include_root=True)
     elif target=='linuxArm64-run':
         # Kotlin/Native has no Linux ARM64 compiler host. Execute the cross-linked tests here.
         native=ROOT/'gdal4k/build/bin/linuxArm64/debugTest/test.kexe'
