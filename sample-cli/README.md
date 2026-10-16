@@ -1,6 +1,6 @@
 # JVM 소비 예제
 
-별도 JVM 프로젝트가 게시된 `gdal4k-binary`와 공통 runtime 인터페이스를 사용하는 예제입니다. GDAL 작업은 `suspend`이며 CLI의 `runBlocking` 경계에서 호출합니다. GDAL 설치나 classifier 지정은 필요하지 않습니다.
+별도 JVM 프로젝트가 게시된 `gdal4k-binary`와 공통 runtime 인터페이스를 사용하는 예제입니다. GDAL 작업은 `suspend`이며 CLI의 `suspend main`에서 호출합니다. GDAL 설치나 classifier 지정은 필요하지 않습니다.
 
 로컬 검증 아티팩트를 준비한 뒤 실행합니다.
 
