@@ -110,7 +110,12 @@ jobs:
           npm ci --prefix verification
           cd verification
           npx playwright install --with-deps chromium
-          node -e 'console.log("CHROME_BIN="+require("playwright").chromium.executablePath())' >> "$GITHUB_ENV"
+          # Ubuntu's AppArmor policy blocks the user-namespace sandbox for this downloaded browser.
+          # Limit the override to this disposable test runner, including independent consumers.
+          chrome="$(node -p 'require("playwright").chromium.executablePath()')"
+          printf '#!/bin/sh\nexec "%s" --no-sandbox "$@"\n' "$chrome" > "$RUNNER_TEMP/gdal4k-chrome"
+          chmod +x "$RUNNER_TEMP/gdal4k-chrome"
+          echo "CHROME_BIN=$RUNNER_TEMP/gdal4k-chrome" >> "$GITHUB_ENV"
       - name: Same own engine in JS and wasmJs, Node and Chromium
         run: |
           source verification/tools/emsdk/emsdk_env.sh
