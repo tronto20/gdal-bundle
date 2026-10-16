@@ -26,6 +26,10 @@ suspend fun contract(options: GdalOptions = platformOptions()) {
             check(info["bands"]!!.jsonArray[0].jsonObject["noDataValue"]!!.jsonPrimitive.double == 0.0)
             check(info["geoTransform"]!!.jsonArray.map { it.jsonPrimitive.double } == listOf(100.0, 0.5, 0.0, 50.0, 0.0, -0.5))
             check(dataset.readRaster().contentEquals(pixels))
+            // Independent engines and identical file names must not share handles or file contents.
+            Gdal.create(options).use { second ->
+                second.open(fixture).use { other -> check(other.readRaster().contentEquals(pixels)) }
+            }
             check(dataset.readRaster(window = RasterWindow(1, 0, 2, 2)).contentEquals(doubleArrayOf(1.0, 2.0, 4.0, 255.0)))
             for (driver in listOf("GTiff", "COG")) {
                 val output = dataset.translate(driver)

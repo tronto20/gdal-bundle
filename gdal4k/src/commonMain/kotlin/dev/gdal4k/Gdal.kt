@@ -137,7 +137,7 @@ class GdalDataset internal constructor(
         window?.let { args += listOf("-srcwin", "${it.x}", "${it.y}", "${it.width}", "${it.height}") }
         val output = translate("XYZ", "pixels.xyz", args).mainFile().bytes.decodeToString()
         val values = output.lineSequence().filter { it.isNotBlank() }.map { line ->
-            val number = line.trim().substringAfterLast(' ' ).substringAfterLast('\t')
+            val number = line.trim().substringAfterLast(' ').substringAfterLast('\t')
             when (number.lowercase()) { "nan" -> Double.NaN; "inf", "+inf" -> Double.POSITIVE_INFINITY; "-inf" -> Double.NEGATIVE_INFINITY; else -> number.toDouble() }
         }.toList().toDoubleArray()
         val expected = window?.let { it.width.toLong() * it.height } ?: (info.width.toLong() * info.height)

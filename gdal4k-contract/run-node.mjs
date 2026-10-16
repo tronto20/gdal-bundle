@@ -4,8 +4,13 @@ const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 globalThis.GDAL4K_BRIDGE_URL = pathToFileURL(path.join(root, 'gdal4k/web/gdal4k-web.mjs')).href;
 globalThis.GDAL4K_ASSETS_URL = pathToFileURL(path.join(root, 'verification/node_modules/gdal3.js/dist/package/')).href;
 let succeeded = false;
-const log = console.log;
-console.log = (...args) => { if (args[0] === 'GDAL4K_LIBRARY_CONTRACT_OK') succeeded = true; log(...args); };
+const write = process.stdout.write.bind(process.stdout);
+let tail = '';
+process.stdout.write = (chunk, ...args) => {
+  tail = (tail + chunk.toString()).slice(-4096);
+  if (tail.includes('GDAL4K_LIBRARY_CONTRACT_OK')) succeeded = true;
+  return write(chunk, ...args);
+};
 const timer = setTimeout(() => { console.error('Contract timed out'); process.exit(1); }, 90_000);
 process.on('beforeExit', () => { if (!succeeded) process.exitCode = 1; });
 const target = process.argv[2];

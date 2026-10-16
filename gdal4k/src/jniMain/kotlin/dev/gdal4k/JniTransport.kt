@@ -1,5 +1,6 @@
 package dev.gdal4k
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -14,7 +15,7 @@ internal class JniBridge {
         }
     }
 }
-internal actual suspend fun createTransport(options: GdalOptions): GdalTransport = withContext(Dispatchers.IO) {
+internal actual suspend fun createTransport(options: GdalOptions): GdalTransport = withContext(Dispatchers.IO + NonCancellable) {
     JniBridge.load(options.libraryPath)
     val bridge = JniBridge()
     val handle = bridge.create(options.projData.orEmpty().encodeToByteArray(), options.gdalData.orEmpty().encodeToByteArray())
