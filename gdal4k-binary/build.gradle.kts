@@ -53,7 +53,9 @@ kotlin {
         }
         jvmMain { resources.srcDir(layout.buildDirectory.dir("jvm-resources")) }
         androidMain.dependencies { api(project(":gdal4k-android-runtime")) }
-        getByName("webMain").kotlin.srcDir(engineTasks.getValue("web").map { layout.buildDirectory.dir("generated/web/kotlin") })
+        for (target in listOf("js", "wasmJs")) {
+            getByName("${target}Main").kotlin.srcDir(engineTasks.getValue("web").map { layout.buildDirectory.dir("generated/web/kotlin") })
+        }
     }
     targets.withType<KotlinNativeTarget>().configureEach {
         val targetName = name
@@ -79,12 +81,19 @@ kotlin {
             tasks.named(interopProcessingTaskName).configure {
                 dependsOn(prepareDefinition)
                 inputs.file(layout.buildDirectory.file("engine/$platform/libgdal4k.a"))
-                doLast {
-                    // The archive is inside the KLIB. Do not publish the producer's search path.
-                    outputs.files.files.filter { it.isDirectory }.forEach { directory ->
-                        val manifest = directory.resolve("default/manifest")
-                        if (manifest.isFile) manifest.writeText(manifest.readLines().filterNot { it.startsWith("libraryPaths=") }.joinToString("\n", postfix = "\n"))
-                    }
+            }
+        }
+    }
+}
+afterEvaluate {
+    // Register after KGP's cinterop actions: the archive is inside the KLIB, and
+    // the producer-only absolute library search path must not escape into Maven.
+    nativeTargets.keys.forEach { targetName ->
+        tasks.named("cinteropGdal4k${targetName.replaceFirstChar(Char::uppercaseChar)}").configure {
+            doLast {
+                outputs.files.files.filter { it.isDirectory }.forEach { directory ->
+                    val manifest = directory.resolve("default/manifest")
+                    if (manifest.isFile) manifest.writeText(manifest.readLines().filterNot { it.startsWith("libraryPaths=") }.joinToString("\n", postfix = "\n"))
                 }
             }
         }

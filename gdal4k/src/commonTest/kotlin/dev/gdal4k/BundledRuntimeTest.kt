@@ -33,6 +33,26 @@ class BundledRuntimeTest {
         // A failed CRS must not poison a subsequent request.
         assertFails { runtime.createSpatialReference("EPSG:NOT_A_CRS") }
         runtime.createSpatialReference("EPSG:4326").use { assertTrue(it.isGeographic()) }
+        // Replacing/emptying native geometry must invalidate borrowed aliases, not leave dangling pointers.
+        val vector = "/vsimem/gdal4k-borrowed.geojson"
+        runtime.writeMemoryFile(vector, """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":[0,0]},{"type":"Point","coordinates":[1,1]}]}}]}""".encodeToByteArray())
+        runtime.openDataset(vector).use { collection ->
+            val layer = requireNotNull(collection.getLayer(0))
+            requireNotNull(layer.getNextFeature()).use { feature ->
+                val borrowed = requireNotNull(feature.getGeometryRef())
+                borrowed.cloneGeometry().use { replacement -> assertEquals(0, feature.setGeometry(replacement)) }
+                assertFails { borrowed.getGeometryCount() }
+                borrowed.close()
+                val geometry = requireNotNull(feature.getGeometryRef())
+                val alias = requireNotNull(feature.getGeometryRef())
+                val child = requireNotNull(alias.getGeometryRef(0))
+                geometry.empty()
+                assertFails { child.exportToWkt() }
+                child.close()
+                assertEquals(0, geometry.getGeometryCount())
+            }
+        }
+        runtime.deleteMemoryFile(vector)
         println("GDAL4K_BUNDLED_ORIGINAL_API_OK")
     }
 }

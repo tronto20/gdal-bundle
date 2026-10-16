@@ -56,6 +56,22 @@ struct Runtime {
     CPLJSONObject result(void* p,const char* type,bool owned,unsigned long long parent=0) {
         if(!p)return nullValue();auto id=++next;handles[id]={p,type,owned,parent};return value(std::to_string(id));
     }
+    void invalidateChildren(void* parent,const std::string& type) {
+        std::vector<unsigned long long> children;
+        for(auto& item:handles) {
+            auto p=handles.find(item.second.parent);
+            if(p!=handles.end() && p->second.pointer==parent && item.second.type==type)children.push_back(item.first);
+        }
+        for(auto id:children)close(id);
+    }
+    void invalidateOverviews(void* dataset) {
+        std::vector<void*> bands;
+        for(auto& item:handles) {
+            auto p=handles.find(item.second.parent);
+            if(p!=handles.end() && p->second.pointer==dataset && item.second.type=="Band")bands.push_back(item.second.pointer);
+        }
+        for(auto band:bands)invalidateChildren(band,"Band");
+    }
     void close(unsigned long long id) {
         auto found=handles.find(id);if(found==handles.end())return;
         std::vector<unsigned long long> children;for(auto& item:handles)if(item.second.parent==id)children.push_back(item.first);
@@ -120,6 +136,18 @@ inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     auto id=std::stoull(request.GetString("handle","0"));
     if(method=="close"){close(id);return nullValue();}
     auto a=request.GetObj("parameters");void* h=type=="GdalRuntime"?nullptr:get(id,type);
+    // A mutation can replace native children while their Kotlin wrappers still exist.
+    // Invalidate aliases after arguments have been resolved and the C call has finished.
+    std::string invalidated;
+    if(type=="Feature" && (method.rfind("setGeometry",0)==0 || method.rfind("setGeomField",0)==0))invalidated="Geometry";
+    if(type=="Geometry" && (method=="empty" || method.rfind("removeGeometry",0)==0))invalidated="Geometry";
+    if((type=="Geometry" && method.rfind("assignSpatialReference",0)==0) || (type=="GeomFieldDefn" && method.rfind("setSpatialRef",0)==0) || (type=="Dataset" && method.rfind("setGCPs",0)==0))invalidated="SpatialReference";
+    if(type=="FeatureDefn" && method.rfind("setGeomType",0)==0)invalidated="GeomFieldDefn";
+    if(type=="Band" && method.rfind("createMaskBand",0)==0)invalidated="Band";
+    struct InvalidateAfter {
+        Runtime& runtime;void* pointer;std::string type;bool overviews;
+        ~InvalidateAfter(){if(!type.empty())runtime.invalidateChildren(pointer,type);if(overviews)runtime.invalidateOverviews(pointer);}
+    } invalidate{r,h,invalidated,type=="Dataset" && method.rfind("buildOverviews",0)==0};
 #include "runtime.generated.inc"
     throw std::runtime_error("Unknown GDAL runtime operation: "+type+"."+method);
 }

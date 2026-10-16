@@ -43,7 +43,7 @@ def main():
  if rev!=VCPKG_REV:raise SystemExit(f'Expected pinned vcpkg {VCPKG_REV}, found {rev}')
  exe=vcpkg/('vcpkg.exe' if os.name=='nt' else 'vcpkg')
  if not exe.exists():run(vcpkg/('bootstrap-vcpkg.bat' if os.name=='nt' else 'bootstrap-vcpkg.sh'),'-disableMetrics')
- target=a.target;base=TARGETS[target];triplet='gdal4k-'+target
+ target=a.target;base=TARGETS[target];triplet='gdal4k-'+target.replace('_','-')
  out=BINARY/'build/engine'/target;out.mkdir(parents=True,exist_ok=True)
  triplets=BINARY/'build/triplets';triplets.mkdir(parents=True,exist_ok=True)
  base_file=next((vcpkg/d/(base+'.cmake') for d in ['triplets','triplets/community'] if (vcpkg/d/(base+'.cmake')).exists()),None)

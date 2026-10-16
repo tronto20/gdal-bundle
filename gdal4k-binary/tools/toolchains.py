@@ -30,11 +30,23 @@ def native_toolchain(target, destination):
             raise RuntimeError('Build the Windows engine on Windows with the Kotlin/Native MinGW toolchain')
         gcc = dependencies/'msys2-mingw-w64-x86_64-2'
         os.environ['PATH'] = str(gcc/'bin')+os.pathsep+os.environ['PATH']
+        llvm = next(p for p in dependencies.glob('llvm-21-x86_64-windows-*') if (p/'bin/clang.exe').exists())
+        # K/N's stripped GCC distribution has headers/runtime but no cc1plus.
+        # Use its LLVM compiler and the matching MinGW sysroot, as K/N itself does.
         text = f'''set(CMAKE_SYSTEM_NAME Windows)
-set(CMAKE_C_COMPILER "{(gcc/'bin/gcc.exe').as_posix()}")
-set(CMAKE_CXX_COMPILER "{(gcc/'bin/g++.exe').as_posix()}")
+set(CMAKE_C_COMPILER "{(llvm/'bin/clang.exe').as_posix()}")
+set(CMAKE_CXX_COMPILER "{(llvm/'bin/clang++.exe').as_posix()}")
+set(CMAKE_C_COMPILER_TARGET x86_64-w64-windows-gnu)
+set(CMAKE_CXX_COMPILER_TARGET x86_64-w64-windows-gnu)
+set(CMAKE_SYSROOT "{gcc.as_posix()}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld.exe")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_RC_COMPILER "{(gcc/'bin/windres.exe').as_posix()}")
-set(CMAKE_AR "{(gcc/'bin/ar.exe').as_posix()}")
+set(CMAKE_AR "{(llvm/'bin/llvm-ar.exe').as_posix()}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
 '''
     else:
         arch = 'aarch64' if target.endswith('arm64') else 'x86_64'

@@ -36,10 +36,12 @@ jobs:
       - uses: actions/setup-python@v6
         with: { python-version: '3.14' }
       - run: python -m pip install -r verification/requirements.txt
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
+        id: native-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}
+          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
       - name: Boot iOS simulator
         if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
         run: |
@@ -49,6 +51,11 @@ jobs:
           echo "IOS_DEVICE=$device" >> "$GITHUB_ENV"
       - name: Test library and independent published consumer
         run: python verification/ci.py '${{ matrix.target }}' ${IOS_DEVICE:+--ios-device "$IOS_DEVICE"}
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: verification/build/vcpkg-cache
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: engine-${{ matrix.target }}
@@ -83,10 +90,12 @@ jobs:
           test "$(git -C verification/tools/emsdk rev-parse HEAD)" = c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56
           verification/tools/emsdk/emsdk install 4.0.23
           verification/tools/emsdk/emsdk activate 4.0.23
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
+        id: web-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}
+          key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
       - name: Browser test runtime
         run: |
           npm ci --prefix verification
@@ -97,6 +106,11 @@ jobs:
         run: |
           source verification/tools/emsdk/emsdk_env.sh
           python verification/ci.py web
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: verification/build/vcpkg-cache
+          key: ${{ steps.web-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: engine-web
@@ -132,12 +146,18 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Android NDK r28c
         run: |
-          sdkmanager 'ndk;28.2.13676358' 'platforms;android-35' 'build-tools;35.0.0'
+          for attempt in 1 2 3; do
+            if sdkmanager 'ndk;28.2.13676358' 'platforms;android-35' 'build-tools;35.0.0'; then break; fi
+            test "$attempt" != 3 || exit 1
+            rm -rf "$ANDROID_HOME/.temp"
+          done
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
+        id: android-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}
+          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
       - run: python verification/ci.py 'android-${{ matrix.abi }}'
       - name: Allow emulator acceleration
         if: matrix.abi == 'x86_64'
@@ -152,6 +172,11 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi x86_64
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: verification/build/vcpkg-cache
+          key: ${{ steps.android-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: engine-android-${{ matrix.abi }}

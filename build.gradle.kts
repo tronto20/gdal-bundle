@@ -25,6 +25,7 @@ val gdalVersion = providers.gradleProperty("gdalVersion")
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
     .orElse("1.0.1-SNAPSHOT")
     .get()
+require(gdalVersion == "3.12.4") { "The embedded engine is pinned to GDAL 3.12.4; update its source manifest before changing gdalVersion" }
 val gdalPackageVersion = "$gdalVersion-$gdal4kVersion"
 val requestedPublishTarget = providers.gradleProperty("publishTarget").orElse("mavenCentral").get()
 val publishTargetParam = if (requestedPublishTarget == "ossrh") "mavenCentral" else requestedPublishTarget

@@ -2,6 +2,7 @@ package dev.gdal4k.sample.cli
 
 import dev.gdal4k.runtime.GdalRuntime
 import dev.gdal4k.runtime.GdalDataType
+import dev.gdal4k.runtime.Feature
 import dev.gdal4k.runtime.DatasetAccessMode
 import dev.gdal4k.runtime.DatasetKind
 import dev.gdal4k.runtime.DatasetOpenOptions
@@ -283,106 +284,8 @@ class SurfaceSmokeService(
 
             val feature = layer.getFeature(iteratedFeatureId) ?: error("Unable to get feature by FID.")
             feature.use { featureHandle ->
-                check(featureHandle.getDefinition().getName().isNotBlank())
-                check(featureHandle.getFieldCount() >= 3)
-                check(featureHandle.getFieldIndex("name") >= 0)
-                check(featureHandle.getFieldAsString("name") == "sample-cli-smoke-test")
-                check(featureHandle.getFieldAsInteger("rank") == 7)
-                check(featureHandle.getFieldAsDouble("score") > 0.0)
-                check(featureHandle.isFieldSet("name"))
-                check(featureHandle.isFieldSetAndNotNull("name"))
-                check(featureHandle.getNativeData().isEmpty() || featureHandle.getNativeData().isNotEmpty())
-                check(featureHandle.getNativeMediaType().isEmpty() || featureHandle.getNativeMediaType().isNotEmpty())
-                check(featureHandle.dumpReadableAsString().isNotBlank())
-                check(featureHandle.validate() >= 0)
-                check(featureHandle.getGeomFieldCount() >= 1)
-
-                val definition = featureHandle.getDefinition()
-                check(definition.getFieldCount() >= 3)
-                val nameFieldDefn = definition.getFieldDefn(definition.getFieldIndex("name"))
-                    ?: error("Field definition for 'name' was not available.")
-                check(nameFieldDefn.getName() == "name")
-                check(nameFieldDefn.getTypeName().isNotBlank())
-                check(nameFieldDefn.getFieldTypeName(nameFieldDefn.getType()).isNotBlank())
-                check(nameFieldDefn.getAlternativeName().isEmpty() || nameFieldDefn.getAlternativeName().isNotEmpty())
-                check(nameFieldDefn.getDomainName().isEmpty() || nameFieldDefn.getDomainName().isNotEmpty())
-                check(nameFieldDefn.getComment().isEmpty() || nameFieldDefn.getComment().isNotEmpty())
-
-                if (definition.getGeomFieldCount() > 0) {
-                    val geomFieldDefn = definition.getGeomFieldDefn(0)
-                        ?: error("Geometry field definition was not available.")
-                    check(geomFieldDefn.getName().isNotBlank() || geomFieldDefn.getName().isEmpty())
-                    check(geomFieldDefn.getNameRef().isNotBlank() || geomFieldDefn.getNameRef().isEmpty())
-                    check(geomFieldDefn.getType() >= 0)
-                    check(geomFieldDefn.isNullable() || !geomFieldDefn.isNullable())
-                    check(geomFieldDefn.isIgnored() || !geomFieldDefn.isIgnored())
-                }
-
-                val geometry = featureHandle.getGeometryRef() ?: error("Feature geometry was not available.")
-                geometry.cloneGeometry().use { geometryHandle ->
-                    check(geometryHandle.getGeometryType() >= 0)
-                    check(geometryHandle.getGeometryName().isNotBlank())
-                    check(geometryHandle.getGeometryCount() >= 1)
-                    check(geometryHandle.getPointCount() >= 0)
-                    check(geometryHandle.exportToWkt().isNotBlank())
-                    check(geometryHandle.exportToIsoWkt().isNotBlank())
-                    check(geometryHandle.exportToGml().isNotBlank())
-                    check(geometryHandle.exportToKml().isNotBlank())
-                    check(geometryHandle.exportToJson().isNotBlank())
-                    check(geometryHandle.exportToWkb().isNotEmpty())
-                    check(geometryHandle.exportToIsoWkb().isNotEmpty())
-                    check(geometryHandle.getArea() >= 0.0)
-                    check(geometryHandle.length() >= 0.0)
-                    check(geometryHandle.geodesicLength() >= 0.0)
-                    check(geometryHandle.geodesicArea() >= 0.0)
-                    check(geometryHandle.distance(geometryHandle) == 0.0)
-                    geometryHandle.distance3D(geometryHandle)
-                    check(geometryHandle.isEmpty().not())
-                    check(geometryHandle.isValid())
-                    check(geometryHandle.isSimple())
-                    check(geometryHandle.intersects(geometryHandle))
-                    check(geometryHandle.intersectsExact(geometryHandle))
-                    check(geometryHandle.equal(geometryHandle))
-                    check(!geometryHandle.disjoint(geometryHandle))
-                    check(geometryHandle.contains(geometryHandle))
-                    check(geometryHandle.within(geometryHandle))
-                    check(geometryHandle.overlaps(geometryHandle) || !geometryHandle.overlaps(geometryHandle))
-                    check(geometryHandle.getEnvelope().size == 4)
-                    check(geometryHandle.getEnvelope3D().size == 6)
-                    check(geometryHandle.centroid() != null)
-                    check(geometryHandle.pointOnSurface() != null)
-                    check(geometryHandle.boundary() != null)
-                    check(geometryHandle.convexHull() != null)
-                    check(geometryHandle.buffer(0.001) != null)
-                    check(geometryHandle.buffer(0.001, listOf("QUADRANT_SEGMENTS=2")) != null)
-                    check(geometryHandle.simplify(0.0001) != null)
-                    check(geometryHandle.simplifyPreserveTopology(0.0001) != null)
-                    check(geometryHandle.makeValid() != null)
-                    check(geometryHandle.normalize() != null)
-                    geometryHandle.closeRings()
-                    geometryHandle.flattenTo2D()
-                    geometryHandle.segmentize(0.05)
-                    check(geometryHandle.wkbSize() > 0)
-                    check(geometryHandle.getCoordinateDimension() >= 2)
-                    check(!geometryHandle.is3D())
-                    check(!geometryHandle.isMeasured())
-                    geometryHandle.set3D(false)
-                    geometryHandle.setMeasured(false)
-                    check(geometryHandle.getDimension() >= 0)
-                    check(!geometryHandle.hasCurveGeometry())
-                    check(geometryHandle.getLinearGeometry() != null)
-                    geometryHandle.getCurveGeometry()
-
-                    val ring = geometryHandle.getGeometryRef(0)
-                    if (ring != null) {
-                        ring.cloneGeometry().use { ringHandle ->
-                            check(ringHandle.getPointCount() > 0)
-                            check(ringHandle.getPoint(0).isNotEmpty())
-                            check(ringHandle.getPoints().isNotEmpty())
-                            check(ringHandle.isRing() || !ringHandle.isRing())
-                        }
-                    }
-                }
+                smokeFeatureDefinition(featureHandle)
+                smokeGeometry(featureHandle)
 
                 val mutableFeature = featureHandle.cloneFeature()
                 mutableFeature.use { copy ->
@@ -439,5 +342,110 @@ class SurfaceSmokeService(
         }
 
         return "Dataset + Layer + Feature + Geometry + FieldDefn + GeomFieldDefn"
+    }
+
+    private suspend fun smokeFeatureDefinition(featureHandle: Feature) {
+        check(featureHandle.getDefinition().getName().isNotBlank())
+        check(featureHandle.getFieldCount() >= 3)
+        check(featureHandle.getFieldIndex("name") >= 0)
+        check(featureHandle.getFieldAsString("name") == "sample-cli-smoke-test")
+        check(featureHandle.getFieldAsInteger("rank") == 7)
+        check(featureHandle.getFieldAsDouble("score") > 0.0)
+        check(featureHandle.isFieldSet("name"))
+        check(featureHandle.isFieldSetAndNotNull("name"))
+        check(featureHandle.getNativeData().isEmpty() || featureHandle.getNativeData().isNotEmpty())
+        check(featureHandle.getNativeMediaType().isEmpty() || featureHandle.getNativeMediaType().isNotEmpty())
+        check(featureHandle.dumpReadableAsString().isNotBlank())
+        check(featureHandle.validate() >= 0)
+        check(featureHandle.getGeomFieldCount() >= 1)
+
+        val definition = featureHandle.getDefinition()
+        check(definition.getFieldCount() >= 3)
+        val nameFieldDefn = definition.getFieldDefn(definition.getFieldIndex("name"))
+            ?: error("Field definition for 'name' was not available.")
+        check(nameFieldDefn.getName() == "name")
+        check(nameFieldDefn.getTypeName().isNotBlank())
+        check(nameFieldDefn.getFieldTypeName(nameFieldDefn.getType()).isNotBlank())
+        check(nameFieldDefn.getAlternativeName().isEmpty() || nameFieldDefn.getAlternativeName().isNotEmpty())
+        check(nameFieldDefn.getDomainName().isEmpty() || nameFieldDefn.getDomainName().isNotEmpty())
+        check(nameFieldDefn.getComment().isEmpty() || nameFieldDefn.getComment().isNotEmpty())
+
+        if (definition.getGeomFieldCount() > 0) {
+            val geomFieldDefn = definition.getGeomFieldDefn(0)
+                ?: error("Geometry field definition was not available.")
+            check(geomFieldDefn.getName().isNotBlank() || geomFieldDefn.getName().isEmpty())
+            check(geomFieldDefn.getNameRef().isNotBlank() || geomFieldDefn.getNameRef().isEmpty())
+            check(geomFieldDefn.getType() >= 0)
+            check(geomFieldDefn.isNullable() || !geomFieldDefn.isNullable())
+            check(geomFieldDefn.isIgnored() || !geomFieldDefn.isIgnored())
+        }
+    }
+
+    private suspend fun smokeGeometry(featureHandle: Feature) {
+        val geometry = featureHandle.getGeometryRef() ?: error("Feature geometry was not available.")
+        geometry.cloneGeometry().use { geometryHandle ->
+            check(geometryHandle.getGeometryType() >= 0)
+            check(geometryHandle.getGeometryName().isNotBlank())
+            check(geometryHandle.getGeometryCount() >= 1)
+            check(geometryHandle.getPointCount() >= 0)
+            check(geometryHandle.exportToWkt().isNotBlank())
+            check(geometryHandle.exportToIsoWkt().isNotBlank())
+            check(geometryHandle.exportToGml().isNotBlank())
+            check(geometryHandle.exportToKml().isNotBlank())
+            check(geometryHandle.exportToJson().isNotBlank())
+            check(geometryHandle.exportToWkb().isNotEmpty())
+            check(geometryHandle.exportToIsoWkb().isNotEmpty())
+            check(geometryHandle.getArea() >= 0.0)
+            check(geometryHandle.length() >= 0.0)
+            check(geometryHandle.geodesicLength() >= 0.0)
+            check(geometryHandle.geodesicArea() >= 0.0)
+            check(geometryHandle.distance(geometryHandle) == 0.0)
+            geometryHandle.distance3D(geometryHandle)
+            check(geometryHandle.isEmpty().not())
+            check(geometryHandle.isValid())
+            check(geometryHandle.isSimple())
+            check(geometryHandle.intersects(geometryHandle))
+            check(geometryHandle.intersectsExact(geometryHandle))
+            check(geometryHandle.equal(geometryHandle))
+            check(!geometryHandle.disjoint(geometryHandle))
+            check(geometryHandle.contains(geometryHandle))
+            check(geometryHandle.within(geometryHandle))
+            check(geometryHandle.overlaps(geometryHandle) || !geometryHandle.overlaps(geometryHandle))
+            check(geometryHandle.getEnvelope().size == 4)
+            check(geometryHandle.getEnvelope3D().size == 6)
+            check(geometryHandle.centroid() != null)
+            check(geometryHandle.pointOnSurface() != null)
+            check(geometryHandle.boundary() != null)
+            check(geometryHandle.convexHull() != null)
+            check(geometryHandle.buffer(0.001) != null)
+            check(geometryHandle.buffer(0.001, listOf("QUADRANT_SEGMENTS=2")) != null)
+            check(geometryHandle.simplify(0.0001) != null)
+            check(geometryHandle.simplifyPreserveTopology(0.0001) != null)
+            check(geometryHandle.makeValid() != null)
+            check(geometryHandle.normalize() != null)
+            geometryHandle.closeRings()
+            geometryHandle.flattenTo2D()
+            geometryHandle.segmentize(0.05)
+            check(geometryHandle.wkbSize() > 0)
+            check(geometryHandle.getCoordinateDimension() >= 2)
+            check(!geometryHandle.is3D())
+            check(!geometryHandle.isMeasured())
+            geometryHandle.set3D(false)
+            geometryHandle.setMeasured(false)
+            check(geometryHandle.getDimension() >= 0)
+            check(!geometryHandle.hasCurveGeometry())
+            check(geometryHandle.getLinearGeometry() != null)
+            geometryHandle.getCurveGeometry()
+
+            val ring = geometryHandle.getGeometryRef(0)
+            if (ring != null) {
+                ring.cloneGeometry().use { ringHandle ->
+                    check(ringHandle.getPointCount() > 0)
+                    check(ringHandle.getPoint(0).isNotEmpty())
+                    check(ringHandle.getPoints().isNotEmpty())
+                    check(ringHandle.isRing() || !ringHandle.isRing())
+                }
+            }
+        }
     }
 }
