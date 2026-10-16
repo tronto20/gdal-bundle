@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--sdk',type=Path,required=True);p.add_argument('--ndk',type=Path,required=True)
-p.add_argument('--serial',required=True);p.add_argument('--abi',choices=['arm64-v8a','armeabi-v7a','x86','x86_64'],default='arm64-v8a')
+p.add_argument('--serial',required=True);p.add_argument('--abi',choices=['arm64-v8a','x86_64'],default='arm64-v8a')
 a=p.parse_args()
 env=os.environ.copy();env.update(ANDROID_HOME=str(a.sdk.resolve()),ANDROID_SDK_ROOT=str(a.sdk.resolve()),ANDROID_NDK_HOME=str(a.ndk.resolve()),ANDROID_SERIAL=a.serial)
 adb=[a.sdk.resolve()/'platform-tools'/('adb.exe' if os.name=='nt' else 'adb'),'-s',a.serial]

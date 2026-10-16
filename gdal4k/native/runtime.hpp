@@ -115,7 +115,7 @@ template<class T> CPLJSONObject rasterTyped(GDALRasterBandH h,const CPLJSONObjec
     int width=a["xSize"].IsValid()?a.GetInteger("xSize"):GDALGetRasterBandXSize(h);
     int height=a["ySize"].IsValid()?a.GetInteger("ySize"):GDALGetRasterBandYSize(h);
     require(x>=0&&y>=0&&width>0&&height>0&&x<=GDALGetRasterBandXSize(h)-width&&y<=GDALGetRasterBandYSize(h)-height,"Raster window is outside the band");
-    // size_t is 32-bit in Wasm and Android x86/ARMv7. Validate before narrowing
+    // size_t is 32-bit in Wasm. Validate before narrowing
     // so a huge virtual raster cannot wrap into a small allocation passed to GDAL.
     uint64_t count=static_cast<uint64_t>(width)*height;require(count<=static_cast<uint64_t>(json.Size()),"Raster buffer is too small");
     std::vector<T> data(count);

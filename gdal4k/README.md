@@ -28,6 +28,45 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 
 기존 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 유지합니다. 모든 GDAL 호출은 이제 `suspend`이므로 기존 동기 호출부는 coroutine 또는 `suspend` 함수로 옮겨야 합니다. `runtime()`처럼 준비된 Kotlin 객체를 가져오는 함수와 캐시된 데이터 프로퍼티는 동기 함수입니다.
 
+## 제공 기능
+
+| 영역 | 공통 API에서 가능한 작업 |
+| --- | --- |
+| 래스터 | 데이터셋·밴드 열기/생성, Byte/Short/Int/Long/Float/Double 배열 읽기·쓰기, window 읽기·쓰기 |
+| 공간 정보 | 영상 크기·밴드 타입·투영·GeoTransform·GCP, NoData·색 해석·마스크·overview 조회/생성 |
+| 포맷 변환 | `Driver.createCopy` 또는 보조 API의 `translate`, GTiff·COG·JPEGXL 출력과 JXL 압축 |
+| 재투영 | 보조 API의 `warp`, CRS 생성·변환 및 좌표 목록 변환 |
+| 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, 보조 API의 `translateVector`(GDAL 공간 필터 옵션 포함) |
+| Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
+| 메모리 파일 | `/vsimem/` 바이트 입출력, 보조 API의 다중 파일 묶음(예: Shapefile) |
+
+다음은 `Gdal4k.prepare()`가 끝난 뒤 호출하는 COG/JXL 무손실 변환 예시입니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
+
+```kotlin
+suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): ByteArray {
+    val runtime = Gdal4k.runtime()
+    try {
+        runtime.writeMemoryFile(inputPath, input)
+        runtime.openDataset(inputPath).use { source ->
+            requireNotNull(runtime.getDriver("COG")).use { driver ->
+                requireNotNull(driver.createCopy(
+                    outputPath, source,
+                    options = listOf("COMPRESS=JXL", "JXL_LOSSLESS=YES"),
+                )).close()
+            }
+        }
+        return runtime.readMemoryFile(outputPath)
+    } finally {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            runtime.deleteMemoryFile(inputPath)
+            runtime.deleteMemoryFile(outputPath)
+        }
+    }
+}
+```
+
+단독 JPEG XL 파일은 드라이버를 `JPEGXL`, 옵션을 `LOSSLESS=YES`로 바꿉니다. 입력 타입·밴드 구성은 선택한 드라이버가 지원해야 합니다. GDAL 전체 C/C++ API를 모두 노출한 것은 아니며, 객체 API의 정확한 메서드는 `gdal4k-runtime` 인터페이스가 기준입니다.
+
 ## 실행과 취소
 
 | 플랫폼 | GDAL 실행 위치 | 내장 방식 |
@@ -36,6 +75,8 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 | Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
 | JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
+
+Android는 API 28 이상에서 64비트 `arm64-v8a`, `x86_64`만 지원합니다. 32비트 ARM/x86은 배포·테스트 대상에서 제외합니다.
 
 한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 
@@ -63,4 +104,4 @@ GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브
 
 테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
 
-지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android는 ABI 4종을 빌드하고 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.
+지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 64비트 ABI 2종을 빌드하고 x86_64 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.

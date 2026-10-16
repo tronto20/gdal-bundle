@@ -2,6 +2,8 @@
 
 GDAL 3.12.4를 내장한 Kotlin Multiplatform 라이브러리입니다. JVM, Android, Kotlin/Native, JS, wasmJs에서 같은 `suspend` API를 사용합니다. GDAL 설치, 데이터 디렉터리 지정, 웹 엔진 CDN 설정은 필요하지 않습니다. WASI는 제외합니다.
 
+Android는 API 28 이상, `arm64-v8a`와 `x86_64`만 지원합니다. Android 32비트는 지원하지 않습니다.
+
 ```kotlin
 commonMain.dependencies {
     implementation("dev.tronto.gdal4k:gdal4k:3.12.4-1.0.1-SNAPSHOT")
