@@ -69,7 +69,14 @@ kotlin {
             inputs.file(layout.buildDirectory.file("engine/$platform/native-linker-options.json"))
             doLast {
                 val linkedOptions = groovy.json.JsonSlurper().parse(layout.buildDirectory.file("engine/$platform/native-linker-options.json").get().asFile) as List<*>
-                val systemOptions = (listOf(if (platform.startsWith("macos") || platform.startsWith("ios")) "-lc++" else "-lstdc++") + linkedOptions.map { it.toString() }).distinct().joinToString(" ")
+                // K/N's MinGW driver already supplies static libstdc++; an explicit
+                // -lstdc++ would select its DLL import library before that runtime.
+                val cxxRuntime = when {
+                    platform.startsWith("windows") -> emptyList()
+                    platform.startsWith("macos") || platform.startsWith("ios") -> listOf("-lc++")
+                    else -> listOf("-lstdc++")
+                }
+                val systemOptions = (cxxRuntime + linkedOptions.map { it.toString() }).distinct().joinToString(" ")
                 destination.get().asFile.apply {
                     parentFile.mkdirs()
                     writeText("headers = gdal4k.h\ncompilerOpts = -DGDAL4K_STATIC\npackage = dev.gdal4k.cinterop\nstaticLibraries = libgdal4k.a\nlibraryPaths = ${layout.buildDirectory.dir("engine/$platform").get().asFile.absolutePath.replace('\\','/')}\nlinkerOpts = $systemOptions\n")

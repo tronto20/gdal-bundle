@@ -119,7 +119,7 @@ def main():
   if target.startswith('windows'):
    # K/N supplies static winpthread with --whole-archive. Re-adding its dynamic
    # import library before that runtime produces duplicate pthread definitions.
-   system_options=[t for t in system_options if t not in ['-lwinpthread','-lpthread']]
+   system_options=[t for t in system_options if t not in ['-lwinpthread','-lpthread','-lstdc++']]
   (out/'native-linker-options.json').write_text(json.dumps(system_options)+'\n')
   merged=out/'libgdal4k.a'
   if target.startswith(('macos','ios')):run('/usr/bin/libtool','-static','-o',merged,*archives)
