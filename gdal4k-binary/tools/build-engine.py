@@ -56,6 +56,7 @@ def main():
  if target.startswith('linux'):
   # All target dependencies are static, with tools disabled. They have no ELF RPATH.
   settings+='set(VCPKG_FIXUP_ELF_RPATH OFF)\n'
+  settings+='if(PORT STREQUAL "gdal")\n  list(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS -DGDAL_OBJECT_LIBRARIES_POSITION_INDEPENDENT_CODE=ON)\nendif()\n'
   if platform.system()=='Darwin':
    # Pinned Meson helper compares CPU families but misses a same-CPU OS change.
    settings+='set(IS_CROSS TRUE)\n'

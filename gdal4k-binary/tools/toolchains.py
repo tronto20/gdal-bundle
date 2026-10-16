@@ -7,6 +7,23 @@ from pathlib import Path
 
 KOTLIN_VERSION = '2.4.21'
 
+def mingw_header_overlay(gcc, directory):
+    """Backport GCC PR libstdc++/91786 without modifying the user's K/N SDK.
+
+    https://gcc.gnu.org/legacy-ml/libstdc++/2019-11/msg00097.html
+    Move filesystem_error before u8path uses it. Definitions and ABI are unchanged.
+    """
+    text=(gcc/'include/c++/9.2.0/bits/fs_path.h').read_text()
+    begin=text.index('  class filesystem_error : public std::system_error\n')
+    end=text.index('  struct path::_Cmpt',begin)
+    definition=text[begin:end]
+    text=text[:begin]+text[end:]
+    position=text.index('  template<typename _InputIterator>\n    inline auto\n    u8path(')
+    text=text[:position]+definition+text[position:]
+    destination=directory/'bits/fs_path.h';destination.parent.mkdir(parents=True,exist_ok=True)
+    destination.write_text(text)
+    return directory
+
 def konan_home():
     configured = os.environ.get('KONAN_HOME')
     if configured:
@@ -32,6 +49,7 @@ def native_toolchain(target, destination):
         gcc = dependencies/'msys2-mingw-w64-x86_64-2'
         os.environ['PATH'] = str(gcc/'bin')+os.pathsep+os.environ['PATH']
         llvm = next(p for p in dependencies.glob('llvm-21-x86_64-windows-*') if (p/'bin/clang.exe').exists())
+        headers=mingw_header_overlay(gcc,destination.parent/'compiler-headers')
         # K/N's stripped GCC distribution has headers/runtime but no cc1plus.
         # Use its LLVM compiler and the matching MinGW sysroot, as K/N itself does.
         text = f'''set(CMAKE_SYSTEM_NAME Windows)
@@ -41,7 +59,7 @@ set(CMAKE_C_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_CXX_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_SYSROOT "{gcc.as_posix()}")
 set(CMAKE_C_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()}")
-set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()}")
+set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()} -isystem {headers.as_posix()}")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_RC_COMPILER "{(gcc/'bin/windres.exe').as_posix()}")
