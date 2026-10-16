@@ -105,5 +105,5 @@ tasks.withType<KotlinJsTest>().configureEach {
     dependsOn(prepareTestWebRuntime)
     environment("GDAL4K_TEST_RUNTIME", layout.buildDirectory.dir("test-web-runtime/gdal").get().asFile.absolutePath)
     environment("GDAL4K_BRIDGE_URL", layout.projectDirectory.file("web/gdal4k-web.mjs").asFile.toURI().toString())
-    environment("GDAL4K_ASSETS_URL", layout.projectDirectory.dir("web/node_modules/gdal3.js/dist/package").asFile.toURI().toString())
+    environment("GDAL4K_ASSETS_URL", layout.projectDirectory.dir("web/node_modules/gdal3.js/dist/package").asFile.toURI().toString().trimEnd('/') + "/")
 }
