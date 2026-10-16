@@ -4,137 +4,137 @@ package dev.gdal4k.runtime
  * Shared OGR feature handle.
  */
 interface Feature {
-    fun close()
+    suspend fun close()
 
-    fun getDefinition(): FeatureDefn
+    suspend fun getDefinition(): FeatureDefn
 
-    fun cloneFeature(): Feature
+    suspend fun cloneFeature(): Feature
 
-    fun equal(other: Feature): Boolean
+    suspend fun equal(other: Feature): Boolean
 
-    fun getFID(): Long
+    suspend fun getFID(): Long
 
-    fun setFID(fid: Long): Int
+    suspend fun setFID(fid: Long): Int
 
-    fun getGeometryRef(): Geometry?
+    suspend fun getGeometryRef(): Geometry?
 
-    fun setGeometry(geometry: Geometry): Int
+    suspend fun setGeometry(geometry: Geometry): Int
 
-    fun setGeometryDirectly(geometry: Geometry): Int
+    suspend fun setGeometryDirectly(geometry: Geometry): Int
 
-    fun getFieldCount(): Int
+    suspend fun getFieldCount(): Int
 
-    fun getFieldDefn(index: Int): FieldDefn?
+    suspend fun getFieldDefn(index: Int): FieldDefn?
 
-    fun getFieldDefn(name: String): FieldDefn?
+    suspend fun getFieldDefn(name: String): FieldDefn?
 
-    fun getGeomFieldCount(): Int
+    suspend fun getGeomFieldCount(): Int
 
-    fun getGeomFieldDefn(index: Int): GeomFieldDefn?
+    suspend fun getGeomFieldDefn(index: Int): GeomFieldDefn?
 
-    fun getGeomFieldDefn(name: String): GeomFieldDefn?
+    suspend fun getGeomFieldDefn(name: String): GeomFieldDefn?
 
-    fun getGeomFieldIndex(name: String): Int
+    suspend fun getGeomFieldIndex(name: String): Int
 
-    fun getGeomFieldRef(index: Int): Geometry?
+    suspend fun getGeomFieldRef(index: Int): Geometry?
 
-    fun getGeomFieldRef(name: String): Geometry?
+    suspend fun getGeomFieldRef(name: String): Geometry?
 
-    fun setGeomField(index: Int, geometry: Geometry): Int
+    suspend fun setGeomField(index: Int, geometry: Geometry): Int
 
-    fun setGeomField(name: String, geometry: Geometry): Int
+    suspend fun setGeomField(name: String, geometry: Geometry): Int
 
-    fun setGeomFieldDirectly(index: Int, geometry: Geometry): Int
+    suspend fun setGeomFieldDirectly(index: Int, geometry: Geometry): Int
 
-    fun setGeomFieldDirectly(name: String, geometry: Geometry): Int
+    suspend fun setGeomFieldDirectly(name: String, geometry: Geometry): Int
 
-    fun getFieldAsString(index: Int): String
+    suspend fun getFieldAsString(index: Int): String
 
-    fun getFieldAsString(name: String): String
+    suspend fun getFieldAsString(name: String): String
 
-    fun getFieldAsInteger(index: Int): Int
+    suspend fun getFieldAsInteger(index: Int): Int
 
-    fun getFieldAsInteger(name: String): Int
+    suspend fun getFieldAsInteger(name: String): Int
 
-    fun getFieldAsInteger64(index: Int): Long
+    suspend fun getFieldAsInteger64(index: Int): Long
 
-    fun getFieldAsInteger64(name: String): Long
+    suspend fun getFieldAsInteger64(name: String): Long
 
-    fun getFieldAsDouble(index: Int): Double
+    suspend fun getFieldAsDouble(index: Int): Double
 
-    fun getFieldAsDouble(name: String): Double
+    suspend fun getFieldAsDouble(name: String): Double
 
-    fun getFieldAsStringList(index: Int): List<String>
+    suspend fun getFieldAsStringList(index: Int): List<String>
 
-    fun getFieldAsIntegerList(index: Int): IntArray
+    suspend fun getFieldAsIntegerList(index: Int): IntArray
 
-    fun getFieldAsDoubleList(index: Int): DoubleArray
+    suspend fun getFieldAsDoubleList(index: Int): DoubleArray
 
-    fun getFieldAsBinary(index: Int): ByteArray
+    suspend fun getFieldAsBinary(index: Int): ByteArray
 
-    fun isFieldSet(index: Int): Boolean
+    suspend fun isFieldSet(index: Int): Boolean
 
-    fun isFieldSet(name: String): Boolean
+    suspend fun isFieldSet(name: String): Boolean
 
-    fun isFieldNull(index: Int): Boolean
+    suspend fun isFieldNull(index: Int): Boolean
 
-    fun isFieldNull(name: String): Boolean
+    suspend fun isFieldNull(name: String): Boolean
 
-    fun isFieldSetAndNotNull(index: Int): Boolean
+    suspend fun isFieldSetAndNotNull(index: Int): Boolean
 
-    fun isFieldSetAndNotNull(name: String): Boolean
+    suspend fun isFieldSetAndNotNull(name: String): Boolean
 
-    fun getFieldIndex(name: String): Int
+    suspend fun getFieldIndex(name: String): Int
 
-    fun dumpReadableAsString(): String
+    suspend fun dumpReadableAsString(): String
 
-    fun getStyleString(): String
+    suspend fun getStyleString(): String
 
-    fun setStyleString(style: String)
+    suspend fun setStyleString(style: String)
 
-    fun getFieldType(index: Int): Int
+    suspend fun getFieldType(index: Int): Int
 
-    fun getFieldType(name: String): Int
+    suspend fun getFieldType(name: String): Int
 
-    fun validate(flags: Int = 0, options: Int = 0): Int
+    suspend fun validate(flags: Int = 0, options: Int = 0): Int
 
-    fun fillUnsetWithDefault()
+    suspend fun fillUnsetWithDefault()
 
-    fun getNativeData(): String
+    suspend fun getNativeData(): String
 
-    fun getNativeMediaType(): String
+    suspend fun getNativeMediaType(): String
 
-    fun setNativeData(nativeData: String)
+    suspend fun setNativeData(nativeData: String)
 
-    fun setNativeMediaType(nativeMediaType: String)
+    suspend fun setNativeMediaType(nativeMediaType: String)
 
-    fun unsetField(index: Int)
+    suspend fun unsetField(index: Int)
 
-    fun unsetField(name: String)
+    suspend fun unsetField(name: String)
 
-    fun setFieldNull(index: Int)
+    suspend fun setFieldNull(index: Int)
 
-    fun setFieldNull(name: String)
+    suspend fun setFieldNull(name: String)
 
-    fun setField(index: Int, value: String)
+    suspend fun setField(index: Int, value: String)
 
-    fun setField(name: String, value: String)
+    suspend fun setField(name: String, value: String)
 
-    fun setField(index: Int, value: Int)
+    suspend fun setField(index: Int, value: Int)
 
-    fun setField(name: String, value: Int)
+    suspend fun setField(name: String, value: Int)
 
-    fun setFieldInteger64(index: Int, value: Long)
+    suspend fun setFieldInteger64(index: Int, value: Long)
 
-    fun setField(index: Int, value: Double)
+    suspend fun setField(index: Int, value: Double)
 
-    fun setField(name: String, value: Double)
+    suspend fun setField(name: String, value: Double)
 }
 
-inline fun <T : Feature, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : Feature, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

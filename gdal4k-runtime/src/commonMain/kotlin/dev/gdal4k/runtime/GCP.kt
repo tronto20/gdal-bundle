@@ -4,41 +4,41 @@ package dev.gdal4k.runtime
  * Shared GDAL Ground Control Point handle.
  */
 interface GCP {
-    fun close()
+    suspend fun close()
 
-    fun getGCPX(): Double
+    suspend fun getGCPX(): Double
 
-    fun setGCPX(value: Double)
+    suspend fun setGCPX(value: Double)
 
-    fun getGCPY(): Double
+    suspend fun getGCPY(): Double
 
-    fun setGCPY(value: Double)
+    suspend fun setGCPY(value: Double)
 
-    fun getGCPZ(): Double
+    suspend fun getGCPZ(): Double
 
-    fun setGCPZ(value: Double)
+    suspend fun setGCPZ(value: Double)
 
-    fun getGCPPixel(): Double
+    suspend fun getGCPPixel(): Double
 
-    fun setGCPPixel(value: Double)
+    suspend fun setGCPPixel(value: Double)
 
-    fun getGCPLine(): Double
+    suspend fun getGCPLine(): Double
 
-    fun setGCPLine(value: Double)
+    suspend fun setGCPLine(value: Double)
 
-    fun getInfo(): String
+    suspend fun getInfo(): String
 
-    fun setInfo(info: String)
+    suspend fun setInfo(info: String)
 
-    fun getId(): String
+    suspend fun getId(): String
 
-    fun setId(id: String)
+    suspend fun setId(id: String)
 }
 
-inline fun <T : GCP, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : GCP, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

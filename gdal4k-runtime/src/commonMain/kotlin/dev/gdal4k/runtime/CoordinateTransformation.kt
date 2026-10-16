@@ -4,15 +4,15 @@ package dev.gdal4k.runtime
  * Shared coordinate transformation handle.
  */
 interface CoordinateTransformation {
-    fun close()
+    suspend fun close()
 
-    fun transformPoint(x: Double, y: Double): DoubleArray
+    suspend fun transformPoint(x: Double, y: Double): DoubleArray
 
-    fun transformPoint(x: Double, y: Double, z: Double): DoubleArray
+    suspend fun transformPoint(x: Double, y: Double, z: Double): DoubleArray
 
-    fun transformPoints(points: Array<DoubleArray>)
+    suspend fun transformPoints(points: Array<DoubleArray>)
 
-    fun transformBounds(
+    suspend fun transformBounds(
         bounds: DoubleArray,
         xMin: Double,
         yMin: Double,
@@ -21,13 +21,13 @@ interface CoordinateTransformation {
         densifyPoints: Int = 0,
     )
 
-    fun getInverse(): CoordinateTransformation?
+    suspend fun getInverse(): CoordinateTransformation?
 }
 
-inline fun <T : CoordinateTransformation, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : CoordinateTransformation, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

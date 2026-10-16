@@ -6,59 +6,59 @@ package dev.gdal4k.runtime
  * The first pass keeps the surface focused on layer metadata, filtering, and iteration state.
  */
 interface Layer {
-    fun close()
+    suspend fun close()
 
-    fun getDataset(): Dataset?
+    suspend fun getDataset(): Dataset?
 
-    fun getLayerDefn(): FeatureDefn?
+    suspend fun getLayerDefn(): FeatureDefn?
 
-    fun getName(): String
+    suspend fun getName(): String
 
-    fun getGeomType(): Int
+    suspend fun getGeomType(): Int
 
-    fun getGeometryColumn(): String
+    suspend fun getGeometryColumn(): String
 
-    fun getFIDColumn(): String
+    suspend fun getFIDColumn(): String
 
-    fun rename(name: String): Int
+    suspend fun rename(name: String): Int
 
-    fun getRefCount(): Int
+    suspend fun getRefCount(): Int
 
-    fun createGeomField(geomFieldDefn: GeomFieldDefn, flags: Int = 0): Int
+    suspend fun createGeomField(geomFieldDefn: GeomFieldDefn, flags: Int = 0): Int
 
-    fun setAttributeFilter(filter: String): Int
+    suspend fun setAttributeFilter(filter: String): Int
 
-    fun resetReading()
+    suspend fun resetReading()
 
-    fun getFeature(fid: Long): Feature?
+    suspend fun getFeature(fid: Long): Feature?
 
-    fun getNextFeature(): Feature?
+    suspend fun getNextFeature(): Feature?
 
-    fun createFeature(feature: Feature): Int
+    suspend fun createFeature(feature: Feature): Int
 
-    fun setFeature(feature: Feature): Int
+    suspend fun setFeature(feature: Feature): Int
 
-    fun upsertFeature(feature: Feature): Int
+    suspend fun upsertFeature(feature: Feature): Int
 
-    fun deleteFeature(fid: Long): Int
+    suspend fun deleteFeature(fid: Long): Int
 
-    fun setNextByIndex(index: Long): Int
+    suspend fun setNextByIndex(index: Long): Int
 
-    fun getFeatureCount(force: Boolean = false): Long
+    suspend fun getFeatureCount(force: Boolean = false): Long
 
-    fun getExtent(force: Boolean = false): DoubleArray?
+    suspend fun getExtent(force: Boolean = false): DoubleArray?
 
-    fun getFeaturesRead(): Long
+    suspend fun getFeaturesRead(): Long
 
-    fun syncToDisk(): Int
+    suspend fun syncToDisk(): Int
 
-    fun testCapability(capability: String): Boolean
+    suspend fun testCapability(capability: String): Boolean
 }
 
-inline fun <T : Layer, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : Layer, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

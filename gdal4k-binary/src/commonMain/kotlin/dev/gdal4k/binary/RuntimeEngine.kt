@@ -1,0 +1,91 @@
+package dev.gdal4k.binary
+
+import dev.gdal4k.GdalException
+import dev.gdal4k.GdalTransport
+import dev.gdal4k.runtime.*
+import kotlinx.serialization.json.*
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+internal class RuntimeEngine(private val transport: GdalTransport) {
+    private val mutex = Mutex()
+    private var closed = false
+    suspend fun close() = withContext(NonCancellable) { mutex.withLock {
+        if (!closed) { transport.close(); closed = true }
+    } }
+    suspend fun invoke(type: String, handle: String, method: String, parameters: Map<String, JsonElement>): JsonElement {
+        if (method != "close") currentCoroutineContext().ensureActive()
+        return mutex.withLock { withContext(NonCancellable) {
+        if (closed) {
+            check(method == "close") { "GDAL runtime is closed" }
+            return@withContext JsonNull
+        }
+        val request = buildJsonObject {
+            put("op", "runtime")
+            putJsonObject("args") {
+                put("type", type); put("handle", handle); put("method", method)
+                put("parameters", JsonObject(parameters))
+            }
+        }
+        val response = Json.parseToJsonElement(transport.call(request.toString())).jsonObject
+        response["error"]?.let { throw GdalException(it.jsonPrimitive.content) }
+        response.getValue("result").jsonObject.getValue("value")
+    } }
+    }
+}
+
+internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: String, private val parent: RuntimeHandle?) {
+    @kotlin.concurrent.Volatile private var closed = false
+    fun checkOpen() { check(!closed) { "GDAL handle is closed" }; parent?.checkOpen() }
+    suspend fun invoke(type: String, method: String, parameters: Map<String, JsonElement>): JsonElement {
+        checkOpen()
+        return engine.invoke(type, id, method, parameters)
+    }
+    suspend fun closeHandle() = withContext(NonCancellable) {
+        if (!closed) {
+            // Closing a borrowed handle never destroys the parent's GDAL object.
+            engine.invoke("Handle", id, "close", emptyMap())
+            closed = true
+        }
+    }
+    fun handle(value: Any): JsonElement {
+        val h = value as? RuntimeHandle ?: error("Handle was not created by the bundled GDAL runtime")
+        require(h.engine === engine) { "Handle belongs to another GDAL runtime" }
+        h.checkOpen()
+        val type = when(value) {
+            is Dataset -> "Dataset"; is Driver -> "Driver"; is Band -> "Band"
+            is SpatialReference -> "SpatialReference"; is CoordinateTransformation -> "CoordinateTransformation"
+            is GCP -> "GCP"; is Layer -> "Layer"; is Feature -> "Feature"
+            is FeatureDefn -> "FeatureDefn"; is FieldDefn -> "FieldDefn"; is GeomFieldDefn -> "GeomFieldDefn"
+            is Geometry -> "Geometry"; else -> error("Unknown GDAL handle")
+        }
+        return buildJsonObject { put("handle", h.id); put("type", type) }
+    }
+    fun encode(value: Any): JsonElement = when(value) {
+        is String -> { require('\u0000' !in value) { "GDAL strings cannot contain NUL" }; JsonPrimitive(value) }
+        is Boolean -> JsonPrimitive(value)
+        is Long -> JsonPrimitive(value.toString()) // JavaScript numbers cannot represent every Int64.
+        is Double -> if (value.isFinite()) JsonPrimitive(value) else JsonPrimitive(value.toString())
+        is Float -> encode(value.toDouble())
+        is Number -> JsonPrimitive(value)
+        is List<*> -> JsonArray(value.map { if (it is RuntimeHandle) handle(it) else encode(requireNotNull(it)) })
+        is Array<*> -> JsonArray(value.map { encode(requireNotNull(it)) })
+        is ByteArray -> JsonArray(value.map(::JsonPrimitive))
+        is ShortArray -> JsonArray(value.map(::JsonPrimitive))
+        is IntArray -> JsonArray(value.map(::JsonPrimitive))
+        is LongArray -> JsonArray(value.map { encode(it) })
+        is FloatArray -> JsonArray(value.map { encode(it) })
+        is DoubleArray -> JsonArray(value.map { encode(it) })
+        is DatasetOpenOptions -> buildJsonObject {
+            put("update", value.accessMode == DatasetAccessMode.Update)
+            put("kind", when(value.kind) { DatasetKind.Any -> 0; DatasetKind.Raster -> 2; DatasetKind.Vector -> 4 })
+            put("options", encode(value.openOptions))
+        }
+        is DatasetInfoOptions -> buildJsonObject { put("arguments", encode(value.arguments)) }
+        else -> error("Unsupported GDAL argument: $value")
+    }
+}

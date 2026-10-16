@@ -4,47 +4,47 @@ package dev.gdal4k.runtime
  * Shared feature definition handle.
  */
 interface FeatureDefn {
-    fun close()
+    suspend fun close()
 
-    fun getName(): String
+    suspend fun getName(): String
 
-    fun getFieldCount(): Int
+    suspend fun getFieldCount(): Int
 
-    fun getFieldDefn(index: Int): FieldDefn?
+    suspend fun getFieldDefn(index: Int): FieldDefn?
 
-    fun getFieldIndex(name: String): Int
+    suspend fun getFieldIndex(name: String): Int
 
-    fun addFieldDefn(fieldDefn: FieldDefn)
+    suspend fun addFieldDefn(fieldDefn: FieldDefn)
 
-    fun getGeomFieldCount(): Int
+    suspend fun getGeomFieldCount(): Int
 
-    fun getGeomFieldDefn(index: Int): GeomFieldDefn?
+    suspend fun getGeomFieldDefn(index: Int): GeomFieldDefn?
 
-    fun getGeomFieldIndex(name: String): Int
+    suspend fun getGeomFieldIndex(name: String): Int
 
-    fun addGeomFieldDefn(geomFieldDefn: GeomFieldDefn)
+    suspend fun addGeomFieldDefn(geomFieldDefn: GeomFieldDefn)
 
-    fun getGeomType(): Int
+    suspend fun getGeomType(): Int
 
-    fun setGeomType(geomType: Int)
+    suspend fun setGeomType(geomType: Int)
 
-    fun getReferenceCount(): Int
+    suspend fun getReferenceCount(): Int
 
-    fun isGeometryIgnored(): Boolean
+    suspend fun isGeometryIgnored(): Boolean
 
-    fun setGeometryIgnored(ignored: Boolean)
+    suspend fun setGeometryIgnored(ignored: Boolean)
 
-    fun isStyleIgnored(): Boolean
+    suspend fun isStyleIgnored(): Boolean
 
-    fun setStyleIgnored(ignored: Boolean)
+    suspend fun setStyleIgnored(ignored: Boolean)
 
-    fun isSame(other: FeatureDefn): Boolean
+    suspend fun isSame(other: FeatureDefn): Boolean
 }
 
-inline fun <T : FeatureDefn, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : FeatureDefn, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

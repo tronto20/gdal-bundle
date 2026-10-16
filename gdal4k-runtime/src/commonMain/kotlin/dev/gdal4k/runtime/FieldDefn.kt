@@ -4,89 +4,89 @@ package dev.gdal4k.runtime
  * Shared OGR field definition handle.
  */
 interface FieldDefn {
-    fun close()
+    suspend fun close()
 
-    fun getName(): String
+    suspend fun getName(): String
 
-    fun getNameRef(): String
+    suspend fun getNameRef(): String
 
-    fun setName(name: String)
+    suspend fun setName(name: String)
 
-    fun getAlternativeName(): String
+    suspend fun getAlternativeName(): String
 
-    fun getAlternativeNameRef(): String
+    suspend fun getAlternativeNameRef(): String
 
-    fun setAlternativeName(name: String)
+    suspend fun setAlternativeName(name: String)
 
-    fun getType(): Int
+    suspend fun getType(): Int
 
-    fun setType(type: Int)
+    suspend fun setType(type: Int)
 
-    fun getFieldType(): Int
+    suspend fun getFieldType(): Int
 
-    fun getSubType(): Int
+    suspend fun getSubType(): Int
 
-    fun setSubType(subType: Int)
+    suspend fun setSubType(subType: Int)
 
-    fun getJustify(): Int
+    suspend fun getJustify(): Int
 
-    fun setJustify(justify: Int)
+    suspend fun setJustify(justify: Int)
 
-    fun getWidth(): Int
+    suspend fun getWidth(): Int
 
-    fun setWidth(width: Int)
+    suspend fun setWidth(width: Int)
 
-    fun getPrecision(): Int
+    suspend fun getPrecision(): Int
 
-    fun setPrecision(precision: Int)
+    suspend fun setPrecision(precision: Int)
 
-    fun getTZFlag(): Int
+    suspend fun getTZFlag(): Int
 
-    fun setTZFlag(flag: Int)
+    suspend fun setTZFlag(flag: Int)
 
-    fun getTypeName(): String
+    suspend fun getTypeName(): String
 
-    fun getFieldTypeName(type: Int): String
+    suspend fun getFieldTypeName(type: Int): String
 
-    fun isIgnored(): Boolean
+    suspend fun isIgnored(): Boolean
 
-    fun setIgnored(ignored: Boolean)
+    suspend fun setIgnored(ignored: Boolean)
 
-    fun isNullable(): Boolean
+    suspend fun isNullable(): Boolean
 
-    fun setNullable(nullable: Boolean)
+    suspend fun setNullable(nullable: Boolean)
 
-    fun isUnique(): Boolean
+    suspend fun isUnique(): Boolean
 
-    fun setUnique(unique: Boolean)
+    suspend fun setUnique(unique: Boolean)
 
-    fun isGenerated(): Boolean
+    suspend fun isGenerated(): Boolean
 
-    fun setGenerated(generated: Boolean)
+    suspend fun setGenerated(generated: Boolean)
 
-    fun getDefault(): String
+    suspend fun getDefault(): String
 
-    fun setDefault(defaultValue: String)
+    suspend fun setDefault(defaultValue: String)
 
-    fun isDefaultDriverSpecific(): Boolean
+    suspend fun isDefaultDriverSpecific(): Boolean
 
-    fun getDomainName(): String
+    suspend fun getDomainName(): String
 
-    fun getDomainNameRef(): String
+    suspend fun getDomainNameRef(): String
 
-    fun setDomainName(domainName: String)
+    suspend fun setDomainName(domainName: String)
 
-    fun getComment(): String
+    suspend fun getComment(): String
 
-    fun getCommentRef(): String
+    suspend fun getCommentRef(): String
 
-    fun setComment(comment: String)
+    suspend fun setComment(comment: String)
 }
 
-inline fun <T : FieldDefn, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : FieldDefn, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

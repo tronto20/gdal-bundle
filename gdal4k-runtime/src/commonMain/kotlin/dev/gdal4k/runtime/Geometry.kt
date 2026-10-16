@@ -7,163 +7,163 @@ package dev.gdal4k.runtime
  * the common collection/point accessors used by feature editing code.
  */
 interface Geometry {
-    fun close()
+    suspend fun close()
 
-    fun cloneGeometry(): Geometry
+    suspend fun cloneGeometry(): Geometry
 
-    fun getGeometryType(): Int
+    suspend fun getGeometryType(): Int
 
-    fun getGeometryName(): String
+    suspend fun getGeometryName(): String
 
-    fun getPointCount(): Int
+    suspend fun getPointCount(): Int
 
-    fun getGeometryCount(): Int
+    suspend fun getGeometryCount(): Int
 
-    fun getPoint(index: Int): DoubleArray
+    suspend fun getPoint(index: Int): DoubleArray
 
-    fun getPoints(): List<DoubleArray>
+    suspend fun getPoints(): List<DoubleArray>
 
-    fun getGeometryRef(index: Int): Geometry?
+    suspend fun getGeometryRef(index: Int): Geometry?
 
-    fun addPoint(x: Double, y: Double)
+    suspend fun addPoint(x: Double, y: Double)
 
-    fun addPoint(x: Double, y: Double, z: Double)
+    suspend fun addPoint(x: Double, y: Double, z: Double)
 
-    fun addPointM(x: Double, y: Double, m: Double)
+    suspend fun addPointM(x: Double, y: Double, m: Double)
 
-    fun addPointZM(x: Double, y: Double, z: Double, m: Double)
+    suspend fun addPointZM(x: Double, y: Double, z: Double, m: Double)
 
-    fun addPoint2D(x: Double, y: Double)
+    suspend fun addPoint2D(x: Double, y: Double)
 
-    fun addGeometryDirectly(geometry: Geometry): Int
+    suspend fun addGeometryDirectly(geometry: Geometry): Int
 
-    fun addGeometry(geometry: Geometry): Int
+    suspend fun addGeometry(geometry: Geometry): Int
 
-    fun removeGeometry(index: Int): Int
+    suspend fun removeGeometry(index: Int): Int
 
-    fun setPoint(index: Int, x: Double, y: Double)
+    suspend fun setPoint(index: Int, x: Double, y: Double)
 
-    fun setPoint(index: Int, x: Double, y: Double, z: Double)
+    suspend fun setPoint(index: Int, x: Double, y: Double, z: Double)
 
-    fun setPointM(index: Int, x: Double, y: Double, m: Double)
+    suspend fun setPointM(index: Int, x: Double, y: Double, m: Double)
 
-    fun setPointZM(index: Int, x: Double, y: Double, z: Double, m: Double)
+    suspend fun setPointZM(index: Int, x: Double, y: Double, z: Double, m: Double)
 
-    fun setPoint2D(index: Int, x: Double, y: Double)
+    suspend fun setPoint2D(index: Int, x: Double, y: Double)
 
-    fun swapXY()
+    suspend fun swapXY()
 
-    fun exportToWkt(): String
+    suspend fun exportToWkt(): String
 
-    fun exportToIsoWkt(): String
+    suspend fun exportToIsoWkt(): String
 
-    fun exportToGml(): String
+    suspend fun exportToGml(): String
 
-    fun exportToKml(): String
+    suspend fun exportToKml(): String
 
-    fun exportToJson(): String
+    suspend fun exportToJson(): String
 
-    fun exportToWkb(): ByteArray
+    suspend fun exportToWkb(): ByteArray
 
-    fun exportToIsoWkb(): ByteArray
+    suspend fun exportToIsoWkb(): ByteArray
 
-    fun getArea(): Double
+    suspend fun getArea(): Double
 
-    fun length(): Double
+    suspend fun length(): Double
 
-    fun geodesicLength(): Double
+    suspend fun geodesicLength(): Double
 
-    fun geodesicArea(): Double
+    suspend fun geodesicArea(): Double
 
-    fun distance(other: Geometry): Double
+    suspend fun distance(other: Geometry): Double
 
-    fun distance3D(other: Geometry): Double
+    suspend fun distance3D(other: Geometry): Double
 
-    fun empty()
+    suspend fun empty()
 
-    fun isEmpty(): Boolean
+    suspend fun isEmpty(): Boolean
 
-    fun isValid(): Boolean
+    suspend fun isValid(): Boolean
 
-    fun isSimple(): Boolean
+    suspend fun isSimple(): Boolean
 
-    fun isRing(): Boolean
+    suspend fun isRing(): Boolean
 
-    fun intersects(other: Geometry): Boolean
+    suspend fun intersects(other: Geometry): Boolean
 
-    fun intersectsExact(other: Geometry): Boolean
+    suspend fun intersectsExact(other: Geometry): Boolean
 
-    fun equal(other: Geometry): Boolean
+    suspend fun equal(other: Geometry): Boolean
 
-    fun disjoint(other: Geometry): Boolean
+    suspend fun disjoint(other: Geometry): Boolean
 
-    fun touches(other: Geometry): Boolean
+    suspend fun touches(other: Geometry): Boolean
 
-    fun crosses(other: Geometry): Boolean
+    suspend fun crosses(other: Geometry): Boolean
 
-    fun within(other: Geometry): Boolean
+    suspend fun within(other: Geometry): Boolean
 
-    fun contains(other: Geometry): Boolean
+    suspend fun contains(other: Geometry): Boolean
 
-    fun overlaps(other: Geometry): Boolean
+    suspend fun overlaps(other: Geometry): Boolean
 
-    fun getEnvelope(): DoubleArray
+    suspend fun getEnvelope(): DoubleArray
 
-    fun getEnvelope3D(): DoubleArray
+    suspend fun getEnvelope3D(): DoubleArray
 
-    fun centroid(): Geometry?
+    suspend fun centroid(): Geometry?
 
-    fun pointOnSurface(): Geometry?
+    suspend fun pointOnSurface(): Geometry?
 
-    fun boundary(): Geometry?
+    suspend fun boundary(): Geometry?
 
-    fun convexHull(): Geometry?
+    suspend fun convexHull(): Geometry?
 
-    fun buffer(distance: Double): Geometry?
+    suspend fun buffer(distance: Double): Geometry?
 
-    fun buffer(distance: Double, options: List<String>): Geometry?
+    suspend fun buffer(distance: Double, options: List<String>): Geometry?
 
-    fun simplify(tolerance: Double): Geometry?
+    suspend fun simplify(tolerance: Double): Geometry?
 
-    fun simplifyPreserveTopology(tolerance: Double): Geometry?
+    suspend fun simplifyPreserveTopology(tolerance: Double): Geometry?
 
-    fun makeValid(): Geometry?
+    suspend fun makeValid(): Geometry?
 
-    fun normalize(): Geometry?
+    suspend fun normalize(): Geometry?
 
-    fun closeRings()
+    suspend fun closeRings()
 
-    fun flattenTo2D()
+    suspend fun flattenTo2D()
 
-    fun segmentize(maxLength: Double)
+    suspend fun segmentize(maxLength: Double)
 
-    fun wkbSize(): Long
+    suspend fun wkbSize(): Long
 
-    fun getCoordinateDimension(): Int
+    suspend fun getCoordinateDimension(): Int
 
-    fun setCoordinateDimension(dimension: Int)
+    suspend fun setCoordinateDimension(dimension: Int)
 
-    fun is3D(): Boolean
+    suspend fun is3D(): Boolean
 
-    fun isMeasured(): Boolean
+    suspend fun isMeasured(): Boolean
 
-    fun set3D(enabled: Boolean)
+    suspend fun set3D(enabled: Boolean)
 
-    fun setMeasured(enabled: Boolean)
+    suspend fun setMeasured(enabled: Boolean)
 
-    fun getDimension(): Int
+    suspend fun getDimension(): Int
 
-    fun hasCurveGeometry(): Boolean
+    suspend fun hasCurveGeometry(): Boolean
 
-    fun getLinearGeometry(): Geometry?
+    suspend fun getLinearGeometry(): Geometry?
 
-    fun getCurveGeometry(): Geometry?
+    suspend fun getCurveGeometry(): Geometry?
 }
 
-inline fun <T : Geometry, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : Geometry, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

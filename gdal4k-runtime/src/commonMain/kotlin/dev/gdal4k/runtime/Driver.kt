@@ -4,15 +4,15 @@ package dev.gdal4k.runtime
  * Shared GDAL driver handle.
  */
 interface Driver {
-    fun close()
+    suspend fun close()
 
-    fun getShortName(): String
+    suspend fun getShortName(): String
 
-    fun getLongName(): String
+    suspend fun getLongName(): String
 
-    fun getHelpTopic(): String
+    suspend fun getHelpTopic(): String
 
-    fun create(
+    suspend fun create(
         name: String,
         xSize: Int,
         ySize: Int,
@@ -21,35 +21,35 @@ interface Driver {
         options: List<String> = emptyList(),
     ): Dataset?
 
-    fun createCopy(
+    suspend fun createCopy(
         name: String,
         dataset: Dataset,
         strict: Int = 0,
         options: List<String> = emptyList(),
     ): Dataset?
 
-    fun createVector(
+    suspend fun createVector(
         name: String,
         options: List<String> = emptyList(),
     ): Dataset?
 
-    fun delete(name: String): Int
+    suspend fun delete(name: String): Int
 
-    fun rename(from: String, to: String): Int
+    suspend fun rename(from: String, to: String): Int
 
-    fun copyFiles(from: String, to: String): Int
+    suspend fun copyFiles(from: String, to: String): Int
 
-    fun hasOpenOption(option: String): Boolean
+    suspend fun hasOpenOption(option: String): Boolean
 
-    fun register(): Int
+    suspend fun register(): Int
 
-    fun deregister()
+    suspend fun deregister()
 }
 
-inline fun <T : Driver, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : Driver, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

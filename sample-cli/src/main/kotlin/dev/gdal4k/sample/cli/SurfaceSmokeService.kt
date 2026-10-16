@@ -1,17 +1,17 @@
 package dev.gdal4k.sample.cli
 
 import dev.gdal4k.runtime.GdalRuntime
+import dev.gdal4k.runtime.GdalDataType
 import dev.gdal4k.runtime.DatasetAccessMode
 import dev.gdal4k.runtime.DatasetKind
 import dev.gdal4k.runtime.DatasetOpenOptions
 import dev.gdal4k.runtime.use
-import org.gdal.gdalconst.gdalconstConstants
 import java.nio.file.Files
 
 class SurfaceSmokeService(
     private val runtime: GdalRuntime,
 ) {
-    fun run(): String {
+    suspend fun run(): String {
         val sections = mutableListOf<String>()
         sections += smokeSpatialReferenceAndTransformation()
         sections += smokeRasterSurface()
@@ -26,7 +26,7 @@ class SurfaceSmokeService(
         }.trimEnd()
     }
 
-    private fun smokeSpatialReferenceAndTransformation(): String {
+    private suspend fun smokeSpatialReferenceAndTransformation(): String {
         runtime.createSpatialReference("OGC:CRS84").use { source ->
             runtime.createSpatialReference("EPSG:3857").use { target ->
                 source.cloneSpatialReference().use { cloned ->
@@ -66,7 +66,7 @@ class SurfaceSmokeService(
         return "SpatialReference + CoordinateTransformation"
     }
 
-    private fun smokeRasterSurface(): String {
+    private suspend fun smokeRasterSurface(): String {
         val driver = runtime.getDriver("MEM") ?: error("MEM raster driver was not available.")
         check(driver.getShortName().isNotBlank())
         check(driver.getLongName().isNotBlank())
@@ -77,7 +77,7 @@ class SurfaceSmokeService(
             xSize = 4,
             ySize = 3,
             bandCount = 1,
-            dataType = gdalconstConstants.GDT_Byte,
+            dataType = GdalDataType.Byte,
             options = emptyList(),
         ) ?: error("Unable to create in-memory raster dataset.")
 
@@ -115,7 +115,7 @@ class SurfaceSmokeService(
             val payload = ByteArray(12) { index -> (index + 1).toByte() }
             check(band.getXSize() == 4)
             check(band.getYSize() == 3)
-            check(band.getRasterDataType() == gdalconstConstants.GDT_Byte)
+            check(band.getRasterDataType() == GdalDataType.Byte)
             check(band.getBlockSize().size == 2)
             check(band.writeRaster(payload) == 0)
 
@@ -147,14 +147,14 @@ class SurfaceSmokeService(
         return "Dataset + Band"
     }
 
-    private fun smokeGcpSurface(): String {
+    private suspend fun smokeGcpSurface(): String {
         val driver = runtime.getDriver("MEM") ?: error("MEM raster driver was not available.")
         val dataset = driver.create(
             name = "",
             xSize = 2,
             ySize = 2,
             bandCount = 1,
-            dataType = gdalconstConstants.GDT_Byte,
+            dataType = GdalDataType.Byte,
             options = emptyList(),
         ) ?: error("Unable to create a raster dataset for GCP smoke testing.")
 
@@ -204,7 +204,7 @@ class SurfaceSmokeService(
         return "Dataset + GCP"
     }
 
-    private fun smokeVectorSurface(): String {
+    private suspend fun smokeVectorSurface(): String {
         val tempDir = Files.createTempDirectory("gdal4k-sample-cli-smoke-")
         val sourcePath = tempDir.resolve("fixture.geojson")
         val copiedPath = tempDir.resolve("copied.geojson")

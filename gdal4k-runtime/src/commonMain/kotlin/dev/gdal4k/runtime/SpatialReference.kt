@@ -7,131 +7,131 @@ package dev.gdal4k.runtime
  * setters that will be needed by dataset/vector geometry workflows.
  */
 interface SpatialReference {
-    fun close()
+    suspend fun close()
 
-    fun cloneSpatialReference(): SpatialReference
+    suspend fun cloneSpatialReference(): SpatialReference
 
-    fun exportToWkt(): String
+    suspend fun exportToWkt(): String
 
-    fun exportToPrettyWkt(): String
+    suspend fun exportToPrettyWkt(): String
 
-    fun exportToProj4(): String
+    suspend fun exportToProj4(): String
 
-    fun exportToProjJson(): String
+    suspend fun exportToProjJson(): String
 
-    fun exportToXml(rootElement: String = ""): String
+    suspend fun exportToXml(rootElement: String = ""): String
 
-    fun exportToMICoordSys(): String
+    suspend fun exportToMICoordSys(): String
 
-    fun importFromWkt(wkt: String): Int
+    suspend fun importFromWkt(wkt: String): Int
 
-    fun importFromProj4(proj4: String): Int
+    suspend fun importFromProj4(proj4: String): Int
 
-    fun importFromEPSG(epsg: Int): Int
+    suspend fun importFromEPSG(epsg: Int): Int
 
-    fun importFromEPSGA(epsga: Int): Int
+    suspend fun importFromEPSGA(epsga: Int): Int
 
-    fun setFromUserInput(definition: String): Int
+    suspend fun setFromUserInput(definition: String): Int
 
-    fun setWellKnownGeogCS(name: String): Int
+    suspend fun setWellKnownGeogCS(name: String): Int
 
-    fun setProjection(name: String): Int
+    suspend fun setProjection(name: String): Int
 
-    fun setProjParm(name: String, value: Double): Int
+    suspend fun setProjParm(name: String, value: Double): Int
 
-    fun getProjParm(name: String, defaultValue: Double = 0.0): Double
+    suspend fun getProjParm(name: String, defaultValue: Double = 0.0): Double
 
-    fun setNormProjParm(name: String, value: Double): Int
+    suspend fun setNormProjParm(name: String, value: Double): Int
 
-    fun getNormProjParm(name: String, defaultValue: Double = 0.0): Double
+    suspend fun getNormProjParm(name: String, defaultValue: Double = 0.0): Double
 
-    fun getName(): String
+    suspend fun getName(): String
 
-    fun getCelestialBodyName(): String
+    suspend fun getCelestialBodyName(): String
 
-    fun isSame(other: SpatialReference): Boolean
+    suspend fun isSame(other: SpatialReference): Boolean
 
-    fun isGeographic(): Boolean
+    suspend fun isGeographic(): Boolean
 
-    fun isProjected(): Boolean
+    suspend fun isProjected(): Boolean
 
-    fun isGeocentric(): Boolean
+    suspend fun isGeocentric(): Boolean
 
-    fun isCompound(): Boolean
+    suspend fun isCompound(): Boolean
 
-    fun isVertical(): Boolean
+    suspend fun isVertical(): Boolean
 
-    fun isLocal(): Boolean
+    suspend fun isLocal(): Boolean
 
-    fun isDynamic(): Boolean
+    suspend fun isDynamic(): Boolean
 
-    fun hasPointMotionOperation(): Boolean
+    suspend fun hasPointMotionOperation(): Boolean
 
-    fun getCoordinateEpoch(): Double
+    suspend fun getCoordinateEpoch(): Double
 
-    fun setCoordinateEpoch(epoch: Double)
+    suspend fun setCoordinateEpoch(epoch: Double)
 
-    fun getAuthorityName(targetKey: String): String?
+    suspend fun getAuthorityName(targetKey: String): String?
 
-    fun getAuthorityCode(targetKey: String): String?
+    suspend fun getAuthorityCode(targetKey: String): String?
 
-    fun getAttrValue(name: String, child: Int = 0): String?
+    suspend fun getAttrValue(name: String, child: Int = 0): String?
 
-    fun setAttrValue(name: String, value: String): Int
+    suspend fun setAttrValue(name: String, value: String): Int
 
-    fun setAuthority(targetKey: String, authority: String, code: Int): Int
+    suspend fun setAuthority(targetKey: String, authority: String, code: Int): Int
 
-    fun getAngularUnits(): Double
+    suspend fun getAngularUnits(): Double
 
-    fun getAngularUnitsName(): String
+    suspend fun getAngularUnitsName(): String
 
-    fun setAngularUnits(name: String, radiansPerUnit: Double): Int
+    suspend fun setAngularUnits(name: String, radiansPerUnit: Double): Int
 
-    fun getLinearUnits(): Double
+    suspend fun getLinearUnits(): Double
 
-    fun getLinearUnitsName(): String
+    suspend fun getLinearUnitsName(): String
 
-    fun setLinearUnits(name: String, metersPerUnit: Double): Int
+    suspend fun setLinearUnits(name: String, metersPerUnit: Double): Int
 
-    fun setLinearUnitsAndUpdateParameters(name: String, metersPerUnit: Double): Int
+    suspend fun setLinearUnitsAndUpdateParameters(name: String, metersPerUnit: Double): Int
 
-    fun getAxisName(targetKey: String, index: Int): String?
+    suspend fun getAxisName(targetKey: String, index: Int): String?
 
-    fun getAxesCount(): Int
+    suspend fun getAxesCount(): Int
 
-    fun getAxisOrientation(targetKey: String, index: Int): Int
+    suspend fun getAxisOrientation(targetKey: String, index: Int): Int
 
-    fun getAxisMappingStrategy(): Int
+    suspend fun getAxisMappingStrategy(): Int
 
-    fun setAxisMappingStrategy(strategy: Int)
+    suspend fun setAxisMappingStrategy(strategy: Int)
 
-    fun setUTM(zone: Int, north: Int = 1): Int
+    suspend fun setUTM(zone: Int, north: Int = 1): Int
 
-    fun getUTMZone(): Int
+    suspend fun getUTMZone(): Int
 
-    fun autoIdentifyEPSG(): Int
+    suspend fun autoIdentifyEPSG(): Int
 
-    fun validate(): Int
+    suspend fun validate(): Int
 
-    fun morphToESRI(): Int
+    suspend fun morphToESRI(): Int
 
-    fun morphFromESRI(): Int
+    suspend fun morphFromESRI(): Int
 
-    fun stripVertical(): Int
+    suspend fun stripVertical(): Int
 
-    fun cloneGeogCS(): SpatialReference?
+    suspend fun cloneGeogCS(): SpatialReference?
 
-    fun convertToOtherProjection(projection: String): SpatialReference?
+    suspend fun convertToOtherProjection(projection: String): SpatialReference?
 
-    fun promoteTo3D(): Int
+    suspend fun promoteTo3D(): Int
 
-    fun demoteTo2D(): Int
+    suspend fun demoteTo2D(): Int
 }
 
-inline fun <T : SpatialReference, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : SpatialReference, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

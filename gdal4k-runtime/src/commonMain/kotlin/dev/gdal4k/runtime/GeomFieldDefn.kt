@@ -4,31 +4,31 @@ package dev.gdal4k.runtime
  * Shared OGR geometry field definition handle.
  */
 interface GeomFieldDefn {
-    fun close()
+    suspend fun close()
 
-    fun getName(): String
+    suspend fun getName(): String
 
-    fun getNameRef(): String
+    suspend fun getNameRef(): String
 
-    fun setName(name: String)
+    suspend fun setName(name: String)
 
-    fun getType(): Int
+    suspend fun getType(): Int
 
-    fun setType(type: Int)
+    suspend fun setType(type: Int)
 
-    fun isIgnored(): Boolean
+    suspend fun isIgnored(): Boolean
 
-    fun setIgnored(ignored: Boolean)
+    suspend fun setIgnored(ignored: Boolean)
 
-    fun isNullable(): Boolean
+    suspend fun isNullable(): Boolean
 
-    fun setNullable(nullable: Boolean)
+    suspend fun setNullable(nullable: Boolean)
 }
 
-inline fun <T : GeomFieldDefn, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : GeomFieldDefn, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }

@@ -20,7 +20,7 @@ fun resolveSigningKeyMaterial(rawValue: String?): String? {
 }
 
 val gdalVersion = providers.gradleProperty("gdalVersion")
-    .orElse("3.9.0")
+    .orElse("3.12.4")
     .get()
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
     .orElse("1.0.1-SNAPSHOT")

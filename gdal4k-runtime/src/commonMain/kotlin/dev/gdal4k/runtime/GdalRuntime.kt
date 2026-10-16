@@ -4,9 +4,16 @@ package dev.gdal4k.runtime
  * Common GDAL entry point for dataset, spatial reference, and transformation operations.
  */
 interface GdalRuntime {
-    fun getDriver(name: String): Driver?
+    suspend fun versionInfo(request: String = "--version"): String
 
-    fun createGCP(
+    /** Mount bytes in GDAL's process-local virtual filesystem. Path must begin with /vsimem/. */
+    suspend fun writeMemoryFile(path: String, bytes: ByteArray)
+    suspend fun readMemoryFile(path: String): ByteArray
+    suspend fun deleteMemoryFile(path: String)
+
+    suspend fun getDriver(name: String): Driver?
+
+    suspend fun createGCP(
         gcpX: Double = 0.0,
         gcpY: Double = 0.0,
         gcpZ: Double = 0.0,
@@ -16,21 +23,21 @@ interface GdalRuntime {
         id: String = "",
     ): GCP
 
-    fun createSpatialReference(): SpatialReference
+    suspend fun createSpatialReference(): SpatialReference
 
-    fun createSpatialReference(definition: String): SpatialReference
+    suspend fun createSpatialReference(definition: String): SpatialReference
 
-    fun createCoordinateTransformation(
+    suspend fun createCoordinateTransformation(
         source: SpatialReference,
         target: SpatialReference,
     ): CoordinateTransformation?
 
-    fun openDataset(
+    suspend fun openDataset(
         source: String,
         options: DatasetOpenOptions = DatasetOpenOptions(),
     ): Dataset
 
-    fun datasetInfo(
+    suspend fun datasetInfo(
         dataset: Dataset,
         options: DatasetInfoOptions = DatasetInfoOptions(),
     ): String
@@ -40,74 +47,74 @@ interface GdalRuntime {
  * Shared dataset handle. Platform-specific implementations will wrap the native dataset object.
  */
 interface Dataset {
-    fun close()
+    suspend fun close()
 
-    fun flushCache(): Int
+    suspend fun flushCache(): Int
 
-    fun getDriver(): Driver?
+    suspend fun getDriver(): Driver?
 
     /**
      * GDAL raster band indices are 1-based.
      */
-    fun getRasterBand(index: Int): Band?
+    suspend fun getRasterBand(index: Int): Band?
 
-    fun getDriverShortName(): String
+    suspend fun getDriverShortName(): String
 
-    fun getDriverLongName(): String
+    suspend fun getDriverLongName(): String
 
-    fun getRasterXSize(): Int
+    suspend fun getRasterXSize(): Int
 
-    fun getRasterYSize(): Int
+    suspend fun getRasterYSize(): Int
 
-    fun getRasterCount(): Int
+    suspend fun getRasterCount(): Int
 
-    fun getLayerCount(): Int
+    suspend fun getLayerCount(): Int
 
-    fun getLayer(index: Int): Layer?
+    suspend fun getLayer(index: Int): Layer?
 
-    fun getLayer(name: String): Layer?
+    suspend fun getLayer(name: String): Layer?
 
-    fun getProjection(): String
+    suspend fun getProjection(): String
 
-    fun getProjectionRef(): String
+    suspend fun getProjectionRef(): String
 
-    fun setProjection(projectionWkt: String): Int
+    suspend fun setProjection(projectionWkt: String): Int
 
-    fun getGeoTransform(): DoubleArray?
+    suspend fun getGeoTransform(): DoubleArray?
 
-    fun setGeoTransform(geoTransform: DoubleArray): Int
+    suspend fun setGeoTransform(geoTransform: DoubleArray): Int
 
-    fun getExtent(): DoubleArray?
+    suspend fun getExtent(): DoubleArray?
 
-    fun getGCPCount(): Int
+    suspend fun getGCPCount(): Int
 
-    fun getGCPProjection(): String
+    suspend fun getGCPProjection(): String
 
-    fun getGCPSpatialRef(): SpatialReference?
+    suspend fun getGCPSpatialRef(): SpatialReference?
 
-    fun getGCPs(): List<GCP>
+    suspend fun getGCPs(): List<GCP>
 
-    fun setGCPs(gcps: List<GCP>, projection: String): Int
+    suspend fun setGCPs(gcps: List<GCP>, projection: String): Int
 
-    fun setGCPs(gcps: List<GCP>, spatialReference: SpatialReference): Int
+    suspend fun setGCPs(gcps: List<GCP>, spatialReference: SpatialReference): Int
 
-    fun getFileList(): List<String>
+    suspend fun getFileList(): List<String>
 
-    fun buildOverviews(
+    suspend fun buildOverviews(
         resampling: String = "NEAREST",
         overviewBands: IntArray = intArrayOf(),
     ): Int
 
-    fun resetReading()
+    suspend fun resetReading()
 
-    fun testCapability(capability: String): Boolean
+    suspend fun testCapability(capability: String): Boolean
 }
 
-inline fun <T : Dataset, R> T.use(block: (T) -> R): R {
+suspend inline fun <T : Dataset, R> T.use(block: (T) -> R): R {
     try {
         return block(this)
     } finally {
-        close()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { close() }
     }
 }
 

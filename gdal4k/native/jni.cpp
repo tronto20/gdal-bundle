@@ -1,5 +1,9 @@
 #include "gdal4k.h"
 #include <jni.h>
+#if defined(_WIN32)
+#undef JNIEXPORT
+#define JNIEXPORT __declspec(dllexport)
+#endif
 #include <string>
 static std::string bytes(JNIEnv *env, jbyteArray input) {
     const auto n = env->GetArrayLength(input);

@@ -1,59 +1,12 @@
-# sample-cli
+# JVM 소비 예제
 
-Standalone JVM CLI sample that consumes `gdal4k-binary` from Maven Central snapshots or a custom repository and packages an installable native app.
+별도 JVM 프로젝트가 게시된 `gdal4k-binary`와 공통 runtime 인터페이스를 사용하는 예제입니다. GDAL 작업은 `suspend`이며 CLI의 `runBlocking` 경계에서 호출합니다. GDAL 설치나 classifier 지정은 필요하지 않습니다.
 
-## What it does
+로컬 검증 아티팩트를 준비한 뒤 실행합니다.
 
-- depends on `dev.tronto.gdal4k:gdal4k-binary:<gdalVersion>-<gdal4kVersion>:<os>_<arch>`
-- loads GDAL through `Gdal4kBinary.prepare()` at startup, extracting the bundle into a user cache on first run
-- prints `gdalinfo` output for the dataset you pass in
-- runs `sample-cli smoke` to verify the current GDAL surface set after installation
-- builds an installable native package for the current host with `packageDistribution`
-- exposes a `sample-cli` command on the installed machine
-- provides a `sample-cli-uninstall` helper on macOS and Linux
-
-## Build
-
-```bash
-./gradlew -p sample-cli packageDistribution
+```sh
+python3 verification/consumer.py --target jvm
+./gradlew -p sample-cli -Pgdal4kPackagesUrl="$PWD/verification/build/consumer-maven" run --args='--help'
 ```
 
-Optional version / repository overrides:
-
-```bash
-./gradlew -p sample-cli packageDistribution \
-  -PgdalVersion=3.9.0 \
-  -Pgdal4kVersion=1.0.1-SNAPSHOT \
-  -Pgdal4kPackagesUrl=file:///path/to/local-maven-repo \
-  -PsampleCliVersion=0.1.0-SNAPSHOT
-```
-
-## Run
-
-After the packaging task completes, install the native package from `build/distributions` and run the installed app.
-
-Package types by platform:
-
-- macOS arm64: `.pkg`
-- Linux amd64: `.deb`
-- Linux arm64: `.deb`
-- Windows amd64: `.msi`
-
-After installation, run `sample-cli info /path/to/dataset.tif`.
-Run `sample-cli smoke` to exercise the bundled raster, GCP, vector, geometry, and spatial reference surfaces.
-
-Uninstall:
-
-- macOS and Linux: `sudo sample-cli-uninstall`
-- Windows: use Add or Remove Programs, which also removes the PATH entry
-
-The installer file is written to `build/distributions` for the current host platform.
-
-## Notes
-
-- This project is JVM-only for now.
-- The CLI is intentionally small so the same core `Dataset` code can later be reused by a future GUI multiplatform app.
-- The installed app contains the JRE, the launcher, and the `gdal4k-binary` payload, so it does not need a separate Java installation.
-- You can still override the bundled runtime with `-Dgdal.bundle.dir` or `GDAL_BUNDLE_DIR` if needed.
-- The published Maven version is `gdalVersion-gdal4kVersion`, so `gdalVersion=3.9.0` and `gdal4kVersion=1.0.1-SNAPSHOT` resolve `gdal4k-binary:3.9.0-1.0.1-SNAPSHOT`.
-- To consume a local build or GitHub Packages mirror, override `gdal4kPackagesUrl` and, for GitHub Packages, provide `GITHUB_USERNAME` / `GITHUB_TOKEN` as Gradle properties or environment variables.
+`verification/consumer.py`는 외부 API·JXL 왕복을 별도로 검사합니다. 전체 OS 배포용 JAR은 CI에서 모든 플랫폼 리소스를 합쳐 만듭니다. 이 예제의 jpackage installer는 해당 OS에서 별도로 검증해야 합니다.

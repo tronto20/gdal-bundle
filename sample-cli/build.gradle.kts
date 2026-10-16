@@ -8,7 +8,7 @@ plugins {
 }
 
 val gdalVersion = providers.gradleProperty("gdalVersion")
-    .orElse("3.9.0")
+    .orElse("3.12.4")
     .get()
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
     .orElse("1.0.1-SNAPSHOT")
@@ -60,6 +60,7 @@ fun currentGdalPlatformClassifier(): String {
     val arch = System.getProperty("os.arch").lowercase()
 
     return when {
+        osName.contains("mac") && (arch == "x86_64" || arch == "amd64") -> "macos-amd64"
         osName.contains("mac") && (arch == "aarch64" || arch == "arm64") -> "macos-arm64"
         osName.contains("linux") && (arch == "aarch64" || arch == "arm64") -> "linux-arm64"
         osName.contains("linux") && (arch == "x86_64" || arch == "amd64") -> "linux-amd64"
@@ -72,7 +73,7 @@ val currentGdalPlatformClassifier = currentGdalPlatformClassifier()
 
 fun currentInstallerType(classifier: String): String {
     return when (classifier) {
-        "macos-arm64" -> "pkg"
+        "macos-arm64", "macos-amd64" -> "pkg"
         "linux-amd64", "linux-arm64" -> "deb"
         "windows-amd64" -> "msi"
         else -> error("Unsupported platform for installer packaging: $classifier")
@@ -81,7 +82,7 @@ fun currentInstallerType(classifier: String): String {
 
 fun currentJPackageResourceDir(classifier: String): File {
     val resourceDirName = when (classifier) {
-        "macos-arm64" -> "macos"
+        "macos-arm64", "macos-amd64" -> "macos"
         "linux-amd64", "linux-arm64" -> "linux"
         "windows-amd64" -> "windows"
         else -> error("Unsupported platform for installer resources: $classifier")
@@ -108,7 +109,7 @@ fun normalizedJpackageVersion(version: String): String {
 }
 
 dependencies {
-    implementation("$gdal4kGroup:gdal4k-binary:$gdal4kPackageVersion:$currentGdalPlatformClassifier")
+    implementation("$gdal4kGroup:gdal4k-binary:$gdal4kPackageVersion")
 }
 
 kotlin {

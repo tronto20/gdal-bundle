@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Build the GDAL runtime from pinned sources. Consumers never run this script."""
+import argparse, hashlib, json, os, platform, re, shlex, shutil, subprocess
+from pathlib import Path
+from toolchains import native_toolchain
+ROOT=Path(__file__).resolve().parents[2]
+BINARY=ROOT/'gdal4k-binary'
+VCPKG_REV='3cd21e48a75f67acfef289da52893ce79144aaa1'
+TARGETS={
+ 'macos-arm64':'arm64-osx','macos-amd64':'x64-osx',
+ 'linux-amd64':'x64-linux','linux-arm64':'arm64-linux',
+ 'windows-amd64':'x64-mingw-static',
+ 'ios-arm64':'arm64-ios','ios-simulator-arm64':'arm64-ios-simulator','ios-simulator-amd64':'x64-ios',
+ 'android-arm64-v8a':'arm64-android','android-armeabi-v7a':'arm-neon-android',
+ 'android-x86':'x86-android','android-x86_64':'x64-android',
+ 'web':'wasm32-emscripten',
+}
+def run(*args,**kwargs):subprocess.run([str(a) for a in args],check=True,**kwargs)
+def fingerprint():
+ digest=hashlib.sha256()
+ for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web/vendor']:
+  for source in sorted(directory.rglob('*')):
+   if source.is_file() and '__pycache__' not in source.parts:
+    digest.update(source.relative_to(ROOT).as_posix().encode());digest.update(source.read_bytes().replace(b'\r\n',b'\n'))
+ return digest.hexdigest()
+def reusable(out,source_hash):
+ manifest=out/'manifest.json'
+ if not manifest.is_file():return False
+ data=json.loads(manifest.read_text())
+ if data.get('source_fingerprint')!=source_hash:return False
+ return all((BINARY/'build'/name).is_file() and hashlib.sha256((BINARY/'build'/name).read_bytes()).hexdigest()==digest for name,digest in data.get('artifacts',{}).items()) and bool(data.get('artifacts'))
+
+def main():
+ p=argparse.ArgumentParser();p.add_argument('target',choices=TARGETS);p.add_argument('--jobs',type=int,default=4);p.add_argument('--vcpkg',type=Path);a=p.parse_args()
+ source_hash=fingerprint()
+ out=BINARY/'build/engine'/a.target;out.mkdir(parents=True,exist_ok=True)
+ if reusable(out,source_hash):
+  print('Verified prebuilt GDAL engine: '+a.target);return
+ vcpkg=(a.vcpkg or Path(os.environ.get('VCPKG_ROOT',ROOT/'verification/tools/vcpkg'))).resolve()
+ if not (vcpkg/'.git').exists():
+  vcpkg.parent.mkdir(parents=True,exist_ok=True);run('git','init',vcpkg);run('git','-C',vcpkg,'fetch','--depth','1','https://github.com/microsoft/vcpkg.git',VCPKG_REV);run('git','-C',vcpkg,'checkout','--detach','FETCH_HEAD')
+ rev=subprocess.check_output(['git','-C',str(vcpkg),'rev-parse','HEAD'],text=True).strip()
+ if rev!=VCPKG_REV:raise SystemExit(f'Expected pinned vcpkg {VCPKG_REV}, found {rev}')
+ exe=vcpkg/('vcpkg.exe' if os.name=='nt' else 'vcpkg')
+ if not exe.exists():run(vcpkg/('bootstrap-vcpkg.bat' if os.name=='nt' else 'bootstrap-vcpkg.sh'),'-disableMetrics')
+ target=a.target;base=TARGETS[target];triplet='gdal4k-'+target
+ out=BINARY/'build/engine'/target;out.mkdir(parents=True,exist_ok=True)
+ triplets=BINARY/'build/triplets';triplets.mkdir(parents=True,exist_ok=True)
+ base_file=next((vcpkg/d/(base+'.cmake') for d in ['triplets','triplets/community'] if (vcpkg/d/(base+'.cmake')).exists()),None)
+ if not base_file:raise SystemExit('Missing base triplet: '+base)
+ settings=f'include("{base_file.as_posix()}")\nset(VCPKG_BUILD_TYPE release)\nset(VCPKG_LIBRARY_LINKAGE static)\nlist(APPEND VCPKG_CMAKE_CONFIGURE_OPTIONS -DCMAKE_POSITION_INDEPENDENT_CODE=ON)\n'
+ if target=='web':settings+='set(VCPKG_CXX_FLAGS "-fexceptions")\nset(VCPKG_C_FLAGS "-fexceptions")\n'
+ if target.startswith('android'):settings+='set(VCPKG_CMAKE_SYSTEM_VERSION 28)\nset(VCPKG_CRT_LINKAGE static)\nset(VCPKG_CMAKE_CONFIGURE_OPTIONS "${VCPKG_CMAKE_CONFIGURE_OPTIONS};-DANDROID_STL=c++_static")\n'
+ if target.startswith('ios'):settings+='set(VCPKG_OSX_DEPLOYMENT_TARGET 15.0)\n'
+ if target.startswith('macos'):settings+='set(VCPKG_OSX_DEPLOYMENT_TARGET 11.0)\n'
+ if target.startswith(('linux','windows')):
+  chain=native_toolchain(target,out/'toolchain.cmake')
+  settings+=f'set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "{chain.as_posix()}")\n'
+ (triplets/(triplet+'.cmake')).write_text(settings)
+ env=os.environ.copy();env['VCPKG_MAX_CONCURRENCY']=str(a.jobs)
+ if target.startswith('android'):
+  env.setdefault('ANDROID_NDK_HOME',str(ROOT/'verification/tools/android-ndk-r28c'))
+ installed=out/'installed'
+ run(exe,'install','--x-wait-for-lock',f'--x-manifest-root={BINARY/"engine"}',f'--overlay-ports={BINARY/"ports"}',f'--overlay-triplets={triplets}',f'--triplet={triplet}',f'--x-install-root={installed}','--disable-metrics',env=env)
+ extra=out/'toolchain-licenses'
+ if extra.exists():
+  notice=installed/triplet/'share/gdal4k-toolchain/copyright';notice.parent.mkdir(parents=True,exist_ok=True)
+  notice.write_text('\n\n'.join(f.name+'\n'+f.read_text(errors='replace') for f in sorted(extra.iterdir())))
+ build=out/'cmake' 
+ cmd=['cmake','--fresh','-S',ROOT/'gdal4k/native','-B',build,'-G','Ninja',f'-DCMAKE_TOOLCHAIN_FILE={vcpkg/"scripts/buildsystems/vcpkg.cmake"}',f'-DVCPKG_INSTALLED_DIR={installed}',f'-DVCPKG_TARGET_TRIPLET={triplet}',f'-DVCPKG_OVERLAY_TRIPLETS={triplets}',f'-DVCPKG_OVERLAY_PORTS={BINARY/"ports"}',f'-DVCPKG_MANIFEST_DIR={BINARY/"engine"}','-DCMAKE_BUILD_TYPE=Release']
+ if target.startswith(('linux','windows')):cmd += [f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={chain}']
+ if target=='web':
+  emsdk=Path(os.environ['EMSDK'])
+  cmd += [f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={emsdk/"upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"}', '-DCMAKE_SYSTEM_NAME=Emscripten','-DCMAKE_CXX_FLAGS=-fexceptions','-DCMAKE_C_FLAGS=-fexceptions']
+ if target.startswith('android'):
+  ndk=Path(os.environ.get('ANDROID_NDK_HOME',ROOT/'verification/tools/android-ndk-r28c'))
+  cmd += ['-DCMAKE_SYSTEM_NAME=Android',f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={ndk/"build/cmake/android.toolchain.cmake"}',f'-DCMAKE_ANDROID_NDK={ndk}','-DANDROID_PLATFORM=android-28','-DANDROID_STL=c++_static',f'-DANDROID_ABI={target[8:]}']
+ if target.startswith('ios'):cmd+=['-DCMAKE_SYSTEM_NAME=iOS',f'-DCMAKE_OSX_SYSROOT={"iphonesimulator" if "simulator" in target else "iphoneos"}',f'-DCMAKE_OSX_ARCHITECTURES={"x86_64" if "amd64" in target else "arm64"}','-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0']
+ if target.startswith('macos'):cmd += [f'-DCMAKE_OSX_ARCHITECTURES={"x86_64" if "amd64" in target else "arm64"}','-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0']
+ run(*cmd,env=env);run('cmake','--build',build,'--parallel',a.jobs,env=env)
+ if target=='web':
+  shutil.copy2(build/'gdal4k.mjs',out/'gdal4k.mjs')
+  run(os.sys.executable,BINARY/'tools/package-web.py',out/'gdal4k.mjs')
+ else:
+  # Merge the bridge and its actual static dependency closure into one relocatable archive.
+  commands=subprocess.check_output(['ninja','-C',str(build),'-t','commands','gdal4k'],text=True)
+  line=next(line for line in reversed(commands.splitlines()) if (' -o ' in line or '/out:' in line.lower()) and ('gdal4k.dylib' in line or 'gdal4k.so' in line or 'gdal4k.dll' in line))
+  archives=[build/'libgdal4k-bridge.a']
+  for token in shlex.split(line.replace('\\','/')):
+   if token.endswith('.a'):
+    f=Path(token);f=f if f.is_absolute() else build/f
+    if f.is_relative_to(installed) and f not in archives:archives.append(f)
+  # Consumers link system libraries with their own target toolchain.
+  system_options=list(dict.fromkeys(t for t in shlex.split(line.replace('\\','/')) if re.fullmatch(r'-l[\w.+-]+',t)))
+  (out/'native-linker-options.json').write_text(json.dumps(system_options)+'\n')
+  merged=out/'libgdal4k.a'
+  if target.startswith(('macos','ios')):run('/usr/bin/libtool','-static','-o',merged,*archives)
+  else:
+   cache=(build/'CMakeCache.txt').read_text()
+   ar=re.search(r'^CMAKE_AR:(?:FILEPATH|STRING)=(.+)$',cache,re.M)[1].strip()
+   script='CREATE '+str(merged)+'\n'+''.join('ADDLIB '+str(f)+'\n' for f in archives)+'SAVE\nEND\n'
+   run(ar,'-M',input=script,text=True)
+  if target.startswith('android'):
+   dest=BINARY/'build/android-runtime/jniLibs'/target[8:]/'libgdal4k.so'
+  elif not target.startswith('ios'):
+   name='gdal4k.dll' if target.startswith('windows') else 'libgdal4k.dylib' if target.startswith('macos') else 'libgdal4k.so'
+   dest=BINARY/'build/jvm-resources/gdal4k'/target/name
+  else:dest=None
+  if dest:
+   dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(build/dest.name,dest)
+  # License texts travel with every platform artifact.
+ licenses=out/'licenses';licenses.mkdir(exist_ok=True)
+ for f in (installed/triplet/'share').glob('*/copyright'):
+  shutil.copy2(f,licenses/(f.parent.name+'.txt'))
+ artifacts=[out/'gdal4k.mjs'] if target=='web' else [out/'libgdal4k.a',out/'native-linker-options.json']
+ if target=='web':artifacts+=list((BINARY/'build/generated/web').rglob('*.kt'))
+ elif dest:artifacts.append(dest)
+ artifacts+=list(licenses.glob('*.txt'))
+ hashes={f.relative_to(BINARY/'build').as_posix():hashlib.sha256(f.read_bytes()).hexdigest() for f in artifacts}
+ if fingerprint()!=source_hash:raise RuntimeError('Engine sources changed during the build; rebuild before publishing')
+ (out/'manifest.json').write_text(json.dumps({'target':target,'source_fingerprint':source_hash,'vcpkg':VCPKG_REV,'gdal':'3.12.4','jxl':True,'artifacts':hashes},indent=2)+'\n')
+if __name__=='__main__':
+ # Serialize producers sharing one vcpkg checkout, including its extracted sources.
+ lock_path=BINARY/'build/.engine-build.lock'
+ lock_path.parent.mkdir(parents=True,exist_ok=True)
+ with lock_path.open('a+b') as lock:
+  if os.name=='nt':
+   import msvcrt,time
+   lock.seek(0);lock.write(b'0');lock.flush();lock.seek(0)
+   while True:
+    try:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1);break
+    except OSError:time.sleep(.25)
+  else:
+   import fcntl
+   fcntl.flock(lock,fcntl.LOCK_EX)
+  main()
+

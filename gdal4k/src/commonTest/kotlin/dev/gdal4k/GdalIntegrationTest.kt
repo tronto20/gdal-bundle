@@ -7,7 +7,7 @@ import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
 import kotlin.math.abs
 
-internal expect suspend fun integrationOptions(): GdalOptions
+internal suspend fun integrationOptions(): GdalOptions = GdalOptions()
 
 class GdalIntegrationTest {
     @Test
@@ -22,6 +22,7 @@ class GdalIntegrationTest {
         session.use { gdal ->
             val drivers = gdal.drivers()
             check(drivers.any { it.name == "GTiff" && it.raster })
+            check(drivers.any { it.name == "JPEGXL" && it.raster })
             check(drivers.any { it.name == "GeoJSON" && it.vector })
             gdal.open(fixture).use { dataset ->
                 check(dataset.info.width == 3 && dataset.info.height == 2 && dataset.info.bandCount == 1)
@@ -39,6 +40,14 @@ class GdalIntegrationTest {
                     gdal.open(output).use { reopened ->
                         check(reopened.readRaster().contentEquals(pixels))
                         if (driver == "COG") check(reopened.info()["metadata"]!!.jsonObject["IMAGE_STRUCTURE"]!!.jsonObject["LAYOUT"]!!.jsonPrimitive.content == "COG")
+                    }
+                }
+                for (driver in listOf("JPEGXL", "GTiff", "COG")) {
+                    val arguments = if (driver == "JPEGXL") listOf("-co", "LOSSLESS=YES") else listOf("-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES")
+                    val output = dataset.translate(driver, if (driver == "JPEGXL") "output.jxl" else "output.tif", arguments)
+                    gdal.open(output).use { reopened ->
+                        check(reopened.readRaster().contentEquals(pixels)) { "$driver JXL pixels differ" }
+                        if (driver != "JPEGXL") check(reopened.info().toString().contains("JXL"))
                     }
                 }
                 val warped = dataset.warp("EPSG:3857", arguments = listOf("-ts", "3", "2", "-r", "near"))

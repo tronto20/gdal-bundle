@@ -1,5 +1,7 @@
 #pragma once
-#if defined(_WIN32)
+#if defined(GDAL4K_STATIC)
+# define G4K_API
+#elif defined(_WIN32)
 # if defined(GDAL4K_BUILD)
 #  define G4K_API __declspec(dllexport)
 # else

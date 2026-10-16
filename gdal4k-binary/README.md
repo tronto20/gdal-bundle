@@ -1,174 +1,56 @@
-# gdal4k-binary
+# 내장 GDAL 빌드와 배포
 
-GDAL JNI 동적 라이브러리와 의존 라이브러리, 드라이버 플러그인, 데이터(`share/gdal`, `share/proj`)를
-Conda 환경에서 추출해 앱 번들에 넣기 위한 모듈입니다. macOS에서는 `install_name_tool`로
-의존 경로를 `@loader_path` 기반으로 패치하고, Linux에서는 동일한 소스 빌드 결과를 그대로
-수집합니다. 배포 시에는 플랫폼별 classifier JAR로 내보내고, 그 안에 포함된 `txz`
-아카이브를 JVM 런타임이 첫 사용 시 로컬 캐시에 압축 해제해 사용합니다.
+`gdal4k-runtime`은 공통 인터페이스, `gdal4k-binary`는 모든 타깃의 구현과 내장 GDAL입니다. 소비 앱에는 GDAL, vcpkg, Emscripten, CMake가 필요하지 않습니다. 이 도구들은 라이브러리를 소스에서 만드는 producer에만 필요합니다.
 
-## 요구 사항
-- macOS (Apple Silicon) 또는 Linux (amd64/arm64)
-- `bundleGdal`만 쓸 경우에는 Conda 환경에 GDAL + Java 바인딩 포함 (`libgdalalljni.*` 존재)
-- 네이티브 C/C++ 컴파일러 툴체인 (`Xcode Command Line Tools` 또는 `build-essential`)
+## 고정된 소스
 
-## 현재 비활성화한 GDAL 구성요소
-아래 항목들은 현재 번들 크기, 의존성 안정성, 또는 Windows 링크 문제 때문에 의도적으로 비활성화한 상태입니다.
-문제를 해결하거나 별도 검증이 끝나면 하나씩 다시 켤 수 있습니다.
+- GDAL 3.12.4 및 JPEG XL을 포함하는 `engine/vcpkg.json`과 `ports` overlay
+- vcpkg `3cd21e48a75f67acfef289da52893ce79144aaa1`
+- 웹: Emscripten 4.0.23 (`emsdk` commit `c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56`)
+- Linux/Windows: Kotlin/Native 2.4.21에 포함된 sysroot / C++ ABI를 사용
+- Android: NDK r28c, API 28 이상, 16 KiB 정렬
+- Apple: macOS 11 / iOS 15 이상. Kotlin/Native 자체 지원 범위도 적용됩니다.
 
-| 범위 | 비활성화한 CMake 옵션 | 영향 |
-| --- | --- | --- |
-| 공통 (macOS / Linux / Windows) | `GDAL_USE_ARROW=OFF` | Arrow 기반 지원 |
-| 공통 (macOS / Linux / Windows) | `GDAL_USE_PARQUET=OFF` | Parquet/columnar 관련 지원 |
-| 공통 (macOS / Linux / Windows) | `GDAL_USE_SFCGAL=OFF` | SFCGAL 기반 지오메트리 지원 |
-| 공통 (macOS / Linux / Windows) | `GDAL_USE_POPPLER=OFF` | Poppler 기반 PDF 지원 |
-| 공통 (macOS / Linux / Windows) | `GDAL_USE_NETCDF=OFF` | NetCDF 드라이버 |
-| Windows 추가 | `GDAL_USE_HDF4=OFF` | HDF4 드라이버 |
-| Windows 추가 | `GDAL_USE_OPENEXR=OFF` | OpenEXR 드라이버 |
-| Windows 추가 | `GDAL_USE_POSTGRESQL=OFF` | PostgreSQL/PostGIS 드라이버 |
-| Windows 추가 | `GDAL_USE_MUPARSER=OFF` | muParser 기반 기능 |
-| Windows 추가 | `GDAL_USE_XERCESC=OFF` | XercesC 기반 기능 |
+`tools/build-engine.py`는 고정 버전의 vcpkg를 준비하고 소스에서 GDAL과 정적 의존성을 빌드합니다. 시스템에 설치된 GDAL로 fallback하지 않습니다. `manifest.json`에 소스 fingerprint와 산출물 SHA-256을 기록하고 재사용 시 모두 검증합니다.
 
-macOS와 Linux는 공통 목록을 사용하며, NetCDF도 함께 끕니다.
-Windows는 내부 `libopencad`와 LIBKML를 켜고, `libkml` 소스를 함께 빌드합니다.
+## Producer 로컬 실행
 
-## 사용 방법
-### 빌드 + 번들링 (GDAL + LIBKML)
-GDAL과 LIBKML을 소스 빌드한 뒤 번들링까지 한 번에 수행합니다. KMZ를 위해 LIBKML 드라이버가 포함됩니다.
+JDK 21, Python 3, Git, 플랫폼 SDK가 필요합니다.
 
-```bash
-./gradlew :gdal4k-binary:buildAndBundleGdal \
-  --conda-prefix=/path/to/conda/env \
-  --conda-exe=/path/to/conda
+```sh
+python3 -m venv verification/tools/python
+verification/tools/python/bin/pip install -r verification/requirements.txt
+export PATH="$PWD/verification/tools/python/bin:$PATH"
+./gradlew :gdal4k-runtime:compileKotlinMacosArm64
+python3 gdal4k-binary/tools/build-engine.py macos-arm64
+./gradlew :gdal4k:jvmTest :gdal4k:macosArm64Test
+python3 verification/consumer.py --target macosArm64
 ```
 
-옵션:
-- `--conda-prefix=/path/to/env`, `--conda-exe=/path/to/conda`: 기본값은 `CONDA_PREFIX`, `CONDA_EXE`
-- `--work-dir=/path/to/work`: 소스/빌드 작업 경로 지정
-- `--gdal-version=3.9.0`, `--libkml-version=1.3.0`: 버전 변경
-- `--output-dir=/path/to/output`: 번들 출력 경로 지정
-- `--codesign-identity="Developer ID Application: ..."`: 번들된 dylib 재서명 (또는 `CODESIGN_IDENTITY`)
-- Docker/CI에서 prefix와 작업 디렉터리를 분리하고 싶으면 `GDAL4K_CONDA_INSTALL_DIR`, `GDAL4K_WORK_DIR`를 사용할 수 있습니다.
+호스트에 맞춰 `macosArm64` / `macos-arm64`를 바꿉니다. Linux ARM64는 x64 Linux 또는 macOS에서 교차 빌드하고 ARM64 호스트에서 실행합니다. Windows 바이너리는 Windows에서 Kotlin/Native의 MinGW 도구로 빌드합니다. Android producer는 `ANDROID_NDK_HOME`, Android Gradle은 `ANDROID_HOME`을 사용합니다. Android AAR 기본 빌드는 ABI 4종이며, 로컬 장치 검사만 할 때 `-Pgdal4kAndroidAbis=arm64-v8a`처럼 줄일 수 있습니다.
 
-이 작업은 conda prefix에 GDAL/libkml을 설치(덮어쓰기)합니다. Windows에서도 `libkml`과 OpenCAD를 함께 빌드합니다.
-`buildLibkml`, `buildGdal`, `buildAndBundleGdal`은 `installConda`와 `installGdalDeps`를 먼저 수행합니다.
-기존 `*Macos` task는 호환용 alias로 남아 있습니다.
+웹은 `.github/workflows/library-tests.yml`과 같은 SDK를 준비·활성화합니다.
 
-### 단계별 실행
-필요한 단계만 따로 실행할 수 있습니다. 작업 디렉터리를 지우려면 `:gdal4k-binary:cleanGdalWorkDir`를 실행하세요.
-
-```bash
-./gradlew :gdal4k-binary:installGdalDeps \
-  --conda-prefix=/path/to/conda/env \
-  --conda-exe=/path/to/conda
+```sh
+source verification/tools/emsdk/emsdk_env.sh
+./gradlew :gdal4k:jsNodeTest :gdal4k:wasmJsNodeTest
+CHROME_BIN=/path/to/chrome ./gradlew :gdal4k:jsBrowserTest :gdal4k:wasmJsBrowserTest
+python3 verification/consumer.py --target js
+python3 verification/consumer.py --target wasmJs
 ```
 
-```bash
-./gradlew :gdal4k-binary:cleanGdalWorkDir \
-  --work-dir=/path/to/work
-```
+웹 엔진은 `gdal3.js`를 사용하지 않습니다. 자체 빌드한 `gdal4k.mjs`를 압축하여 JS/wasmJs KLIB에 똑같이 넣습니다. MIT 라이선스의 vendored `tiny-inflate` 디코더도 Worker 안에서만 실행합니다. 별도 npm 엔진 패키지, CDN, 엔진 URL 설정이 필요하지 않습니다.
 
-```bash
-./gradlew :gdal4k-binary:buildLibkml \
-  --conda-prefix=/path/to/conda/env
-```
+## 산출물과 게시
 
-```bash
-./gradlew :gdal4k-binary:buildGdal \
-  --conda-prefix=/path/to/conda/env
-```
+- JVM: `gdal4k-binary-jvm`에 Linux x64/ARM64, macOS x64/ARM64, Windows x64 JNI 리소스를 모두 포함하는 JAR
+- Native: `gdal4k-binary-<target>` KLIB 안에 GDAL과 모든 선택된 종속성의 정적 archive 포함
+- Android: 플랫폼 Kotlin 아티팩트와 `gdal4k-android-runtime` AAR (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`)
+- 웹: `gdal4k-binary-js` / `gdal4k-binary-wasm-js`, 동일한 엔진 포함
+- `gdal4k`와 `gdal4k-runtime`도 동일한 버전 `3.12.4-1.0.1-SNAPSHOT`으로 게시
 
-### 번들링만
-```bash
-./gradlew :gdal4k-binary:bundleGdal
-```
+Kotlin 소비자는 루트 좌표를 의존하며 Gradle이 타깃 아티팩트를 선택합니다. OS classifier를 직접 붙이지 않습니다. 로컬 호스트만 빌드한 JAR은 전체 배포용이 아닙니다.
 
-Conda 환경이 활성화되지 않았다면 prefix를 지정하세요.
-```bash
-./gradlew :gdal4k-binary:bundleGdal \
-  --conda-prefix=/path/to/conda/env
-```
+CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. `-Pgdal4kUniversalJvm=true`와 ZIP 내용 검사로 JVM 5종과 Android 4종의 누락을 막습니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
 
-배포용으로 dylib를 재서명하려면:
-```bash
-./gradlew :gdal4k-binary:bundleGdal \
-  --conda-prefix=/path/to/conda/env \
-  --codesign-identity="Developer ID Application: ..."
-```
-
-출력 경로를 바꾸려면:
-```bash
-./gradlew :gdal4k-binary:bundleGdal \
-  --output-dir=/path/to/output
-```
-
-기본 출력은 `gdal4k-binary/build/gdal-bundle/<classifier>/gdal` 이고,
-배포용 압축 파일은 내부적으로 `gdal4k-binary/build/published-bundles/gdal4k-binary-<classifier>.txz` 에 생성됩니다.
-최종 Maven 배포물인 `dev.tronto.gdal4k:gdal4k-binary:<version>:<classifier>` JAR에는 이 `txz`와 함께
-`gdal4k-runtime` JVM 클래스도 같이 들어가므로, 소비자는 `gdal4k-binary` 하나만 의존해도 됩니다.
-
-## Publishing
-- `publishTarget=mavenCentral`은 Maven Central의 snapshot/release 엔드포인트로 배포하고, 배포 시 artifact를 서명합니다.
-- `publishTarget=githubPackages`는 기존 GitHub Packages 흐름을 유지합니다.
-- 기본 버전은 `gdalVersion`에서 유도한 `gdal4kVersion` snapshot입니다.
-
-## Compose Desktop 앱에 포함하기 (예시)
-Compose Desktop(1.9.x 기준)는 `appResourcesRootDir` 아래의
-`common/`, `macos/`, `macos-arm64/`를 읽어 macOS 패키지에
-`Contents/app/resources`로 복사합니다.
-그래서 GDAL 번들은 `macos/gdal`에 복사해야 합니다.
-
-```kotlin
-val gdalBundleDir = project(":gdal4k-binary").layout.buildDirectory.dir("gdal-bundle")
-val gdalResourcesRoot = layout.buildDirectory.dir("app-resources")
-
-val syncGdalResources by tasks.registering(Sync::class) {
-    dependsOn(":gdal4k-binary:bundleGdal")
-    from(gdalBundleDir.map { it.dir("macos-arm64/gdal") })
-    into(gdalResourcesRoot.map { it.dir("macos/gdal") })
-}
-
-tasks.named("prepareAppResources") {
-    dependsOn(syncGdalResources)
-}
-
-compose.desktop {
-    application {
-        nativeDistributions {
-            appResourcesRootDir.set(gdalResourcesRoot)
-        }
-    }
-}
-```
-
-## 런타임 설정 (Kotlin)
-```kotlin
-import java.io.File
-import org.gdal.gdal.gdal
-
-val resourcesDir = System.getProperty("compose.application.resources.dir")
-val gdalDir = File(resourcesDir, "gdal")
-System.load(File(gdalDir, "lib/libgdalalljni.dylib").absolutePath)
-
-gdal.SetConfigOption("GDAL_DATA", File(gdalDir, "share/gdal").absolutePath)
-gdal.SetConfigOption("PROJ_DATA", File(gdalDir, "share/proj").absolutePath)
-val pluginsDir = File(gdalDir, "gdalplugins")
-if (pluginsDir.exists()) {
-    gdal.SetConfigOption("GDAL_DRIVER_PATH", pluginsDir.absolutePath)
-}
-
-gdal.AllRegister()
-```
-
-필요 시 `org.gdal:gdal` 의존성(버전은 기존 카탈로그)에 추가하세요.
-
-`Gdal4kBinary.prepare()`는 기본적으로 JAR 안에 포함된 `gdal/gdal-bundle.txz` 를 찾습니다.
-필요하면 `bundleDir` 인자나 `-Dgdal.bundle.dir` / `GDAL_BUNDLE_DIR` 로 압축 해제된 번들 디렉터리 또는
-`.txz` 파일 경로를 직접 넘길 수 있습니다. 아카이브를 넘기면 첫 사용 시 사용자 캐시에 압축을 푼 뒤 그 디렉터리를 재사용합니다.
-
-JVM 런타임은 추출된 `libgdalalljni` 경로를 `gdal4k.gdaljni.path` 시스템 속성으로 넘기고,
-패치된 GDAL Java 바인딩이 그 경로를 직접 로드합니다. 그래서 시작 시 `Native library load failed.`
-경고가 뜨지 않습니다.
-
-패키지 버전은 `gdalVersion-gdal4kVersion` 형태로 계산됩니다. 예를 들어 `gdalVersion=3.9.0`,
-`gdal4kVersion=1.0.1-SNAPSHOT`이면 Maven 버전은 `3.9.0-1.0.1-SNAPSHOT`이 됩니다.
-`-Pgdal4kVersion`으로 명시 오버라이드할 수 있고, workflow_dispatch에서도 이 규칙을 그대로 사용합니다.
+기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k/README.md)를 참고하세요.

@@ -1,97 +1,64 @@
-# gdal4k 공통 라이브러리
+# 공통 API
 
-`dev.tronto.gdal4k:gdal4k`의 공통 `suspend` API를 JVM, Android, Kotlin/Native, JS, wasmJs에서 사용합니다. WASI는 제외합니다.
+`gdal4k-runtime`의 기존 GDAL 객체 인터페이스를 모든 지원 타깃에 공개하고, `gdal4k-binary`가 구현합니다. 테스트 전용 인터페이스/contract 모듈은 없습니다. `gdal4k`는 두 모듈을 함께 제공하는 진입점입니다.
+
+## 초기화와 수명
 
 ```kotlin
-import dev.gdal4k.*
+import dev.gdal4k.Gdal4k
+import dev.gdal4k.runtime.*
 
-suspend fun convert(input: ByteArray, options: GdalOptions): ByteArray =
-    Gdal.create(options).use { gdal ->
-        gdal.open(GdalFile("input.tif", input)).use { dataset ->
-            println(dataset.info()) // GDAL JSON: projection, geotransform, NoData, metadata
-            val values: DoubleArray = dataset.readRaster(band = 1)
-            dataset.translate(driver = "COG").mainFile().bytes
+suspend fun readBand(bytes: ByteArray): ByteArray {
+    Gdal4k.prepare()
+    try {
+        val runtime = Gdal4k.runtime()
+        runtime.writeMemoryFile("/vsimem/image.tif", bytes)
+        return runtime.openDataset("/vsimem/image.tif").use { dataset ->
+            val result = ByteArray(dataset.getRasterXSize() * dataset.getRasterYSize())
+            requireNotNull(dataset.getRasterBand(1)).use { band ->
+                check(band.readRaster(result) == 0)
+            }
+            result
         }
-    }
+    } finally { Gdal4k.close() }
+}
 ```
 
-공통 기능:
+이 예시는 작은 Byte 래스터용입니다. 큰 영상은 밴드의 window 인자를 사용해 나눠 읽습니다. `GdalDataType`은 공통 GDAL 데이터 타입 상수를 제공합니다. JVM의 `org.gdal.*` SWIG 클래스에는 의존하지 않습니다.
 
-- 메모리 파일 열기, 다중 파일 입력/출력 (`GdalFiles`), 드라이버 목록 조회
-- 래스터/벡터 JSON 정보, 밴드/윈도우 픽셀 읽기
-- `translate`, `warp`, `translateVector`: GDAL의 옵션을 `arguments`로 전달
-- CRS 좌표 변환: 모든 플랫폼에서 longitude/easting, latitude/northing 순서
-- 세션/데이터셋의 명시적 종료와 `use`; 부모 종료 시 자식도 종료
-- 호출 직렬화, 세션별 입력 파일 분리, 오류 전파와 실패 후 재사용
+기존 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 유지합니다. 모든 GDAL 호출은 이제 `suspend`이므로 기존 동기 호출부는 coroutine 또는 `suspend` 함수로 옮겨야 합니다. `runtime()`처럼 준비된 Kotlin 객체를 가져오는 함수와 캐시된 데이터 프로퍼티는 동기 함수입니다.
 
-사용 가능한 드라이버는 `drivers()`로 확인합니다. 모든 플랫폼의 GDAL 빌드가 같은 선택 의존성을 포함하는 것은 아닙니다. 입력과 출력은 메모리 기반이며, Base64 전송과 픽셀 읽기의 XYZ 변환 비용이 있습니다. 대용량 스트리밍과 전체 GDAL C 객체 API는 이 공통 API의 범위에 포함하지 않습니다.
+## 실행과 취소
 
-기존 `gdal4k-runtime` / `gdal4k-binary`의 `Gdal4kBinary.runtime()` 및 JVM 객체 래퍼는 호환성을 위해 유지합니다. 그 전체 객체 API를 웹용 stub으로 구현하지 않습니다. 새 공통 코드는 위의 `dev.gdal4k.Gdal`을 사용합니다.
+| 플랫폼 | GDAL 실행 위치 | 내장 방식 |
+| --- | --- | --- |
+| JVM | `Dispatchers.IO` | JAR의 OS/아키텍처별 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
+| Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
+| Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
+| JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
 
-## JVM / Native
+한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 
-GDAL 3.7 이상과 이 디렉터리의 C bridge를 링크합니다. JVM은 Java 17 이상을 대상으로 하며 GDAL Java/SWIG 바인딩을 요구하지 않습니다. 빌드 JDK는 21입니다.
+대기 중인 호출은 취소할 수 있습니다. 이미 시작한 GDAL C 호출은 중간에 강제 중단하지 않고 완료한 뒤 핸들/결과를 정리합니다. 따라서 coroutine 취소가 오래 걸리는 GDAL 연산을 즉시 멈추지는 않습니다. 웹 Worker를 강제로 종료해서 데이터셋 상태를 손상시키는 동작도 하지 않습니다.
 
-```sh
-cmake -S gdal4k/native -B gdal4k/build/bridge -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build gdal4k/build/bridge --parallel 3
-```
+JS와 wasmJs가 사용하는 **GDAL 엔진 자체는 일반 WebAssembly**입니다. JS 경로는 Kotlin/Wasm의 Wasm GC를 지원하지 않는 브라우저에서도 기본 Wasm·Worker·ES module을 지원하면 사용할 수 있습니다. WebAssembly 자체가 없는 환경에서는 동작하지 않습니다. wasmJs로 컴파일한 Kotlin 앱은 Kotlin/Wasm의 브라우저 요구 사항도 충족해야 합니다. Node는 `process.getBuiltinModule`을 제공하는 20.16+ / 22+가 필요합니다. 웹 CSP는 Blob Worker, 모듈과 Wasm 실행을 허용해야 합니다. 엔진은 pthread/SharedArrayBuffer를 요구하지 않습니다.
 
-JVM: `GdalOptions(libraryPath = "/absolute/path/libgdal4k.so", projData = "/.../share/proj", gdalData = "/.../share/gdal")`. 확장자는 macOS `.dylib`, Windows `.dll`입니다. 기본값은 `System.loadLibrary("gdal4k")`입니다. GDAL 공유 라이브러리와 그 의존성도 시스템 로더가 찾을 수 있어야 합니다. Native/JNI 호출은 백그라운드 디스패처에서 실행합니다. GDAL의 PROJ 검색 경로가 프로세스 전역이므로 bridge 호출 중에만 적용하고 원래 값으로 복원하며, 이 bridge의 Native/JNI 호출은 프로세스 단위로 직렬화합니다. 같은 프로세스에서 별도 GDAL 바인딩을 직접 호출한다면 전역 설정 변경을 함께 동기화해야 합니다.
+## 데이터와 드라이버
 
-Native: `Gdal.create(GdalOptions(projData = ..., gdalData = ...))`. 배포하는 klib는 `-lgdal4k` 링크를 요구합니다. 앱 링크에 bridge 디렉터리의 `-L`과 런타임 검색 경로를 지정하거나 CMake `install`로 검색 가능한 곳에 설치합니다. iOS는 해당 SDK/아키텍처로 빌드한 GDAL/bridge와 데이터가 필요합니다. 저장소 테스트는 `-Pgdal4kBridgePrefix=/absolute/path`를 사용합니다.
+GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브러리의 라이선스 고지를 바이너리에 포함합니다. 외부 설치나 `GDAL_DATA` / `PROJ_DATA` 지정이 필요하지 않습니다. 선택적 지역 변환 grid 파일은 포함하지 않습니다.
 
-선언한 Native 타깃: macosArm64/X64, linuxX64/Arm64, mingwX64, iosArm64/SimulatorArm64/X64. 실행 검증과 단순 타깃 선언은 구분하며, 최신 실행 결과는 PR/CI를 확인합니다.
+공통 빌드 프로필은 GDAL 기본 드라이버와 GEOS, JPEG, PNG, SQLite, WebP, Zstd, Expat, OpenJPEG, JPEG XL입니다. JPEGXL 드라이버와 GTiff/COG의 `COMPRESS=JXL`을 검증합니다. **모든 GDAL 선택 드라이버를 포함한다는 뜻은 아닙니다.** HDF5/netCDF/Parquet/PostgreSQL 등의 추가 SDK와 CURL 기반 원격 VFS는 이 프로필에 포함하지 않습니다. 웹에서는 앱이 HTTP로 받은 바이트를 `writeMemoryFile`로 전달할 수 있습니다. 원래 Conda 배포와 드라이버 목록이 같다고 가정하지 마세요.
 
-## Android
+`runtime.versionInfo("THIRD_PARTY_LICENSES")`로 실제 포함된 고지를 조회합니다. 기능 감지는 `getDriver(name)`의 결과로 수행합니다.
 
-NDK로 GDAL과 bridge를 빌드한 뒤 다음 스크립트로 ABI별 JNI와 데이터를 준비합니다. GDAL의 CMake 패키지/의존성 탐색에는 vcpkg toolchain 또는 `CMAKE_PREFIX_PATH`를 사용할 수 있습니다.
+## 보조 바이트 API
 
-```sh
-python gdal4k/tools/package-android.py \
-  --abi arm64-v8a --bridge /path/libgdal4k.so --ndk /path/android-ndk \
-  --proj-data /path/share/proj --gdal-data /path/share/gdal
-./gradlew -PportableOnly=true :gdal4k:assembleAndroidMain :gdal4k-android-runtime:assembleRelease
-```
+기존의 간단한 `Gdal.create().use { session -> ... }` / `GdalFile` / `GdalFiles`도 유지합니다. `GdalFile`은 파일 이름과 바이트, `GdalFiles`는 Shapefile 같은 다중 파일 묶음이며 별도의 GDAL 엔진이 아닙니다. Base64는 이 API의 내부 JSON 전송 구현에만 사용합니다.
 
-`gdal4k` Android AAR는 JNI/데이터 AAR인 `gdal4k-android-runtime`을 전이 의존합니다. NDK r28 이상 권장, 최소 Android API 28. 다른 ABI는 그 ABI로 GDAL/bridge를 빌드하고 스크립트를 반복 실행해 추가합니다. 준비되지 않은 JNI/데이터로 runtime AAR를 패키징하면 실패합니다.
-
-Android 초기화만 `GdalAndroid.options(context)`를 호출하고, 결과를 공통 코드의 `Gdal.create(options)`로 전달합니다. `GdalAndroid.create(context)` 단축 API도 제공합니다. 데이터는 무결성을 검사해 앱 전용 디렉터리에 추출하며 저장소 권한이 필요하지 않습니다.
-
-## JS / wasmJs (브라우저 / Node)
-
-```sh
-./gradlew -PportableOnly=true :gdal4k:webRuntime
-```
-
-`gdal4k/build/distributions/gdal4k-web.zip`에 adapter, Worker, 고정된 `gdal3.js@2.8.1`의 JS/Wasm/data를 함께 넣습니다. 브라우저는 압축을 풀어 같은 origin에서 정적 제공합니다. Wasm MIME은 `application/wasm`으로 설정합니다. Worker와 동적 모듈 import가 허용되어야 합니다.
-
-```kotlin
-val options = GdalOptions(
-    webBridgeUrl = "https://example.com/gdal/gdal4k-web.mjs",
-    webAssetsUrl = "https://example.com/gdal/", // 마지막 / 포함
-)
-```
-
-Webpack을 쓰는 Kotlin/JS 앱은 런타임 URL의 `import(url)`을 번들러가 변환하지 않도록 설정합니다. `webpack.config.d/gdal.js`에 다음을 추가합니다. `wasmJs`의 import에는 adapter가 `webpackIgnore`를 지정합니다.
-
-```js
-config.module.rules.push({ test: /gdal4k\.js$/, parser: { import: false } });
-```
-
-Node는 압축 해제한 같은 파일들의 절대 `file:` URL을 전달합니다. 세션마다 별도 Worker를 사용하고 `close()`에서 종료합니다. Kotlin의 `ByteArray`를 넘기므로 브라우저 File/Node 파일 경로 API가 공통 코드에 노출되지 않습니다.
+`GdalOptions()` 기본값만으로 내장 엔진을 사용합니다. `libraryPath`, `projData`, `gdalData`, `webBridgeUrl`은 고급 호스트가 직접 런타임을 바꾸는 선택적 override입니다. 일반 사용에서 지정하지 않습니다.
 
 ## 검증
 
-```sh
-cd verification && npm ci && npx playwright install chromium && cd ..
-python gdal4k/tools/run-tests.py
-```
+테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
 
-검증은 `gdal4k`의 `commonTest`에 있으며, 플랫폼 초기화만 `jvmTest`, `nativeTest`, `jsTest`, `wasmJsTest`, `androidDeviceTest`에 둡니다. GeoTIFF/COG 재열기·픽셀·NoData·geotransform, 윈도우 읽기, 재투영, 좌표 왕복, Shapefile 보조 파일, 중복 이름, Unicode 파일명, 잘못된 드라이버/CRS/파일/옵션, 종료 후 사용을 같은 Kotlin 테스트로 검증합니다.
-
-위 스크립트는 호스트 C bridge를 준비하고 `:gdal4k:jvmTest`, 호스트 Native 테스트, `:gdal4k:jsNodeTest`, `:gdal4k:wasmJsNodeTest`, `:gdal4k:jsBrowserTest`, `:gdal4k:wasmJsBrowserTest`를 실행합니다. bridge와 `CHROME_BIN`을 준비했다면 이 Gradle 태스크를 직접 실행해도 됩니다. 결과는 `gdal4k/build/test-results`와 `gdal4k/build/reports/tests`에 기록됩니다. `.github/workflows/library-tests.yml`에서 데스크톱 3종과 `:gdal4k:iosSimulatorArm64Test`를 실행합니다.
-
-Android는 `python gdal4k/tools/run-android-tests.py --sdk /path/sdk --ndk /path/ndk --vcpkg /path/vcpkg --serial emulator-5580`으로 JNI/데이터를 준비하고 `:gdal4k:connectedAndroidDeviceTest`를 실행합니다. raw GDAL CMake 패키지를 사용할 때는 `--gdal-dir /path/lib/cmake/gdal`을 추가합니다. 별도 테스트 앱 모듈 없이 Android Gradle Plugin이 instrumentation APK를 생성합니다. 결과는 `gdal4k/build/outputs/androidTest-results`에 기록됩니다.
-
-`-PportableOnly=true`는 기존 conda/JVM 번들 모듈을 제외하여 공통 라이브러리만 빌드하는 옵션입니다. Maven 공개 배포는 별도 작업입니다.
+지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android는 ABI 4종을 빌드하고 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.

@@ -1,149 +1,209 @@
 name: GDAL library integration tests
-
 on:
-  push:
-    branches: ['main']
-    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', 'verification/package.json', 'verification/package-lock.json', 'verification/requirements.txt', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
-  pull_request:
-    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', 'verification/package.json', 'verification/package-lock.json', 'verification/requirements.txt', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
+  workflow_call:
   workflow_dispatch:
-
 permissions:
   contents: read
 
-concurrency:
-  group: library-tests-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+
+env:
+  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/verification/build/vcpkg-cache,readwrite
 
 jobs:
-  ios-simulator:
-    runs-on: macos-15
-    timeout-minutes: 60
-    defaults:
-      run:
-        working-directory: verification
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Prepare Gradle before native source build
-        run: ../gradlew --version
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-      - run: python -m pip install -r requirements.txt
-      - name: Identify iOS SDK
-        id: sdk
-        run: echo "version=$(xcrun --sdk iphonesimulator --show-sdk-version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v6
-        id: ios-cache
-        with:
-          path: verification/build/vcpkg-binary-cache
-          key: ios-gdal-arm64-3cd21e48a75f67acfef289da52893ce79144aaa1-${{ steps.sdk.outputs.version }}
-      - name: Pinned iOS GDAL source build
-        id: ios-gdal
-        env:
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/verification/build/vcpkg-binary-cache
-        run: |
-          mkdir -p tools build/vcpkg-binary-cache
-          git init tools/vcpkg
-          git -C tools/vcpkg fetch --depth 1 https://github.com/microsoft/vcpkg.git 3cd21e48a75f67acfef289da52893ce79144aaa1
-          git -C tools/vcpkg checkout --detach FETCH_HEAD
-          tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
-          VCPKG_MAX_CONCURRENCY=3 tools/vcpkg/vcpkg install 'gdal[core]:arm64-ios-simulator-release' --classic --disable-metrics
-      - uses: actions/cache/save@v6
-        if: steps.ios-cache.outputs.cache-hit != 'true'
-        with:
-          path: verification/build/vcpkg-binary-cache
-          key: ${{ steps.ios-cache.outputs.cache-primary-key }}
-      - name: Build GDAL C bridge for iOS simulator
-        run: |
-          cmake -S ../gdal4k/native -B ../gdal4k/build/ios-simulator -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$PWD/tools/vcpkg/scripts/buildsystems/vcpkg.cmake" \
-            -DVCPKG_TARGET_TRIPLET=arm64-ios-simulator-release \
-            -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
-            -DCMAKE_BUILD_TYPE=Release
-          cmake --build ../gdal4k/build/ios-simulator --parallel 3
-          codesign --force --sign - ../gdal4k/build/ios-simulator/libgdal4k.dylib
-      - name: Run actual Kotlin Native GDAL test on iOS simulator
-        run: |
-          mkdir -p results
-          device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if x["name"].startswith("iPhone")))')"
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-          SIMCTL_CHILD_PROJ_DATA="$PWD/tools/vcpkg/installed/arm64-ios-simulator-release/share/proj" \
-          ../gradlew --console=plain -p .. -PportableOnly=true "-Pgdal4kBridgePrefix=$PWD/../gdal4k/build/ios-simulator" "-PiosDevice=$device" :gdal4k:iosSimulatorArm64Test
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: gdal-library-ios-simulator
-          path: |
-            gdal4k/build/test-results/
-            gdal4k/build/reports/tests/
-            verification/tools/vcpkg/buildtrees/gdal/*.log
-          if-no-files-found: error
-  desktop-and-web:
+  native:
+    name: Native ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          - { target: linuxX64, os: ubuntu-24.04 }
+          - { target: linuxArm64, os: ubuntu-24.04 }
+          - { target: macosArm64, os: macos-15 }
+          - { target: macosX64, os: macos-15-intel }
+          - { target: mingwX64, os: windows-2025 }
+          - { target: iosArm64, os: macos-15 }
+          - { target: iosSimulatorArm64, os: macos-15 }
+          - { target: iosX64, os: macos-15-intel }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-    defaults:
-      run:
-        working-directory: verification
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - name: Linux GDAL
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgdal-dev ninja-build
-      - name: macOS GDAL
-        if: runner.os == 'macOS'
-        run: brew install gdal ninja
-      - name: Windows GDAL and compiler
-        id: msys2
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          install: mingw-w64-x86_64-gdal mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja
-          path-type: inherit
-      - name: Windows native search paths
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $prefix = '${{ steps.msys2.outputs.msys2-location }}' -replace '\\', '/'
-          "$prefix/mingw64/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-          "CMAKE_PREFIX_PATH=$prefix/mingw64" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "PROJ_DATA=$prefix/mingw64/share/proj" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "GDAL_DATA=$prefix/mingw64/share/gdal" | Out-File -FilePath $env:GITHUB_ENV -Append
+        with: { distribution: temurin, java-version: '21' }
       - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - run: python -m pip install -r verification/requirements.txt
+      - uses: actions/cache@v6
         with:
-          python-version: '3.14'
-      - name: Python build tools
-        run: python -m pip install -r requirements.txt
-      - name: Web dependencies
-        run: npm ci
-      - name: Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run standard library test source sets
-        run: python ../gdal4k/tools/run-tests.py
-      - name: Preserve evidence
+          path: verification/build/vcpkg-cache
+          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}
+      - name: Boot iOS simulator
+        if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
+        run: |
+          device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for g in d["devices"].values() for x in g if x["name"].startswith("iPhone")))')"
+          xcrun simctl boot "$device" || xcrun simctl list devices booted | grep "$device"
+          xcrun simctl bootstatus "$device" -b
+          echo "IOS_DEVICE=$device" >> "$GITHUB_ENV"
+      - name: Test library and independent published consumer
+        run: python verification/ci.py '${{ matrix.target }}' ${IOS_DEVICE:+--ios-device "$IOS_DEVICE"}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.target }}
+          path: verification/build/staged/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: gdal-library-${{ matrix.os }}
+          name: evidence-${{ matrix.target }}
           path: |
             gdal4k/build/test-results/
             gdal4k/build/reports/tests/
+            verification/results/published-consumer-*/
+            verification/tools/vcpkg/buildtrees/*/*.log
           if-no-files-found: warn
+
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-node@v6
+        with: { node-version: '24' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - run: python -m pip install -r verification/requirements.txt
+      - name: Pinned Emscripten SDK
+        run: |
+          git clone --depth 1 --branch 4.0.23 https://github.com/emscripten-core/emsdk.git verification/tools/emsdk
+          test "$(git -C verification/tools/emsdk rev-parse HEAD)" = c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56
+          verification/tools/emsdk/emsdk install 4.0.23
+          verification/tools/emsdk/emsdk activate 4.0.23
+      - uses: actions/cache@v6
+        with:
+          path: verification/build/vcpkg-cache
+          key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}
+      - name: Browser test runtime
+        run: |
+          npm ci --prefix verification
+          cd verification
+          npx playwright install --with-deps chromium
+          node -e 'console.log("CHROME_BIN="+require("playwright").chromium.executablePath())' >> "$GITHUB_ENV"
+      - name: Same own engine in JS and wasmJs, Node and Chromium
+        run: |
+          source verification/tools/emsdk/emsdk_env.sh
+          python verification/ci.py web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-web
+          path: verification/build/staged/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-web
+          path: |
+            gdal4k/build/test-results/
+            verification/results/published-consumer-*/
+            verification/tools/vcpkg/buildtrees/*/*.log
+
+  android:
+    name: Android ${{ matrix.abi }}
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - run: python -m pip install -r verification/requirements.txt
+      - uses: android-actions/setup-android@v3
+      - name: Android NDK r28c
+        run: |
+          sdkmanager 'ndk;28.2.13676358' 'platforms;android-35' 'build-tools;35.0.0'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        with:
+          path: verification/build/vcpkg-cache
+          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}
+      - run: python verification/ci.py 'android-${{ matrix.abi }}'
+      - name: Allow emulator acceleration
+        if: matrix.abi == 'x86_64'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        if: matrix.abi == 'x86_64'
+        with:
+          api-level: 35
+          arch: x86_64
+          disable-animations: true
+          script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-android-${{ matrix.abi }}
+          path: verification/build/staged/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-android-${{ matrix.abi }}
+          path: |
+            gdal4k/build/outputs/androidTest-results/
+            gdal4k/build/results/
+            verification/results/published-consumer-*/
+            verification/tools/vcpkg/buildtrees/*/*.log
+
+  assemble:
+    needs: [native, web, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - uses: actions/download-artifact@v4
+        with: { pattern: 'engine-*', path: verification/build/downloads, merge-multiple: true }
+      - name: Restore verified outputs only
+        run: python -c 'import tarfile; from pathlib import Path; [tarfile.open(p).extractall(filter="data") for p in Path("verification/build/downloads").glob("*.tar.gz")]'
+      - name: Assemble complete Maven repository and verify universal JVM and Android AAR
+        run: python verification/ci.py aggregate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gdal4k-maven
+          path: verification/build/staged/complete-maven.tar.gz
+          if-no-files-found: error
+
+  linux-arm64-runtime:
+    needs: [native, assemble]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - uses: actions/download-artifact@v4
+        with: { name: engine-linuxArm64, path: verification/build/downloads }
+      - uses: actions/download-artifact@v4
+        with: { name: gdal4k-maven, path: verification/build/downloads }
+      - run: python -c 'import tarfile; from pathlib import Path; [tarfile.open(p).extractall(filter="data") for p in Path("verification/build/downloads").glob("*.tar.gz")]'
+      - run: python verification/ci.py linuxArm64-run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-linux-arm64-runtime
+          path: verification/results/published-consumer-jvm/

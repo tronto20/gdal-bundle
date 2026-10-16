@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Build, execute and stage the actual library artifacts, never a system GDAL probe."""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BUILD = ROOT/'gdal4k-binary/build'
+REPO = ROOT/'verification/build/consumer-maven'
+GRADLE = ROOT/('gradlew.bat' if os.name == 'nt' else 'gradlew')
+PLATFORMS = {'macosArm64':'macos-arm64','macosX64':'macos-amd64','linuxX64':'linux-amd64',
+ 'linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64',
+ 'iosSimulatorArm64':'ios-simulator-arm64','iosX64':'ios-simulator-amd64'}
+
+def run(*args):
+    subprocess.run([str(x) for x in args], cwd=ROOT, check=True)
+
+def gradle(*tasks, options=()):
+    run(GRADLE, '--console=plain', f'-Dmaven.repo.local={REPO}', *options, *tasks)
+
+def publish(target):
+    title=target[0].upper()+target[1:]
+    gradle(*(f':{m}:publish{p}PublicationToMavenLocal' for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for p in ['KotlinMultiplatform',title]))
+
+def consumer(target, *options):
+    run(sys.executable, ROOT/'verification/consumer.py', '--target', target, '--no-publish', '--repo', REPO, *options)
+
+def stage(name, platforms=(), targets=(), include_root=False, include_tests=False):
+    """Only portable outputs; no producer installations, SDKs or build caches."""
+    files=set()
+    for platform in platforms:
+        manifest=BUILD/f'engine/{platform}/manifest.json'
+        data=json.loads(manifest.read_text())
+        files.add(manifest)
+        files.update(BUILD/f for f in data['artifacts'])
+    suffixes={'wasmJs':'wasm-js'}
+    coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for t in targets]
+    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-android-runtime']
+    for coordinate in coordinates:
+        directory=REPO/'dev/tronto/gdal4k'/coordinate
+        if not directory.exists():raise RuntimeError('Missing publication '+coordinate)
+        files.update(f for f in directory.rglob('*') if f.is_file())
+    if include_tests:
+        files.update(f for f in (ROOT/'gdal4k/build/bin').rglob('*') if f.is_file() and 'debugTest' in f.parts)
+        for result in (ROOT/'verification/results').glob('published-consumer-linuxArm64/bin/**/*'):
+            if result.is_file():files.add(result)
+    output=ROOT/f'verification/build/staged/{name}.tar.gz';output.parent.mkdir(parents=True,exist_ok=True)
+    with tarfile.open(output,'w:gz') as archive:
+        for f in sorted(files):archive.add(f,arcname=f.relative_to(ROOT),recursive=False)
+    print('Staged '+str(output),flush=True)
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('target', choices=[*PLATFORMS,'web','android-arm64-v8a','android-armeabi-v7a','android-x86','android-x86_64','aggregate','linuxArm64-run'])
+    p.add_argument('--ios-device');a=p.parse_args();target=a.target
+    if target in PLATFORMS:
+        gradle(f':gdal4k-runtime:compileKotlin{target[0].upper()+target[1:]}') # initialize matching K/N toolchain
+        cross=target in ['iosArm64','linuxArm64']
+        options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
+        tasks=[f':gdal4k:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k:{target}Test']
+        if target in ['macosArm64','macosX64','linuxX64','mingwX64']:tasks+=[':gdal4k:jvmTest']
+        gradle(*tasks,options=options)
+        run(sys.executable, ROOT/'verification/audit-engine.py', PLATFORMS[target])
+        publish(target)
+        consumer(target,*(['--compile-only'] if cross else []),*(['--ios-device',a.ios_device] if a.ios_device else []))
+        stage(target,[PLATFORMS[target]],[target],include_tests=target=='linuxArm64')
+    elif target=='web':
+        gradle(':gdal4k:jsNodeTest',':gdal4k:wasmJsNodeTest',':gdal4k:jsBrowserTest',':gdal4k:wasmJsBrowserTest')
+        run(sys.executable, ROOT/'verification/audit-engine.py', 'web')
+        for t in ['js','wasmJs']:
+            publish(t);consumer(t);consumer(t,'--browser')
+        stage('web',['web'],['js','wasmJs'])
+    elif target.startswith('android-'):
+        run(sys.executable,ROOT/'gdal4k-binary/tools/build-engine.py',target)
+        run(sys.executable,ROOT/'verification/audit-engine.py',target)
+        stage(target,[target])
+    elif target=='aggregate':
+        # All five JNI libraries and all four Android ABIs are mandatory before publication.
+        gradle(':gdal4k:jvmTest',options=['-Pgdal4kUniversalJvm=true'])
+        publish('jvm')
+        # jvmJar may already be up-to-date; explicitly verify its payload below.
+        import zipfile
+        jar=next((REPO/'dev/tronto/gdal4k/gdal4k-binary-jvm').glob('*/*-SNAPSHOT.jar'))
+        with zipfile.ZipFile(jar) as z:
+            for file in ['macos-arm64/libgdal4k.dylib','macos-amd64/libgdal4k.dylib','linux-amd64/libgdal4k.so','linux-arm64/libgdal4k.so','windows-amd64/gdal4k.dll']:
+                if 'gdal4k/'+file not in z.namelist():raise RuntimeError('Incomplete JVM artifact: '+file)
+        publish('android')
+        gradle(':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal')
+        aar=next((REPO/'dev/tronto/gdal4k/gdal4k-android-runtime').glob('*/*.aar'))
+        with zipfile.ZipFile(aar) as z:
+            for abi in ['arm64-v8a','armeabi-v7a','x86','x86_64']:
+                if f'jni/{abi}/libgdal4k.so' not in z.namelist():raise RuntimeError('Incomplete AAR: '+abi)
+        consumer('jvm')
+        # Exercise the release publisher against a local repository, including snapshot metadata.
+        published=ROOT/'verification/build/publish-roundtrip'
+        run(sys.executable, ROOT/'verification/publish.py','--repo',REPO,'--destination',published)
+        run(sys.executable, ROOT/'verification/consumer.py','--target','jvm','--no-publish','--repo',published)
+        stage('complete-maven',targets=[*PLATFORMS,'js','wasmJs','jvm','android'],include_root=True)
+    elif target=='linuxArm64-run':
+        # Kotlin/Native has no Linux ARM64 compiler host. Execute the cross-linked tests here.
+        native=ROOT/'gdal4k/build/bin/linuxArm64/debugTest/test.kexe'
+        run(native)
+        binaries=list((ROOT/'verification/results/published-consumer-linuxArm64/bin').glob('**/test.kexe'))
+        if len(binaries)!=1:raise RuntimeError('Missing independent consumer executable')
+        run(binaries[0])
+        consumer('jvm')
+
+if __name__=='__main__':main()

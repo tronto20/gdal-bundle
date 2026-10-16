@@ -81,7 +81,6 @@ private fun printUsage() {
           sample-cli smoke
 
         The GDAL runtime bundle is packaged inside the gdal4k-binary dependency.
-        You can still override it with -Dgdal.bundle.dir or GDAL_BUNDLE_DIR if needed.
         """.trimIndent(),
     )
 }

@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "resources.h"
+#include "runtime.hpp"
 
 namespace {
 std::atomic<unsigned long long> sequence{0};
@@ -78,6 +80,7 @@ CPLJSONObject outputFiles(const Directory &dir, const std::string &main) {
 }
 
 struct gdal4k_context {
+    g4k::Runtime runtime;
     std::map<std::string, std::unique_ptr<Dataset>> datasets;
     std::mutex mutex;
     unsigned long long nextId = 0;
@@ -87,6 +90,7 @@ struct gdal4k_context {
 static CPLJSONObject execute(gdal4k_context &ctx, const CPLJSONObject &request) {
     const auto op = request.GetString("op");
     const auto args = request.GetObj("args");
+    if (op == "runtime") return ctx.runtime.execute(args);
     if (op == "drivers") {
         CPLJSONArray result;
         for (int i = 0; i < GDALGetDriverCount(); ++i) {
@@ -191,10 +195,10 @@ static CPLJSONObject execute(gdal4k_context &ctx, const CPLJSONObject &request) 
 
 extern "C" gdal4k_context *gdal4k_create(const char *proj, const char *data) {
     try {
-        std::call_once(registered, [] { GDALAllRegister(); });
+        std::call_once(registered, [] { gdal4k_install_resources(); GDALAllRegister(); });
         auto ctx = new gdal4k_context;
         if (proj) ctx->projData = proj;
-        if (data) ctx->gdalData = data;
+        ctx->gdalData = data && *data ? data : gdal4k_data_directory();
         return ctx;
     } catch (...) { return nullptr; }
 }
