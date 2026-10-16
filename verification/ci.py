@@ -58,9 +58,14 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('target', choices=[*PLATFORMS,'web','android-arm64-v8a','android-armeabi-v7a','android-x86','android-x86_64','aggregate','linuxArm64-run'])
+    p.add_argument('--build-engine-only',action='store_true',help='Build the native engine before starting a simulator or running Kotlin tests')
     p.add_argument('--ios-device');a=p.parse_args();target=a.target
+    if a.build_engine_only and target not in PLATFORMS:p.error('--build-engine-only requires a Native target')
     if target in PLATFORMS:
         gradle(f':gdal4k-runtime:compileKotlin{target[0].upper()+target[1:]}') # initialize matching K/N toolchain
+        if a.build_engine_only:
+            run(sys.executable,ROOT/'gdal4k-binary/tools/build-engine.py',PLATFORMS[target])
+            return
         cross=target in ['iosArm64','linuxArm64']
         options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
         tasks=[f':gdal4k:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k:{target}Test']

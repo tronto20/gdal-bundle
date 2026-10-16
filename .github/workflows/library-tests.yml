@@ -44,6 +44,8 @@ jobs:
           restore-keys: |
             engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
             engine-${{ matrix.target }}-
+      - name: Build GDAL and codecs
+        run: python verification/ci.py '${{ matrix.target }}' --build-engine-only
       - name: Boot iOS simulator
         timeout-minutes: 5
         if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
