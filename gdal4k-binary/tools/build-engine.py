@@ -26,7 +26,8 @@ def link_arguments(command):
 def fingerprint():
  digest=hashlib.sha256()
  for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web/vendor']:
-  for source in sorted(directory.rglob('*')):
+  # WindowsPath sorts without case; compare the same slash-separated names on every host.
+  for source in sorted(directory.rglob('*'),key=lambda p:p.relative_to(ROOT).as_posix()):
    if source.is_file() and '__pycache__' not in source.parts:
     digest.update(source.relative_to(ROOT).as_posix().encode());digest.update(source.read_bytes().replace(b'\r\n',b'\n'))
  return digest.hexdigest()
