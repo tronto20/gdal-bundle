@@ -119,7 +119,7 @@ kotlin {
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))
      original.rename(moved);hidden.append((original,moved))
-  run([gradle,'-p',consumer,'--console=plain',task],cwd=consumer)
+  run([gradle,'-p',consumer,'--console=plain','--refresh-dependencies',task],cwd=consumer)
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else ''))
   destination.mkdir(parents=True,exist_ok=True)
   for folder in ['build/test-results','build/outputs/androidTest-results','build/bin']:

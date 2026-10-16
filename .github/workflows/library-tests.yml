@@ -43,6 +43,7 @@ jobs:
           key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
       - name: Boot iOS simulator
+        timeout-minutes: 5
         if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
         run: |
           device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for g in d["devices"].values() for x in g if x["name"].startswith("iPhone")))')"
