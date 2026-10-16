@@ -30,6 +30,15 @@ class BundledRuntimeTest {
         dataset.close()
         assertFails { band.getXSize() }
         band.close(); band.close(); dataset.close()
+        // 65537 * 65536 wraps to 65536 in a 32-bit size_t. VRT needs no pixel allocation.
+        requireNotNull(runtime.getDriver("VRT")).use { vrt ->
+            requireNotNull(vrt.create("", 65537, 65536, 1, GdalDataType.Byte)).use { huge ->
+                val failure = assertFailsWith<GdalException> {
+                    requireNotNull(huge.getRasterBand(1)).readRaster(ByteArray(65536))
+                }
+                assertTrue(failure.message.orEmpty().contains("Raster buffer is too small"))
+            }
+        }
         // A failed CRS must not poison a subsequent request.
         assertFails { runtime.createSpatialReference("EPSG:NOT_A_CRS") }
         runtime.createSpatialReference("EPSG:4326").use { assertTrue(it.isGeographic()) }
