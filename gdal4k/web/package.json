@@ -1,0 +1,6 @@
+{
+  "name": "gdal4k-web-runtime",
+  "version": "1.0.1",
+  "private": true,
+  "dependencies": { "gdal3.js": "2.8.1" }
+}

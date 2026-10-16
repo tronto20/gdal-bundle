@@ -1,0 +1,3 @@
+headers = gdal4k.h
+package = dev.gdal4k.cinterop
+linkerOpts = -lgdal4k
