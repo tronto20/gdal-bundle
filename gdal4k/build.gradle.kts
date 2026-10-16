@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.targets.js.testing.KotlinJsTest
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -18,13 +19,25 @@ kotlin {
         namespace = "dev.gdal4k"
         compileSdk = 35
         minSdk = 28
-        withHostTest {}
+        withDeviceTestBuilder { sourceSetTreeName = "test" }.configure {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
-    js { nodejs(); browser() }
-    wasmJs { nodejs(); browser() }
+    js {
+        nodejs { testTask { useMocha { timeout = "120s" } } }
+        browser { testTask { useKarma { useChromeHeadless() } } }
+    }
+    wasmJs {
+        nodejs()
+        browser { testTask { useKarma { useChromeHeadless() } } }
+    }
     macosArm64(); macosX64()
     linuxX64(); linuxArm64(); mingwX64()
-    iosArm64(); iosSimulatorArm64(); iosX64()
+    iosArm64()
+    iosSimulatorArm64 {
+        testRuns["test"].deviceId = providers.gradleProperty("iosDevice").orElse("iPhone 16").get()
+    }
+    iosX64()
     applyDefaultHierarchyTemplate {
         common { group("jni") { withCompilations { it.target.name == "jvm" || it.target.name == "android" } } }
     }
@@ -34,7 +47,13 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
         androidMain.dependencies { api(project(":gdal4k-android-runtime")) }
-        commonTest.dependencies { implementation(kotlin("test")) }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+        }
+        getByName("androidDeviceTest") {
+            dependencies { implementation("androidx.test:runner:1.6.2") }
+        }
     }
     targets.withType<KotlinNativeTarget>().configureEach {
         compilations["main"].cinterops.create("gdal4k") {
@@ -68,4 +87,23 @@ val webRuntime by tasks.registering(Zip::class) {
 }
 publishing.publications.withType<MavenPublication>().matching { it.name == "kotlinMultiplatform" }.configureEach {
     artifact(webRuntime) { classifier = "web-runtime" }
+}
+
+// Test-only assets are served with the standard JS/Wasm browser test bundle.
+val prepareTestWebRuntime by tasks.registering(Copy::class) {
+    dependsOn(installWebRuntime)
+    from("web") { include("*.mjs") }
+    from("web/node_modules/gdal3.js/dist/package") {
+        include("gdal3.js", "gdal3.node.js", "gdal3WebAssembly.wasm", "gdal3WebAssembly.data")
+    }
+    into(layout.buildDirectory.dir("test-web-runtime/gdal"))
+}
+tasks.withType<Test>().configureEach {
+    systemProperty("gdal4k.library", file(bridgePrefix.get()).resolve(System.mapLibraryName("gdal4k")).absolutePath)
+}
+tasks.withType<KotlinJsTest>().configureEach {
+    dependsOn(prepareTestWebRuntime)
+    environment("GDAL4K_TEST_RUNTIME", layout.buildDirectory.dir("test-web-runtime/gdal").get().asFile.absolutePath)
+    environment("GDAL4K_BRIDGE_URL", layout.projectDirectory.file("web/gdal4k-web.mjs").asFile.toURI().toString())
+    environment("GDAL4K_ASSETS_URL", layout.projectDirectory.dir("web/node_modules/gdal3.js/dist/package").asFile.toURI().toString())
 }

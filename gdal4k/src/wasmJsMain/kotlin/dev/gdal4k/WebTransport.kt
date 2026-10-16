@@ -6,7 +6,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 import kotlin.js.*
 
-@JsFun("(url, assets, success, failure) => { import(url).then(m => m.createGdal4k(assets)).then(success, e => failure(String(e.stack || e))); }")
+@JsFun("(url, assets, success, failure) => { import(/* webpackIgnore: true */ url).then(m => m.createGdal4k(assets)).then(success, e => failure(String(e.stack || e))); }")
 private external fun make(url: String, assets: String, success: (JsAny) -> Unit, failure: (String) -> Unit)
 @JsFun("(bridge, request, success, failure) => { bridge.call(request).then(success, e => failure(String(e.stack || e))); }")
 private external fun invoke(bridge: JsAny, request: String, success: (String) -> Unit, failure: (String) -> Unit)

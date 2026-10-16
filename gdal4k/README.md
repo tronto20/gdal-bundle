@@ -73,19 +73,25 @@ val options = GdalOptions(
 )
 ```
 
+Webpack을 쓰는 Kotlin/JS 앱은 런타임 URL의 `import(url)`을 번들러가 변환하지 않도록 설정합니다. `webpack.config.d/gdal.js`에 다음을 추가합니다. `wasmJs`의 import에는 adapter가 `webpackIgnore`를 지정합니다.
+
+```js
+config.module.rules.push({ test: /gdal4k\.js$/, parser: { import: false } });
+```
+
 Node는 압축 해제한 같은 파일들의 절대 `file:` URL을 전달합니다. 세션마다 별도 Worker를 사용하고 `close()`에서 종료합니다. Kotlin의 `ByteArray`를 넘기므로 브라우저 File/Node 파일 경로 API가 공통 코드에 노출되지 않습니다.
 
 ## 검증
 
 ```sh
 cd verification && npm ci && npx playwright install chromium && cd ..
-python gdal4k-contract/run-local.py
+python gdal4k/tools/run-tests.py
 ```
 
-별도 consumer 모듈 `gdal4k-contract`가 실제 라이브러리 의존성을 사용합니다. GeoTIFF/COG 재열기·픽셀·NoData·geotransform, 윈도우 읽기, 재투영, 좌표 왕복, Shapefile 보조 파일, 중복 이름, Unicode 파일명, 잘못된 드라이버/CRS/파일/옵션, 종료 후 사용을 같은 Kotlin 코드로 검증합니다. `.github/workflows/library-contract.yml`에서 데스크톱 3종과 iOS Simulator를 실행합니다.
+검증은 `gdal4k`의 `commonTest`에 있으며, 플랫폼 초기화만 `jvmTest`, `nativeTest`, `jsTest`, `wasmJsTest`, `androidDeviceTest`에 둡니다. GeoTIFF/COG 재열기·픽셀·NoData·geotransform, 윈도우 읽기, 재투영, 좌표 왕복, Shapefile 보조 파일, 중복 이름, Unicode 파일명, 잘못된 드라이버/CRS/파일/옵션, 종료 후 사용을 같은 Kotlin 테스트로 검증합니다.
 
-Android 자동 검증은 `python gdal4k-contract/run-android.py --sdk /path/sdk --ndk /path/ndk --vcpkg /path/vcpkg --serial emulator-5580`입니다. raw GDAL CMake 패키지를 사용할 때는 `--gdal-dir /path/lib/cmake/gdal`을 추가합니다. 빌드·AAR·APK 설치·테스트 앱 데이터 초기화·cold asset 추출·instrumentation·성공 마커를 검사합니다.
+위 스크립트는 호스트 C bridge를 준비하고 `:gdal4k:jvmTest`, 호스트 Native 테스트, `:gdal4k:jsNodeTest`, `:gdal4k:wasmJsNodeTest`, `:gdal4k:jsBrowserTest`, `:gdal4k:wasmJsBrowserTest`를 실행합니다. bridge와 `CHROME_BIN`을 준비했다면 이 Gradle 태스크를 직접 실행해도 됩니다. 결과는 `gdal4k/build/test-results`와 `gdal4k/build/reports/tests`에 기록됩니다. `.github/workflows/library-tests.yml`에서 데스크톱 3종과 `:gdal4k:iosSimulatorArm64Test`를 실행합니다.
 
-수동 검증: `:gdal4k-android-test:assembleDebug` 후 테스트 장치에 설치하고 `adb shell am instrument -w dev.gdal4k.contract.app/.ContractInstrumentation`. 종료 코드뿐 아니라 `GDAL4K_LIBRARY_CONTRACT_OK`를 확인합니다. `GdalAndroid`의 데이터 추출과 전이 AAR 패키징도 이 경로에서 실행합니다.
+Android는 `python gdal4k/tools/run-android-tests.py --sdk /path/sdk --ndk /path/ndk --vcpkg /path/vcpkg --serial emulator-5580`으로 JNI/데이터를 준비하고 `:gdal4k:connectedAndroidDeviceTest`를 실행합니다. raw GDAL CMake 패키지를 사용할 때는 `--gdal-dir /path/lib/cmake/gdal`을 추가합니다. 별도 테스트 앱 모듈 없이 Android Gradle Plugin이 instrumentation APK를 생성합니다. 결과는 `gdal4k/build/outputs/androidTest-results`에 기록됩니다.
 
 `-PportableOnly=true`는 기존 conda/JVM 번들 모듈을 제외하여 공통 라이브러리만 빌드하는 옵션입니다. Maven 공개 배포는 별도 작업입니다.
