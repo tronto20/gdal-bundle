@@ -35,7 +35,7 @@ object Gdal4kBinary {
         Unit
     }
 
-    fun runtime(): GdalRuntime = instance ?: error("Call Gdal4kBinary.prepare() first")
+    fun runtime(): GdalRuntime = instance ?: error("Call Gdal4k.prepare() first")
 }
 
 internal expect fun bundledOptions(bundleDir: String?): GdalOptions

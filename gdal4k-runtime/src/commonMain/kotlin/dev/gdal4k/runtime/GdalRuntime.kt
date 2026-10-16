@@ -1,5 +1,8 @@
 package dev.gdal4k.runtime
 
+import dev.gdal4k.GdalDriver
+import dev.gdal4k.GdalFiles
+
 /**
  * Common GDAL entry point for dataset, spatial reference, and transformation operations.
  */
@@ -12,6 +15,8 @@ interface GdalRuntime {
     suspend fun deleteMemoryFile(path: String)
 
     suspend fun getDriver(name: String): Driver?
+
+    suspend fun drivers(): List<GdalDriver>
 
     suspend fun createGCP(
         gcpX: Double = 0.0,
@@ -37,6 +42,12 @@ interface GdalRuntime {
         options: DatasetOpenOptions = DatasetOpenOptions(),
     ): Dataset
 
+    /** Opens an isolated memory workspace; closing the returned dataset removes its files. */
+    suspend fun openDataset(
+        files: GdalFiles,
+        options: DatasetOpenOptions = DatasetOpenOptions(),
+    ): Dataset
+
     suspend fun datasetInfo(
         dataset: Dataset,
         options: DatasetInfoOptions = DatasetInfoOptions(),
@@ -48,6 +59,28 @@ interface GdalRuntime {
  */
 interface Dataset {
     suspend fun close()
+
+    /** GDAL JSON information for a raster or vector dataset. */
+    suspend fun info(arguments: List<String> = emptyList()): String
+
+    suspend fun translate(
+        driver: String = "GTiff",
+        name: String = "output.tif",
+        arguments: List<String> = emptyList(),
+    ): GdalFiles
+
+    suspend fun warp(
+        target: String,
+        driver: String = "GTiff",
+        name: String = "warped.tif",
+        arguments: List<String> = emptyList(),
+    ): GdalFiles
+
+    suspend fun translateVector(
+        driver: String = "GeoJSON",
+        name: String = "output.geojson",
+        arguments: List<String> = emptyList(),
+    ): GdalFiles
 
     suspend fun flushCache(): Int
 

@@ -1,7 +1,6 @@
 package dev.gdal4k.binary
 
-import dev.gdal4k.GdalException
-import dev.gdal4k.GdalTransport
+import dev.gdal4k.*
 import dev.gdal4k.runtime.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.NonCancellable
@@ -10,6 +9,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.io.encoding.Base64
 
 internal class RuntimeEngine(private val transport: GdalTransport) {
     private val mutex = Mutex()
@@ -86,6 +86,18 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
             put("options", encode(value.openOptions))
         }
         is DatasetInfoOptions -> buildJsonObject { put("arguments", encode(value.arguments)) }
+        is GdalFiles -> buildJsonObject {
+            put("main", value.main)
+            put("files", JsonArray(value.files.map { file -> buildJsonObject {
+                put("name", file.name); put("data", Base64.encode(file.bytes))
+            } }))
+        }
         else -> error("Unsupported GDAL argument: $value")
     }
+}
+
+internal fun decodeFiles(value: JsonElement): GdalFiles = value.jsonObject.let { files ->
+    GdalFiles(files.getValue("main").jsonPrimitive.content, files.getValue("files").jsonArray.map { entry ->
+        entry.jsonObject.let { file -> GdalFile(file.getValue("name").jsonPrimitive.content, Base64.decode(file.getValue("data").jsonPrimitive.content)) }
+    })
 }

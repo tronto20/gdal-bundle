@@ -2,6 +2,7 @@
 package dev.gdal4k.binary
 
 import dev.gdal4k.runtime.*
+import dev.gdal4k.*
 import kotlinx.serialization.json.*
 
 internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine, "0", null), GdalRuntime {
@@ -10,16 +11,22 @@ internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine,
     override suspend fun readMemoryFile(path: String): ByteArray { val result = invoke("GdalRuntime", "readMemoryFile_String", mapOf("path" to encode(path))); return result.jsonArray.map { it.jsonPrimitive.content.toInt().toByte() }.toByteArray() }
     override suspend fun deleteMemoryFile(path: String): Unit { invoke("GdalRuntime", "deleteMemoryFile_String", mapOf("path" to encode(path))); return Unit }
     override suspend fun getDriver(name: String): Driver? { val result = invoke("GdalRuntime", "getDriver_String", mapOf("name" to encode(name))); return engine.wrapDriver(result, null) }
+    override suspend fun drivers(): List<GdalDriver> { val result = invoke("GdalRuntime", "drivers", mapOf()); return result.jsonArray.map { it.jsonObject.let { d -> GdalDriver(d.getValue("name").jsonPrimitive.content, d.getValue("longName").jsonPrimitive.content, d.getValue("raster").jsonPrimitive.boolean, d.getValue("vector").jsonPrimitive.boolean) } } }
     override suspend fun createGCP(gcpX: Double, gcpY: Double, gcpZ: Double, gcpPixel: Double, gcpLine: Double, info: String, id: String): GCP { val result = invoke("GdalRuntime", "createGCP_Double_Double_Double_Double_Double_String_String", mapOf("gcpX" to encode(gcpX), "gcpY" to encode(gcpY), "gcpZ" to encode(gcpZ), "gcpPixel" to encode(gcpPixel), "gcpLine" to encode(gcpLine), "info" to encode(info), "id" to encode(id))); return requireNotNull(engine.wrapGCP(result, null)) }
     override suspend fun createSpatialReference(): SpatialReference { val result = invoke("GdalRuntime", "createSpatialReference", mapOf()); return requireNotNull(engine.wrapSpatialReference(result, null)) }
     override suspend fun createSpatialReference(definition: String): SpatialReference { val result = invoke("GdalRuntime", "createSpatialReference_String", mapOf("definition" to encode(definition))); return requireNotNull(engine.wrapSpatialReference(result, null)) }
     override suspend fun createCoordinateTransformation(source: SpatialReference, target: SpatialReference): CoordinateTransformation? { val result = invoke("GdalRuntime", "createCoordinateTransformation_SpatialReference_SpatialReference", mapOf("source" to handle(source), "target" to handle(target))); return engine.wrapCoordinateTransformation(result, null) }
     override suspend fun openDataset(source: String, options: DatasetOpenOptions): Dataset { val result = invoke("GdalRuntime", "openDataset_String_DatasetOpenOptions", mapOf("source" to encode(source), "options" to encode(options))); return requireNotNull(engine.wrapDataset(result, null)) }
+    override suspend fun openDataset(files: GdalFiles, options: DatasetOpenOptions): Dataset { val result = invoke("GdalRuntime", "openDataset_GdalFiles_DatasetOpenOptions", mapOf("files" to encode(files), "options" to encode(options))); return requireNotNull(engine.wrapDataset(result, null)) }
     override suspend fun datasetInfo(dataset: Dataset, options: DatasetInfoOptions): String { val result = invoke("GdalRuntime", "datasetInfo_Dataset_DatasetInfoOptions", mapOf("dataset" to handle(dataset), "options" to encode(options))); return result.jsonPrimitive.contentOrNull.orEmpty() }
 }
 
 internal class BundledDataset(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Dataset {
     override suspend fun close() = closeHandle()
+    override suspend fun info(arguments: List<String>): String { val result = invoke("Dataset", "info_List_String", mapOf("arguments" to encode(arguments))); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun translate(driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "translate_String_String_List_String", mapOf("driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
+    override suspend fun warp(target: String, driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "warp_String_String_String_List_String", mapOf("target" to encode(target), "driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
+    override suspend fun translateVector(driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "translateVector_String_String_List_String", mapOf("driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
     override suspend fun flushCache(): Int { val result = invoke("Dataset", "flushCache", mapOf()); return result.jsonPrimitive.int }
     override suspend fun getDriver(): Driver? { val result = invoke("Dataset", "getDriver", mapOf()); return engine.wrapDriver(result, this) }
     override suspend fun getRasterBand(index: Int): Band? { val result = invoke("Dataset", "getRasterBand_Int", mapOf("index" to encode(index))); return engine.wrapBand(result, this) }

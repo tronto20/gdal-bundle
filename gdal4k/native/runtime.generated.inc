@@ -14,6 +14,9 @@
     if(type=="GdalRuntime" && method=="getDriver_String") {
         return r.result(GDALGetDriverByName(a["name"].ToString().c_str()), "Driver", false);
     }
+    if(type=="GdalRuntime" && method=="drivers") {
+        return driverList();
+    }
     if(type=="GdalRuntime" && method=="createGCP_Double_Double_Double_Double_Double_String_String") {
         auto p=static_cast<GDAL_GCP*>(CPLCalloc(1,sizeof(GDAL_GCP))); GDALInitGCPs(1,p); p->dfGCPX=a["gcpX"].ToDouble();p->dfGCPY=a["gcpY"].ToDouble();p->dfGCPZ=a["gcpZ"].ToDouble();p->dfGCPPixel=a["gcpPixel"].ToDouble();p->dfGCPLine=a["gcpLine"].ToDouble();CPLFree(p->pszInfo);CPLFree(p->pszId);p->pszInfo=CPLStrdup(a["info"].ToString().c_str());p->pszId=CPLStrdup(a["id"].ToString().c_str());return r.result(p,"GCP",true);
     }
@@ -27,10 +30,25 @@
         return r.result(OCTNewCoordinateTransformation(r.arg(a["source"]),r.arg(a["target"])),"CoordinateTransformation",true);
     }
     if(type=="GdalRuntime" && method=="openDataset_String_DatasetOpenOptions") {
-        auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);
+        if(a["files"].IsValid())return openMemoryDataset(r,a);auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);
+    }
+    if(type=="GdalRuntime" && method=="openDataset_GdalFiles_DatasetOpenOptions") {
+        if(a["files"].IsValid())return openMemoryDataset(r,a);auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);
     }
     if(type=="GdalRuntime" && method=="datasetInfo_Dataset_DatasetInfoOptions") {
-        Strings list(a["options"].GetArray("arguments"));auto ds=r.arg(a["dataset"]);char* s=nullptr;if(GDALGetRasterCount(ds)>0){auto opts=GDALInfoOptionsNew(list.data(),nullptr);if(!opts)throw std::runtime_error(CPLGetLastErrorMsg());s=GDALInfo(ds,opts);GDALInfoOptionsFree(opts);}else {auto opts=GDALVectorInfoOptionsNew(list.data(),nullptr);if(!opts)throw std::runtime_error(CPLGetLastErrorMsg());s=GDALVectorInfo(ds,opts);GDALVectorInfoOptionsFree(opts);}if(!s)throw std::runtime_error(CPLGetLastErrorMsg());return allocated(s);
+        return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));
+    }
+    if(type=="Dataset" && method=="info_List_String") {
+        return value(datasetInfo(h,a.GetArray("arguments"),true));
+    }
+    if(type=="Dataset" && method=="translate_String_String_List_String") {
+        return convertDataset(h,a,"translate");
+    }
+    if(type=="Dataset" && method=="warp_String_String_String_List_String") {
+        return convertDataset(h,a,"warp");
+    }
+    if(type=="Dataset" && method=="translateVector_String_String_List_String") {
+        return convertDataset(h,a,"vector");
     }
     if(type=="Dataset" && method=="flushCache") {
         auto out=apply(GDALFlushCache, Arg(r,h));return value(out);

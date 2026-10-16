@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
+#include <atomic>
 
 namespace g4k {
 inline void require(bool ok,const char* message) { if(!ok) throw std::runtime_error(message); }
@@ -45,6 +46,7 @@ struct Strings {
 struct Runtime {
     struct Entry {void* pointer;std::string type;bool owned;unsigned long long parent;};
     std::map<unsigned long long,Entry> handles;
+    std::map<unsigned long long,std::string> workspaces;
     unsigned long long next=0;
     ~Runtime(){while(!handles.empty())close(handles.rbegin()->first);}
     void* get(unsigned long long id,const std::string& type="") {
@@ -78,7 +80,11 @@ struct Runtime {
         std::vector<unsigned long long> children;for(auto& item:handles)if(item.second.parent==id)children.push_back(item.first);
         for(auto child:children)close(child);
         auto e=found->second;handles.erase(found);if(!e.owned)return;
-        if(e.type=="Dataset")GDALClose(e.pointer);
+        if(e.type=="Dataset") {
+            GDALClose(e.pointer);
+            auto workspace=workspaces.find(id);
+            if(workspace!=workspaces.end()){VSIRmdirRecursive(workspace->second.c_str());workspaces.erase(workspace);}
+        }
         else if(e.type=="Feature")OGR_F_Destroy(e.pointer);
         else if(e.type=="Geometry")OGR_G_DestroyGeometry(e.pointer);
         else if(e.type=="SpatialReference")OSRRelease(e.pointer);
@@ -91,6 +97,7 @@ struct Runtime {
     }
     CPLJSONObject execute(const CPLJSONObject& request);
 };
+#include "runtime-files.hpp"
 struct Arg {
     Runtime& r;CPLJSONObject json;void* pointer=nullptr;bool native=false;
     mutable std::unique_ptr<Strings> list;

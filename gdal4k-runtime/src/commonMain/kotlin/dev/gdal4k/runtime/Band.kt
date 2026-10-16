@@ -3,8 +3,7 @@ package dev.gdal4k.runtime
 /**
  * Shared raster band handle.
  *
- * The first version focuses on band metadata, overview/mask access, and full-band raster I/O.
- * Windowed and more advanced raster operations can be added as the surface grows.
+ * Provides band metadata, overview/mask access, and full-band or windowed raster I/O.
  */
 interface Band {
     suspend fun close()

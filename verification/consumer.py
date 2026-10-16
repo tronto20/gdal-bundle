@@ -50,6 +50,16 @@ class PublishedConsumerTest {
                         assertEquals(0, source.setProjection(crs.exportToWkt()))
                     }
                     assertEquals(0, source.setGeoTransform(doubleArrayOf(100.0,0.5,0.0,50.0,0.0,-0.5)))
+                    // Convenience conversion works on the original Dataset, not a second wrapper.
+                    val converted = source.translate("COG", "unified.tif", listOf("-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES"))
+                    runtime.openDataset("unified.tif", converted.mainFile().bytes).use { reopened ->
+                        assertContentEquals(doubleArrayOf(0.0, 1.0, 127.0, 255.0), reopened.readRaster())
+                        val actual = ByteArray(4)
+                        requireNotNull(reopened.getRasterBand(1)).use { band ->
+                            assertEquals(0, band.readRaster(actual))
+                        }
+                        assertContentEquals(expected, actual)
+                    }
                     for (format in listOf("JPEGXL", "GTiff", "COG")) {
                         val path = "/vsimem/consumer-" + format + if(format=="JPEGXL") ".jxl" else ".tif"
                         val options = if(format=="JPEGXL") listOf("LOSSLESS=YES") else listOf("COMPRESS=JXL", "JXL_LOSSLESS=YES")

@@ -12,8 +12,7 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
     Gdal4k.prepare()
     try {
         val runtime = Gdal4k.runtime()
-        runtime.writeMemoryFile("/vsimem/image.tif", bytes)
-        return runtime.openDataset("/vsimem/image.tif").use { dataset ->
+        return runtime.openDataset("image.tif", bytes).use { dataset ->
             val result = ByteArray(dataset.getRasterXSize() * dataset.getRasterYSize())
             requireNotNull(dataset.getRasterBand(1)).use { band ->
                 check(band.readRaster(result) == 0)
@@ -34,11 +33,11 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 | --- | --- |
 | 래스터 | 데이터셋·밴드 열기/생성, Byte/Short/Int/Long/Float/Double 배열 읽기·쓰기, window 읽기·쓰기 |
 | 공간 정보 | 영상 크기·밴드 타입·투영·GeoTransform·GCP, NoData·색 해석·마스크·overview 조회/생성 |
-| 포맷 변환 | `Driver.createCopy` 또는 보조 API의 `translate`, GTiff·COG·JPEGXL 출력과 JXL 압축 |
-| 재투영 | 보조 API의 `warp`, CRS 생성·변환 및 좌표 목록 변환 |
-| 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, 보조 API의 `translateVector`(GDAL 공간 필터 옵션 포함) |
+| 포맷 변환 | `Driver.createCopy` 또는 `Dataset.translate`, GTiff·COG·JPEGXL 출력과 JXL 압축 |
+| 재투영 | `Dataset.warp`, CRS 생성·변환 및 좌표 목록 변환 |
+| 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, `Dataset.translateVector`(GDAL 공간 필터 옵션 포함) |
 | Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
-| 메모리 파일 | `/vsimem/` 바이트 입출력, 보조 API의 다중 파일 묶음(예: Shapefile) |
+| 메모리 파일 | `/vsimem/` 바이트 입출력, 다중 파일 묶음(예: Shapefile) |
 
 다음은 `Gdal4k.prepare()`가 끝난 뒤 호출하는 COG/JXL 무손실 변환 예시입니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
 
@@ -94,11 +93,35 @@ GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브
 
 `runtime.versionInfo("THIRD_PARTY_LICENSES")`로 실제 포함된 고지를 조회합니다. 기능 감지는 `getDriver(name)`의 결과로 수행합니다.
 
-## 보조 바이트 API
+## 하나의 진입점과 바이트 입력
 
-기존의 간단한 `Gdal.create().use { session -> ... }` / `GdalFile` / `GdalFiles`도 유지합니다. `GdalFile`은 파일 이름과 바이트, `GdalFiles`는 Shapefile 같은 다중 파일 묶음이며 별도의 GDAL 엔진이 아닙니다. Base64는 이 API의 내부 JSON 전송 구현에만 사용합니다.
+공개 사용 진입점은 `Gdal4k`입니다. `Gdal.create()`, `GdalSession`, 별도의 `GdalDataset` 및 Android 전용 세션 팩토리는 제거했습니다. 초기화·Worker·호출 직렬화·종료를 기존 runtime에 통합했습니다. 기존 `Gdal4kBinary` 초기화 함수는 binary 모듈의 호환 진입점으로 유지합니다.
 
-`GdalOptions()` 기본값만으로 내장 엔진을 사용합니다. `libraryPath`, `projData`, `gdalData`, `webBridgeUrl`은 고급 호스트가 직접 런타임을 바꾸는 선택적 override입니다. 일반 사용에서 지정하지 않습니다.
+경로, 단일 바이트 파일, 다중 파일 입력 모두 `runtime.openDataset(...)`으로 열고 **같은 `Dataset` 인터페이스**를 반환합니다. 따라서 바이트 입력에서도 `getRasterBand`, `getLayer` 같은 기존 API와 편의 변환을 함께 사용합니다.
+
+```kotlin
+import dev.gdal4k.Gdal4k
+import dev.gdal4k.runtime.*
+
+// 앱 초기화 coroutine에서 한 번: Gdal4k.prepare()
+suspend fun toCog(bytes: ByteArray): ByteArray {
+    val runtime = Gdal4k.runtime()
+    return runtime.openDataset("input.tif", bytes).use { dataset ->
+        dataset.translate(
+            driver = "COG",
+            name = "output.tif",
+            arguments = listOf("-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES"),
+        ).mainFile().bytes
+    }
+}
+// 앱 종료 coroutine에서: Gdal4k.close()
+```
+
+`Dataset.info()`는 JSON 문자열, `translate` / `warp` / `translateVector`는 `GdalFiles`를 반환합니다. `Dataset.readRaster(band, window)`는 기존 `Band.readRaster`를 통해 `DoubleArray`를 읽습니다. `runtime.drivers()`는 포함된 드라이버 목록을, `runtime.transform(source, target, points)`는 기존 SRS·좌표변환 API를 이용한 좌표 목록 변환을 제공합니다.
+
+`GdalFile`은 이름과 바이트, `GdalFiles`는 Shapefile 같은 다중 파일 묶음을 담는 값입니다. 두 타입 모두 `gdal4k-runtime`에 있으며, 별도 엔진이나 데이터셋 핸들이 아닙니다. 바이트 입력은 서로 다른 임시 `/vsimem/` 디렉터리를 사용하고 데이터셋을 닫을 때 정리됩니다. 직접 지정한 경로나 `writeMemoryFile`의 파일은 호출자가 관리합니다.
+
+JSON/Base64 전송 코드는 binary 모듈 내부에만 있습니다. 공개 `GdalOptions` 없이 내장 엔진을 사용합니다. GDAL·PROJ 경로나 웹 엔진 URL을 앱에서 지정하지 않습니다.
 
 ## 검증
 
