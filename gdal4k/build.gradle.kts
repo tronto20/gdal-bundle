@@ -60,6 +60,8 @@ val webRuntime by tasks.registering(Zip::class) {
     from("web/node_modules/gdal3.js/dist/package") {
         include("gdal3.js", "gdal3.node.js", "gdal3WebAssembly.wasm", "gdal3WebAssembly.data")
     }
+    from("web/node_modules/gdal3.js/LICENSE") { into("licenses/gdal3.js") }
+    from("web/node_modules/gdal3.js/README.md") { into("licenses/gdal3.js") }
     archiveFileName.set("gdal4k-web.zip")
     destinationDirectory.set(layout.buildDirectory.dir("distributions"))
 }

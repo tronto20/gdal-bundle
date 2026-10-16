@@ -37,7 +37,7 @@ cmake -S gdal4k/native -B gdal4k/build/bridge -G Ninja -DCMAKE_BUILD_TYPE=Releas
 cmake --build gdal4k/build/bridge --parallel 3
 ```
 
-JVM: `GdalOptions(libraryPath = "/absolute/path/libgdal4k.so", projData = "/.../share/proj", gdalData = "/.../share/gdal")`. 확장자는 macOS `.dylib`, Windows `.dll`입니다. 기본값은 `System.loadLibrary("gdal4k")`입니다. GDAL 공유 라이브러리와 그 의존성도 시스템 로더가 찾을 수 있어야 합니다.
+JVM: `GdalOptions(libraryPath = "/absolute/path/libgdal4k.so", projData = "/.../share/proj", gdalData = "/.../share/gdal")`. 확장자는 macOS `.dylib`, Windows `.dll`입니다. 기본값은 `System.loadLibrary("gdal4k")`입니다. GDAL 공유 라이브러리와 그 의존성도 시스템 로더가 찾을 수 있어야 합니다. Native/JNI 호출은 백그라운드 디스패처에서 실행합니다. GDAL의 PROJ 검색 경로가 프로세스 전역이므로 bridge 호출 중에만 적용하고 원래 값으로 복원하며, 이 bridge의 Native/JNI 호출은 프로세스 단위로 직렬화합니다. 같은 프로세스에서 별도 GDAL 바인딩을 직접 호출한다면 전역 설정 변경을 함께 동기화해야 합니다.
 
 Native: `Gdal.create(GdalOptions(projData = ..., gdalData = ...))`. 배포하는 klib는 `-lgdal4k` 링크를 요구합니다. 앱 링크에 bridge 디렉터리의 `-L`과 런타임 검색 경로를 지정하거나 CMake `install`로 검색 가능한 곳에 설치합니다. iOS는 해당 SDK/아키텍처로 빌드한 GDAL/bridge와 데이터가 필요합니다. 저장소 테스트는 `-Pgdal4kBridgePrefix=/absolute/path`를 사용합니다.
 

@@ -19,6 +19,8 @@
 namespace {
 std::atomic<unsigned long long> sequence{0};
 std::once_flag registered;
+// GDAL keeps PROJ search paths globally. Serialize path changes and restore the host state.
+std::mutex configurationMutex;
 void ensure(bool ok, const std::string &message) {
     if (!ok) throw std::runtime_error(message + ": " + CPLGetLastErrorMsg());
 }
@@ -198,8 +200,14 @@ extern "C" gdal4k_context *gdal4k_create(const char *proj, const char *data) {
 }
 extern "C" char *gdal4k_execute(gdal4k_context *ctx, const char *request) {
     if (!ctx) return CPLStrdup("{\"error\":\"GDAL session is closed\"}");
+    std::lock_guard<std::mutex> configLock(configurationMutex);
     std::lock_guard<std::mutex> lock(ctx->mutex);
-    // Per-call thread-local options avoid changing configuration for unrelated sessions.
+    // Most options are thread-local, but GDAL PROJ search paths require the explicit OSR API.
+    char **previousPaths = ctx->projData.empty() ? nullptr : OSRGetPROJSearchPaths();
+    if (!ctx->projData.empty()) {
+        const char *paths[] = {ctx->projData.c_str(), nullptr};
+        OSRSetPROJSearchPaths(paths);
+    }
     char **previous = CPLGetThreadLocalConfigOptions();
     if (!ctx->projData.empty()) CPLSetThreadLocalConfigOption("PROJ_DATA", ctx->projData.c_str());
     if (!ctx->gdalData.empty()) CPLSetThreadLocalConfigOption("GDAL_DATA", ctx->gdalData.c_str());
@@ -208,9 +216,13 @@ extern "C" char *gdal4k_execute(gdal4k_context *ctx, const char *request) {
     try { response.Add("result", execute(*ctx, parse(request))); }
     catch (const std::exception &e) { response.Add("error", e.what()); }
     catch (...) { response.Add("error", "Unknown GDAL error"); }
+    if (previousPaths) { OSRSetPROJSearchPaths(previousPaths); CSLDestroy(previousPaths); }
     CPLSetThreadLocalConfigOptions(previous);
     CSLDestroy(previous);
     return CPLStrdup(response.Format(CPLJSONObject::PrettyFormat::Plain).c_str());
 }
 extern "C" void gdal4k_free(char *s) { CPLFree(s); }
-extern "C" void gdal4k_destroy(gdal4k_context *ctx) { delete ctx; }
+extern "C" void gdal4k_destroy(gdal4k_context *ctx) {
+    std::lock_guard<std::mutex> lock(configurationMutex);
+    delete ctx;
+}
