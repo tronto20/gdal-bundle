@@ -25,6 +25,7 @@ fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.spl
     if (target == "web") outputs.dir(layout.buildDirectory.dir("generated/web"))
     else {
         outputs.file(layout.buildDirectory.file("engine/$target/libgdal4k.a"))
+        outputs.file(layout.buildDirectory.file("engine/$target/native-linker-options.json"))
         if (target.startsWith("android")) outputs.file(layout.buildDirectory.file("android-runtime/jniLibs/${target.removePrefix("android-")}/libgdal4k.so"))
         else if (!target.startsWith("ios")) outputs.file(layout.buildDirectory.file("jvm-resources/gdal4k/$target/${if (target.startsWith("windows")) "gdal4k.dll" else if (target.startsWith("macos")) "libgdal4k.dylib" else "libgdal4k.so"}"))
     }

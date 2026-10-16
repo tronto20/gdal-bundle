@@ -111,8 +111,7 @@ def main():
   merged=out/'libgdal4k.a'
   if target.startswith(('macos','ios')):run('/usr/bin/libtool','-static','-o',merged,*archives)
   else:
-   cache=(build/'CMakeCache.txt').read_text()
-   ar=re.search(r'^CMAKE_AR:(?:FILEPATH|STRING)=(.+)$',cache,re.M)[1].strip()
+   ar=(build/'gdal4k-archiver.txt').read_text().strip()
    script='CREATE '+str(merged)+'\n'+''.join('ADDLIB '+str(f)+'\n' for f in archives)+'SAVE\nEND\n'
    run(ar,'-M',input=script,text=True)
   if target.startswith('android'):

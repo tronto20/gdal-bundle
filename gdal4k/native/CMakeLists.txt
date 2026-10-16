@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 project(gdal4k C CXX)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gdal4k-archiver.txt" "${CMAKE_AR}\n")
 if(VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
     set(GDAL4K_DEPENDENCIES "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 endif()
