@@ -116,6 +116,10 @@ def main():
   print('Bundled static closure: '+', '.join(f.name for f in archives),flush=True)
   # Consumers link system libraries with their own target toolchain.
   system_options=list(dict.fromkeys(t for t in arguments if re.fullmatch(r'-l[\w.+-]+',t)))
+  if target.startswith('windows'):
+   # K/N supplies static winpthread with --whole-archive. Re-adding its dynamic
+   # import library before that runtime produces duplicate pthread definitions.
+   system_options=[t for t in system_options if t not in ['-lwinpthread','-lpthread']]
   (out/'native-linker-options.json').write_text(json.dumps(system_options)+'\n')
   merged=out/'libgdal4k.a'
   if target.startswith(('macos','ios')):run('/usr/bin/libtool','-static','-o',merged,*archives)
