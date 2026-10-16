@@ -73,6 +73,10 @@ jobs:
             gdal4k/build/reports/tests/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
+            gdal4k-binary/build/engine/*/cmake/build.ninja
+            gdal4k-binary/build/engine/*/cmake/CMakeCache.txt
+            gdal4k-binary/build/engine/*/cmake/gdal4k-static-dependencies.txt
+            gdal4k-binary/build/engine/*/manifest.json
           if-no-files-found: warn
 
   web:

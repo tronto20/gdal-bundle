@@ -96,7 +96,12 @@ def main():
    if token.endswith('.a'):
     f=Path(token);f=f if f.is_absolute() else build/f
     if f.is_relative_to(installed) and f not in archives:archives.append(f)
-  for required in ['libgdal.a','libproj.a','libtiff.a','libjxl.a']:
+  # Static Apple frameworks have no .a suffix and appear as -framework in Ninja.
+  for location in (build/'gdal4k-static-dependencies.txt').read_text().splitlines():
+   f=Path(location).resolve()
+   if not f.is_relative_to(installed) or f.read_bytes()[:8]!=b'!<arch>\n':raise RuntimeError('Expected an embedded static archive: '+str(f))
+   if f not in archives:archives.append(f)
+  for required in ['libgdal.a','libproj.a','libjxl.a']:
    if not any(f.name==required for f in archives):raise RuntimeError('Static dependency missing from the Native archive: '+required)
   print('Bundled static closure: '+', '.join(f.name for f in archives),flush=True)
   # Consumers link system libraries with their own target toolchain.
