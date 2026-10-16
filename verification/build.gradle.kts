@@ -8,9 +8,13 @@ kotlin {
     js { nodejs(); browser(); binaries.executable() }
     wasmJs { nodejs(); browser(); binaries.executable() }
     macosArm64 { binaries.executable { entryPoint = "dev.gdal4k.probe.main" } }
+    iosSimulatorArm64 {
+        testRuns["test"].deviceId = providers.gradleProperty("iosDevice").orElse("iPhone 16").get()
+    }
     linuxX64 { binaries.executable { entryPoint = "dev.gdal4k.probe.main" } }
     linuxArm64 { binaries.executable { entryPoint = "dev.gdal4k.probe.main" } }
     mingwX64 { binaries.executable { entryPoint = "dev.gdal4k.probe.main" } }
+    sourceSets.commonTest.dependencies { implementation(kotlin("test")) }
     targets.withType<KotlinNativeTarget>().configureEach {
         compilations.getByName("main").cinterops.create("probe") {
             definitionFile.set(layout.projectDirectory.file("src/nativeInterop/cinterop/probe.def"))
@@ -18,6 +22,7 @@ kotlin {
         }
         binaries.all { linkerOpts("-L${probePrefix.get()}", "-lgdal4k_probe") }
         if (name.startsWith("linux")) binaries.all { linkerOpts("-Wl,--allow-shlib-undefined") }
+        if (name == "iosSimulatorArm64") binaries.all { linkerOpts("-rpath", probePrefix.get()) }
     }
 }
 

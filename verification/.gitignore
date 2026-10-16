@@ -5,3 +5,4 @@
 /node_modules/
 /results/
 /local.properties
+__pycache__/

@@ -62,9 +62,10 @@ and a timestamped `results/local.json`. No missing runtime is counted as a pass.
 
 For cross-compilation set `-PprobePrefix=/absolute/path/to/built-C-library`,
 then run the resulting executable on the matching OS/architecture. The Native
-targets in this first probe are macOS ARM64, Linux x64/ARM64, and Windows x64.
-Apple mobile/device targets and other ABIs still need their own GDAL builds and
-execution evidence; desktop Native success alone does not validate them.
+targets in this first probe are macOS ARM64, Linux x64/ARM64, Windows x64, and
+iOS Simulator ARM64. The iOS CI job builds its own GDAL and runs a Native test
+on an actual booted Simulator. Apple physical-device targets and other ABIs
+still need their own builds and execution evidence.
 
 ## Android
 
@@ -78,8 +79,21 @@ Provide the probe shared library, `libc++_shared.so`, and PROJ data in the
 isolated test directory. This checks Kotlin bytecode and JNI on Android; AAR/APK
 packaging, scoped-storage integration, real devices and other ABIs are separate.
 
+With the SDK, NDK and vcpkg GDAL build prepared and a matching emulator running:
+
+```sh
+python run-android.py --sdk /path/to/sdk --ndk /path/to/ndk \
+  --vcpkg /path/to/vcpkg --serial emulator-5580 --abi arm64-v8a
+```
+
+The runner verifies the device ABI, builds the bridge, compiles the actual Kotlin
+JARs to DEX, copies native/runtime data into its own `/data/local/tmp` directory,
+and records Android version, ABI, page size, GDAL output and execution status.
+The initial local run passed on Android 15 ARM64 with 4 KB pages and GDAL 3.12.4;
+16 KB page-size execution remains unverified.
+
 ## CI
 
 `.github/workflows/platform-feasibility.yml` runs host probes on Linux x64,
-macOS ARM64, and Windows x64 and preserves the actual logs. It has read-only
+macOS ARM64, Windows x64, and iOS Simulator ARM64 and preserves the actual logs. It has read-only
 repository permissions and no package publication steps.
