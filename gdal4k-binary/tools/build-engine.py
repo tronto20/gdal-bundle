@@ -56,6 +56,9 @@ def main():
  if target.startswith('linux'):
   # All target dependencies are static, with tools disabled. They have no ELF RPATH.
   settings+='set(VCPKG_FIXUP_ELF_RPATH OFF)\n'
+  if platform.system()=='Darwin':
+   # Pinned Meson helper compares CPU families but misses a same-CPU OS change.
+   settings+='set(IS_CROSS TRUE)\n'
  if target.startswith(('linux','windows')):
   chain=native_toolchain(target,out/'toolchain.cmake')
   settings+=f'set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "{chain.as_posix()}")\n'

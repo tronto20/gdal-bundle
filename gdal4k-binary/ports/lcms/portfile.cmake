@@ -36,12 +36,6 @@ else()
     list(APPEND OPTIONS -Dutils=false)
 endif()
 
-if(VCPKG_TARGET_IS_LINUX AND CMAKE_HOST_APPLE)
-    # The pinned Meson helper compares CPU families but misses a same-CPU OS change.
-    # Preserve its cross-mode flag so it never executes Linux probes on macOS ARM64.
-    set(IS_CROSS TRUE)
-endif()
-
 vcpkg_configure_meson(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
