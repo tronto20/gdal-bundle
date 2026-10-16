@@ -7,13 +7,42 @@ import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
 class LifecycleTest {
+    @Test fun lazyInitializationAndSharedLifetime() = runTest(timeout = 180.seconds) {
+        Gdal4k.close()
+        try {
+            val cancelled = launch(start = CoroutineStart.UNDISPATCHED) {
+                currentCoroutineContext().cancel()
+                assertFailsWith<CancellationException> { Gdal4k.runtime() }
+            }
+            cancelled.join()
+            val runtimes = List(8) { async(Dispatchers.Default) { Gdal4k.runtime() } }.awaitAll()
+            val runtime = runtimes.first()
+            runtimes.forEach { assertSame(runtime, it) }
+            assertEquals("3120400", runtime.versionInfo("VERSION_NUM"))
+            Gdal4k.prepare() // Optional warm-up must not replace an active runtime.
+            assertSame(runtime, Gdal4k.runtime())
+            Gdal4k.close()
+            val restarted = Gdal4k.runtime() // No separate prepare, including after explicit release.
+            assertNotSame(runtime, restarted)
+            assertFails { runtime.versionInfo() }
+            assertEquals("3120400", restarted.versionInfo("VERSION_NUM"))
+            repeat(3) {
+                // Either acquisition can win; neither may fail with "not prepared".
+                val acquiring = async(Dispatchers.Default) { Gdal4k.runtime() }
+                val closing = async(Dispatchers.Default) { Gdal4k.close() }
+                acquiring.await()
+                closing.await()
+                assertEquals("3120400", Gdal4k.runtime().versionInfo("VERSION_NUM"))
+            }
+        } finally { Gdal4k.close() }
+    }
+
     @Test fun cancellationAndShutdown() = runTest(timeout = 180.seconds) {
         val cancelledPreparation = launch(start = CoroutineStart.UNDISPATCHED) {
             currentCoroutineContext().cancel()
             assertFailsWith<CancellationException> { Gdal4k.prepare() }
         }
         cancelledPreparation.join()
-        Gdal4k.prepare()
         val runtime = Gdal4k.runtime()
         try {
             val memory = requireNotNull(runtime.getDriver("MEM"))
@@ -37,7 +66,6 @@ class LifecycleTest {
         } finally { Gdal4k.close() }
         assertFails { runtime.versionInfo() }
         Gdal4k.close() // idempotent
-        Gdal4k.prepare()
         try {
             val restarted = Gdal4k.runtime()
             assertEquals("3120400", restarted.versionInfo("VERSION_NUM"))

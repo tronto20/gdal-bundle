@@ -9,23 +9,26 @@ import dev.gdal4k.Gdal4k
 import dev.gdal4k.runtime.*
 
 suspend fun readBand(bytes: ByteArray): ByteArray {
-    Gdal4k.prepare()
-    try {
-        val runtime = Gdal4k.runtime()
-        return runtime.openDataset("image.tif", bytes).use { dataset ->
-            val result = ByteArray(dataset.getRasterXSize() * dataset.getRasterYSize())
-            requireNotNull(dataset.getRasterBand(1)).use { band ->
-                check(band.readRaster(result) == 0)
-            }
-            result
+    val runtime = Gdal4k.runtime() // 초기화되지 않았다면 자동 준비
+    return runtime.openDataset("image.tif", bytes).use { dataset ->
+        val result = ByteArray(dataset.getRasterXSize() * dataset.getRasterYSize())
+        requireNotNull(dataset.getRasterBand(1)).use { band ->
+            check(band.readRaster(result) == 0)
         }
-    } finally { Gdal4k.close() }
+        result
+    }
 }
 ```
 
 이 예시는 작은 Byte 래스터용입니다. 큰 영상은 밴드의 window 인자를 사용해 나눠 읽습니다. `GdalDataType`은 공통 GDAL 데이터 타입 상수를 제공합니다. JVM의 `org.gdal.*` SWIG 클래스에는 의존하지 않습니다.
 
-기존 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 유지합니다. 모든 GDAL 호출은 이제 `suspend`이므로 기존 동기 호출부는 coroutine 또는 `suspend` 함수로 옮겨야 합니다. `runtime()`처럼 준비된 Kotlin 객체를 가져오는 함수와 캐시된 데이터 프로퍼티는 동기 함수입니다.
+`runtime()`은 `suspend` 함수입니다. 최초 호출이 내장 엔진을 초기화하고, 동시에 호출한 coroutine들은 하나의 초기화 결과를 공유합니다. 준비된 뒤에는 같은 런타임을 반환합니다. 초기화와 명시적 종료는 같은 잠금으로 직렬화하며, 닫은 뒤 다음 `runtime()` 호출은 새 엔진을 만듭니다. 기존 핸들은 새 엔진으로 자동 이관되지 않습니다.
+
+`prepare()`는 앱 시작 시 엔진을 미리 로딩하고 싶은 경우만 호출하는 선택 기능입니다. binary 모듈의 호환 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 같은 초기화·수명 규칙을 사용합니다. GDAL 호출과 런타임 초기화는 `suspend`이고, 이미 확보한 Kotlin 값의 프로퍼티 접근은 동기입니다.
+
+`Gdal4k.close()`는 앱 종료 시 반드시 호출해야 하는 함수가 아닙니다. 앱이 살아 있는 동안 엔진 컨텍스트·데이터셋 핸들·Worker를 명시적으로 반환하거나 테스트 사이 상태를 초기화할 때 사용합니다. 프로세스가 종료되면 메모리는 회수되지만, 이는 출력 파일 쓰기의 정상 완료를 보장하지 않습니다. **데이터셋은 계속 `use`로 닫아 flush와 자원 정리를 보장해야 합니다.**
+
+공유 런타임을 각 작업이나 Android Activity 종료마다 닫으면 다른 작업의 핸들도 무효화됩니다. 다른 사용자가 없음을 아는 소유자가 명시적 종료를 결정합니다. Android 실제 기기에서는 [`Application.onTerminate()`가 호출되지 않으므로](https://developer.android.com/reference/android/app/Application#onTerminate()), 여기에 정리를 의존하지 않습니다.
 
 ## 제공 기능
 
@@ -39,7 +42,7 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 | Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
 | 메모리 파일 | `/vsimem/` 바이트 입출력, 다중 파일 묶음(예: Shapefile) |
 
-다음은 `Gdal4k.prepare()`가 끝난 뒤 호출하는 COG/JXL 무손실 변환 예시입니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
+다음은 객체 API를 사용하는 COG/JXL 무손실 변환 예시입니다. `runtime()`이 필요할 때 자동으로 초기화합니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
 
 ```kotlin
 suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): ByteArray {
@@ -103,7 +106,6 @@ GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브
 import dev.gdal4k.Gdal4k
 import dev.gdal4k.runtime.*
 
-// 앱 초기화 coroutine에서 한 번: Gdal4k.prepare()
 suspend fun toCog(bytes: ByteArray): ByteArray {
     val runtime = Gdal4k.runtime()
     return runtime.openDataset("input.tif", bytes).use { dataset ->
@@ -114,7 +116,6 @@ suspend fun toCog(bytes: ByteArray): ByteArray {
         ).mainFile().bytes
     }
 }
-// 앱 종료 coroutine에서: Gdal4k.close()
 ```
 
 `Dataset.info()`는 JSON 문자열, `translate` / `warp` / `translateVector`는 `GdalFiles`를 반환합니다. `Dataset.readRaster(band, window)`는 기존 `Band.readRaster`를 통해 `DoubleArray`를 읽습니다. `runtime.drivers()`는 포함된 드라이버 목록을, `runtime.transform(source, target, points)`는 기존 SRS·좌표변환 API를 이용한 좌표 목록 변환을 제공합니다.

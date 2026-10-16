@@ -1,6 +1,5 @@
 package dev.gdal4k
 
-import dev.gdal4k.binary.Gdal4kBinary
 import dev.gdal4k.runtime.use
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -10,8 +9,7 @@ internal expect suspend fun verifyBackground(block: suspend () -> Unit)
 
 class BackgroundExecutionTest {
     @Test fun jpegXlDoesNotBlockCaller() = runTest(timeout = 180.seconds) {
-        Gdal4kBinary.prepare()
-        val runtime = Gdal4kBinary.runtime()
+        val runtime = Gdal4k.runtime()
         requireNotNull(runtime.getDriver("MEM")).use { memory ->
             requireNotNull(memory.create("", 3072, 3072, 1, 1)).use { source ->
                 requireNotNull(runtime.getDriver("JPEGXL")).use { jxl ->

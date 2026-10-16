@@ -17,7 +17,6 @@ class GdalIntegrationTest {
     """.encodeToByteArray())
         var stale: Dataset? = null
         var inputPaths = emptyList<String>()
-        Gdal4k.prepare()
         val gdal = Gdal4k.runtime()
         try {
             val drivers = gdal.drivers()
@@ -97,7 +96,6 @@ class GdalIntegrationTest {
         stale!!.close() // idempotent after parent close
         expectFailure { gdal.drivers() }
         expectFailure { stale!!.readRaster() }
-        Gdal4k.prepare()
         try {
             for (path in inputPaths) expectFailure { Gdal4k.runtime().readMemoryFile(path) }
         } finally { Gdal4k.close() }

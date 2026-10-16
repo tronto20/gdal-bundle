@@ -37,7 +37,6 @@ import kotlin.time.Duration.Companion.seconds
 
 class PublishedConsumerTest {
     @Test fun defaultRuntimeAndJxl() = runTest(timeout = 120.seconds) {
-        Gdal4k.prepare()
         try {
             val runtime = Gdal4k.runtime()
             assertEquals("3120400", runtime.versionInfo("VERSION_NUM"))

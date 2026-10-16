@@ -11,7 +11,6 @@ import kotlin.time.Duration.Companion.seconds
 
 class NumericLocaleTest {
     @Test fun numericValuesDoNotUseProcessLocale() = runTest(timeout = 120.seconds) {
-        Gdal4k.prepare()
         val previous = requireNotNull(setlocale(LC_NUMERIC, null)).toKString()
         try {
             assertNotNull(setlocale(LC_NUMERIC, "fr_FR.UTF-8"))

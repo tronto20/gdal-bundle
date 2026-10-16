@@ -1,6 +1,5 @@
 package dev.gdal4k
 
-import dev.gdal4k.binary.Gdal4kBinary
 import dev.gdal4k.runtime.*
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
@@ -8,8 +7,7 @@ import kotlin.time.Duration.Companion.seconds
 
 class BundledRuntimeTest {
     @Test fun originalInterface() = runTest(timeout = 120.seconds) {
-        Gdal4kBinary.prepare()
-        val runtime = Gdal4kBinary.runtime()
+        val runtime = Gdal4k.runtime()
         assertEquals("3120400", runtime.versionInfo("VERSION_NUM"))
         assertTrue(SurfaceSmokeService(runtime).run().contains("surface smoke passed"))
         // UInt8 bytes must survive signed Kotlin Byte values, including 255.

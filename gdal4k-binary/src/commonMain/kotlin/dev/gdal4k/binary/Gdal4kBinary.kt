@@ -18,24 +18,31 @@ object Gdal4kBinary {
     suspend fun prepare(bundleDir: String? = null): Unit {
         currentCoroutineContext().ensureActive()
         mutex.withLock {
-            if (instance == null) {
-                withContext(NonCancellable) {
-                    val transport = createTransport(bundledOptions(bundleDir))
-                    val created = RuntimeEngine(transport)
-                    engine = created
-                    instance = BundledGdalRuntime(created)
-                }
-            }
+            if (instance == null) initialize(bundleDir)
         }
     }
 
-    /** Finish the current operation and release every owned dataset, handle, and Worker. */
+    /** Optional release of the shared engine while the application is still alive. */
     suspend fun close(): Unit = withContext(NonCancellable) {
         mutex.withLock { try { engine?.close() } finally { instance = null; engine = null } }
         Unit
     }
 
-    fun runtime(): GdalRuntime = instance ?: error("Call Gdal4k.prepare() first")
+    /** Lazily initializes once. Initialization, acquisition and close share the same lock. */
+    suspend fun runtime(): GdalRuntime {
+        currentCoroutineContext().ensureActive()
+        return mutex.withLock { instance ?: initialize(null) }
+    }
+
+    // Called only while holding mutex. Publish a completely initialized runtime.
+    private suspend fun initialize(bundleDir: String?): GdalRuntime = withContext(NonCancellable) {
+        val transport = createTransport(bundledOptions(bundleDir))
+        val created = RuntimeEngine(transport)
+        val runtime = BundledGdalRuntime(created)
+        engine = created
+        instance = runtime
+        runtime
+    }
 }
 
 internal expect fun bundledOptions(bundleDir: String?): GdalOptions

@@ -35,8 +35,7 @@ private suspend fun runInfo(args: List<String>) {
     val datasetPath = args.first()
     val infoArgs = args.drop(1)
 
-    debug("preparing GDAL runtime")
-    Gdal4kBinary.prepare()
+    debug("acquiring GDAL runtime (initializes on first use)")
     val runtime = Gdal4kBinary.runtime()
 
     debug("opening dataset $datasetPath")
@@ -52,8 +51,7 @@ private suspend fun runSmoke(args: List<String>) {
         exitProcess(1)
     }
 
-    debug("preparing GDAL runtime")
-    Gdal4kBinary.prepare()
+    debug("acquiring GDAL runtime (initializes on first use)")
     val runtime = Gdal4kBinary.runtime()
 
     debug("running surface smoke checks")

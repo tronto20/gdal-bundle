@@ -17,19 +17,14 @@ import dev.gdal4k.Gdal4k
 import dev.gdal4k.runtime.*
 
 suspend fun describe(bytes: ByteArray): String {
-    Gdal4k.prepare()
-    try {
-        val gdal = Gdal4k.runtime()
-        return gdal.openDataset("input.tif", bytes).use { dataset ->
-            gdal.datasetInfo(dataset, DatasetInfoOptions(listOf("-json")))
-        }
-    } finally {
-        Gdal4k.close()
+    val gdal = Gdal4k.runtime() // 첫 호출에서 자동 초기화
+    return gdal.openDataset("input.tif", bytes).use { dataset ->
+        gdal.datasetInfo(dataset, DatasetInfoOptions(listOf("-json")))
     }
 }
 ```
 
-`prepare()`는 앱 수명에 맞춰 한 번 호출하고, 데이터셋은 `use`로 닫습니다. `close()`는 해당 런타임의 모든 핸들과 웹 Worker를 해제합니다. 앱에서 여러 작업이 같은 런타임을 공유한다면 작업 하나가 끝날 때마다 전역 런타임을 닫지 않습니다.
+`runtime()`은 `suspend` 함수이며 첫 호출에서 초기화하고 이후 같은 런타임을 반환합니다. 별도 `prepare()`는 선택적인 사전 로딩용입니다. 데이터셋은 `use`로 닫아 쓰기를 완료하고 자원을 정리합니다. 전역 `close()`는 앱 실행 중 엔진 컨텍스트·Worker를 명시적으로 반환할 때 선택적으로 호출합니다. 앱 종료 훅으로 반드시 호출할 필요는 없으며, 공유 런타임을 작업마다 닫지 않습니다. 명시적으로 닫은 뒤 다시 `runtime()`을 호출하면 새로 초기화됩니다.
 
 - `gdal4k-runtime`: 기존 `GdalRuntime`, `Dataset`, `Band`, OGR·SRS 인터페이스와 공통 파일 값 타입·편의 함수. GDAL을 호출하는 메서드는 `suspend`입니다.
 - `gdal4k-binary`: 인터페이스의 플랫폼별 구현, JNI·정적 Native·자체 Wasm 엔진과 데이터.
