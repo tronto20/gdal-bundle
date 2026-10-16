@@ -16,6 +16,13 @@ TARGETS={
  'web':'wasm32-emscripten',
 }
 def run(*args,**kwargs):subprocess.run([str(a) for a in args],check=True,**kwargs)
+
+def link_arguments(command):
+ # CMake wraps Windows link + post-build commands in cmd /C "...".
+ # Remove that outer shell quoting before reading the linker's archive arguments.
+ wrapper=re.match(r'^.*?\bcmd\.exe\s+/C\s+"(.*)"$',command,re.I)
+ if wrapper:command=wrapper.group(1)
+ return shlex.split(command.replace('\\','/'))
 def fingerprint():
  digest=hashlib.sha256()
  for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web/vendor']:
@@ -92,8 +99,9 @@ def main():
   # Merge the bridge and its actual static dependency closure into one relocatable archive.
   commands=subprocess.check_output(['ninja','-C',str(build),'-t','commands','gdal4k'],text=True)
   line=next(line for line in reversed(commands.splitlines()) if (' -o ' in line or '/out:' in line.lower()) and ('gdal4k.dylib' in line or 'gdal4k.so' in line or 'gdal4k.dll' in line))
+  arguments=link_arguments(line)
   archives=[build/'libgdal4k-bridge.a']
-  for token in shlex.split(line.replace('\\','/')):
+  for token in arguments:
    if token.endswith('.a'):
     f=Path(token);f=f if f.is_absolute() else build/f
     if f.is_relative_to(installed) and f not in archives:archives.append(f)
@@ -106,7 +114,7 @@ def main():
    if not any(f.name==required for f in archives):raise RuntimeError('Static dependency missing from the Native archive: '+required)
   print('Bundled static closure: '+', '.join(f.name for f in archives),flush=True)
   # Consumers link system libraries with their own target toolchain.
-  system_options=list(dict.fromkeys(t for t in shlex.split(line.replace('\\','/')) if re.fullmatch(r'-l[\w.+-]+',t)))
+  system_options=list(dict.fromkeys(t for t in arguments if re.fullmatch(r'-l[\w.+-]+',t)))
   (out/'native-linker-options.json').write_text(json.dumps(system_options)+'\n')
   merged=out/'libgdal4k.a'
   if target.startswith(('macos','ios')):run('/usr/bin/libtool','-static','-o',merged,*archives)
