@@ -14,6 +14,9 @@ val hostArch = if (System.getProperty("os.arch") in listOf("aarch64", "arm64")) 
 val hostPlatform = when { hostOs.contains("mac") -> "macos-$hostArch"; hostOs.contains("win") -> "windows-$hostArch"; else -> "linux-$hostArch" }
 fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }) {
     group = "GDAL runtime"
+    // These outputs can arrive from verified CI artifacts. Gradle's first-run
+    // stale-output cleanup must not delete them before the producer checks hashes.
+    doNotTrackState("The engine producer fingerprints sources and verifies every artifact hash")
     workingDir(rootDir)
     commandLine(pythonCommand, "gdal4k-binary/tools/build-engine.py", target)
     inputs.files(fileTree("ports") { exclude("**/__pycache__/**") })
