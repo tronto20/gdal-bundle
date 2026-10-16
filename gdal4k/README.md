@@ -30,7 +30,7 @@ suspend fun convert(input: ByteArray, options: GdalOptions): ByteArray =
 
 ## JVM / Native
 
-GDAL 3.7 이상과 이 디렉터리의 C bridge를 링크합니다. JVM은 GDAL Java/SWIG 바인딩을 요구하지 않습니다.
+GDAL 3.7 이상과 이 디렉터리의 C bridge를 링크합니다. JVM은 Java 17 이상을 대상으로 하며 GDAL Java/SWIG 바인딩을 요구하지 않습니다. 빌드 JDK는 21입니다.
 
 ```sh
 cmake -S gdal4k/native -B gdal4k/build/bridge -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -84,6 +84,8 @@ python gdal4k-contract/run-local.py
 
 별도 consumer 모듈 `gdal4k-contract`가 실제 라이브러리 의존성을 사용합니다. GeoTIFF/COG 재열기·픽셀·NoData·geotransform, 윈도우 읽기, 재투영, 좌표 왕복, Shapefile 보조 파일, 중복 이름, Unicode 파일명, 잘못된 드라이버/CRS/파일/옵션, 종료 후 사용을 같은 Kotlin 코드로 검증합니다. `.github/workflows/library-contract.yml`에서 데스크톱 3종과 iOS Simulator를 실행합니다.
 
-Android APK 검증: `:gdal4k-android-test:assembleDebug` 후 테스트 장치에 설치하고 `adb shell am instrument -w dev.gdal4k.contract.app/.ContractInstrumentation`. 종료 코드뿐 아니라 `GDAL4K_LIBRARY_CONTRACT_OK`를 확인합니다. `GdalAndroid`의 데이터 추출과 전이 AAR 패키징도 이 경로에서 실행합니다.
+Android 자동 검증은 `python gdal4k-contract/run-android.py --sdk /path/sdk --ndk /path/ndk --vcpkg /path/vcpkg --serial emulator-5580`입니다. raw GDAL CMake 패키지를 사용할 때는 `--gdal-dir /path/lib/cmake/gdal`을 추가합니다. 빌드·AAR·APK 설치·테스트 앱 데이터 초기화·cold asset 추출·instrumentation·성공 마커를 검사합니다.
+
+수동 검증: `:gdal4k-android-test:assembleDebug` 후 테스트 장치에 설치하고 `adb shell am instrument -w dev.gdal4k.contract.app/.ContractInstrumentation`. 종료 코드뿐 아니라 `GDAL4K_LIBRARY_CONTRACT_OK`를 확인합니다. `GdalAndroid`의 데이터 추출과 전이 AAR 패키징도 이 경로에서 실행합니다.
 
 `-PportableOnly=true`는 기존 conda/JVM 번들 모듈을 제외하여 공통 라이브러리만 빌드하는 옵션입니다. Maven 공개 배포는 별도 작업입니다.

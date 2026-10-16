@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
@@ -12,7 +13,7 @@ val bridgePrefix = providers.gradleProperty("gdal4kBridgePrefix")
     .orElse(rootProject.layout.projectDirectory.dir("gdal4k/build/bridge").asFile.absolutePath)
 kotlin {
     jvmToolchain(21)
-    jvm()
+    jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
     androidLibrary {
         namespace = "dev.gdal4k"
         compileSdk = 35

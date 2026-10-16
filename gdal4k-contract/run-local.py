@@ -18,6 +18,8 @@ if platform.system() == 'Linux' and platform.machine() not in ('x86_64', 'AMD64'
 gradle = str(ROOT / ('gradlew.bat' if os.name == 'nt' else 'gradlew'))
 env = os.environ.copy()
 env['PATH'] = str(bridge) + os.pathsep + env['PATH']
+if platform.system() == 'Linux':
+    env['LD_LIBRARY_PATH'] = str(bridge) + os.pathsep + env.get('LD_LIBRARY_PATH', '')
 records = []
 def run(name, command, marker=False):
     started = time.monotonic()

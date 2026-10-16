@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -8,7 +9,7 @@ val bridgePrefix = providers.gradleProperty("gdal4kBridgePrefix").orElse(rootPro
 kotlin {
     androidLibrary { namespace = "dev.gdal4k.contract"; compileSdk = 35; minSdk = 28 }
     jvmToolchain(21)
-    jvm { mainRun { mainClass.set("dev.gdal4k.contract.ContractKt") } }
+    jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17); mainRun { mainClass.set("dev.gdal4k.contract.ContractKt") } }
     js { nodejs(); browser(); binaries.executable() }
     wasmJs { nodejs(); browser(); binaries.executable() }
     macosArm64 { binaries.executable { entryPoint = "dev.gdal4k.contract.main" } }
