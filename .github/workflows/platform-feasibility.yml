@@ -1,11 +1,8 @@
 name: GDAL platform feasibility
 
+# Historical connection probes remain available for manual diagnosis.
+# Pull requests and main use the production library's commonTest coverage.
 on:
-  push:
-    branches: ['codex/multiplatform-feasibility']
-    paths: ['verification/**', '.github/workflows/platform-feasibility.yml']
-  pull_request:
-    paths: ['verification/**', '.github/workflows/platform-feasibility.yml']
   workflow_dispatch:
 
 permissions:

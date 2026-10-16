@@ -2,10 +2,10 @@ name: GDAL library integration tests
 
 on:
   push:
-    branches: ['codex/gdal4k-multiplatform']
-    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
+    branches: ['main']
+    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', 'verification/package.json', 'verification/package-lock.json', 'verification/requirements.txt', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
   pull_request:
-    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
+    paths: ['gdal4k/**', 'gdal4k-android-runtime/**', 'gradle/**', 'kotlin-js-store/**', 'verification/package.json', 'verification/package-lock.json', 'verification/requirements.txt', '*.gradle.kts', 'gradle.properties', '.github/workflows/library-tests.yml']
   workflow_dispatch:
 
 permissions:

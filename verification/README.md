@@ -94,6 +94,8 @@ The initial local run passed on Android 15 ARM64 with 4 KB pages and GDAL 3.12.4
 
 ## CI
 
-`.github/workflows/platform-feasibility.yml` runs host probes on Linux x64,
+`.github/workflows/platform-feasibility.yml` is a manual (`workflow_dispatch`) diagnostic workflow. It runs host probes on Linux x64,
 macOS ARM64, Windows x64, and iOS Simulator ARM64 and preserves the actual logs. It has read-only
 repository permissions and no package publication steps.
+
+Pull requests and `main` are validated by the production library test source sets in `.github/workflows/library-tests.yml`.
