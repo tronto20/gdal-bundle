@@ -53,6 +53,9 @@ def main():
  if target.startswith('android'):settings+='set(VCPKG_CMAKE_SYSTEM_VERSION 28)\nset(VCPKG_CRT_LINKAGE static)\nset(VCPKG_CMAKE_CONFIGURE_OPTIONS "${VCPKG_CMAKE_CONFIGURE_OPTIONS};-DANDROID_STL=c++_static")\n'
  if target.startswith('ios'):settings+='set(VCPKG_OSX_DEPLOYMENT_TARGET 15.0)\n'
  if target.startswith('macos'):settings+='set(VCPKG_OSX_DEPLOYMENT_TARGET 11.0)\n'
+ if target.startswith('linux'):
+  # All target dependencies are static, with tools disabled. They have no ELF RPATH.
+  settings+='set(VCPKG_FIXUP_ELF_RPATH OFF)\n'
  if target.startswith(('linux','windows')):
   chain=native_toolchain(target,out/'toolchain.cmake')
   settings+=f'set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "{chain.as_posix()}")\n'
@@ -90,6 +93,9 @@ def main():
    if token.endswith('.a'):
     f=Path(token);f=f if f.is_absolute() else build/f
     if f.is_relative_to(installed) and f not in archives:archives.append(f)
+  for required in ['libgdal.a','libproj.a','libtiff.a','libjxl.a']:
+   if not any(f.name==required for f in archives):raise RuntimeError('Static dependency missing from the Native archive: '+required)
+  print('Bundled static closure: '+', '.join(f.name for f in archives),flush=True)
   # Consumers link system libraries with their own target toolchain.
   system_options=list(dict.fromkeys(t for t in shlex.split(line.replace('\\','/')) if re.fullmatch(r'-l[\w.+-]+',t)))
   (out/'native-linker-options.json').write_text(json.dumps(system_options)+'\n')

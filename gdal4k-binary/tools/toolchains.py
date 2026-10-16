@@ -1,6 +1,7 @@
 """Producer-only toolchain configuration; published consumers use embedded artifacts."""
 import os
 import platform
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -39,14 +40,16 @@ set(CMAKE_CXX_COMPILER "{(llvm/'bin/clang++.exe').as_posix()}")
 set(CMAKE_C_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_CXX_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_SYSROOT "{gcc.as_posix()}")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld.exe")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld.exe")
+set(CMAKE_C_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()}")
+set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_RC_COMPILER "{(gcc/'bin/windres.exe').as_posix()}")
 set(CMAKE_AR "{(llvm/'bin/llvm-ar.exe').as_posix()}")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 '''
     else:
         arch = 'aarch64' if target.endswith('arm64') else 'x86_64'
@@ -63,15 +66,31 @@ set(CMAKE_CXX_COMPILER "{(llvm/'bin/clang++').as_posix()}")
 set(CMAKE_C_COMPILER_TARGET {arch}-unknown-linux-gnu)
 set(CMAKE_CXX_COMPILER_TARGET {arch}-unknown-linux-gnu)
 set(CMAKE_SYSROOT "{sysroot.as_posix()}")
-set(CMAKE_C_FLAGS_INIT "--gcc-toolchain={gcc.as_posix()}")
-set(CMAKE_CXX_FLAGS_INIT "--gcc-toolchain={gcc.as_posix()}")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld={llvm.as_posix()}/bin/ld.lld")
+set(CMAKE_C_FLAGS_INIT "--target={arch}-unknown-linux-gnu --sysroot={sysroot.as_posix()} --gcc-toolchain={gcc.as_posix()}")
+set(CMAKE_CXX_FLAGS_INIT "--target={arch}-unknown-linux-gnu --sysroot={sysroot.as_posix()} --gcc-toolchain={gcc.as_posix()}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld")
 set(CMAKE_AR "{(llvm/'bin/llvm-ar').as_posix()}")
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+'''
+    # Essentials LLVM distributions expose ranlib through the llvm-ar multicall binary.
+    # A host ranlib would corrupt the symbol index of cross-platform static archives.
+    ar = llvm/'bin'/('llvm-ar.exe' if os.name == 'nt' else 'llvm-ar')
+    ranlib = destination.parent/('llvm-ranlib.exe' if os.name == 'nt' else 'llvm-ranlib')
+    if not ranlib.exists():
+        if os.name == 'nt':shutil.copy2(ar, ranlib)
+        else:ranlib.symlink_to(ar)
+    text += f'''set(CMAKE_RANLIB "{ranlib.as_posix()}")
+set(CMAKE_C_COMPILER_AR "{ar.as_posix()}")
+set(CMAKE_CXX_COMPILER_AR "{ar.as_posix()}")
+set(CMAKE_C_COMPILER_RANLIB "{ranlib.as_posix()}")
+set(CMAKE_CXX_COMPILER_RANLIB "{ranlib.as_posix()}")
+set(CMAKE_ASM_COMPILER "${{CMAKE_C_COMPILER}}")
+set(CMAKE_ASM_COMPILER_TARGET "${{CMAKE_C_COMPILER_TARGET}}")
+set(CMAKE_ASM_FLAGS_INIT "${{CMAKE_C_FLAGS_INIT}}")
 '''
     licenses = destination.parent/'toolchain-licenses'
     licenses.mkdir(parents=True,exist_ok=True)

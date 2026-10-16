@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -46,7 +47,8 @@ else:
         objdump=Path(os.environ.get('KONAN_DATA_DIR',Path.home()/'.konan'))/'dependencies/msys2-mingw-w64-x86_64-2/bin/objdump.exe'
     else:
         directory=Path(os.environ.get('KONAN_DATA_DIR',Path.home()/'.konan'))/'dependencies'
-        objdump=next(directory.glob('llvm-21-*/bin/llvm-objdump'))
+        objdump=next(directory.glob('llvm-21-*/bin/llvm-objdump'),None) or shutil.which('llvm-objdump') or shutil.which('objdump')
+        if not objdump:raise SystemExit('An ELF-capable objdump is required for the producer dependency audit')
     output=subprocess.check_output([str(objdump),'-p',str(library)],text=True)
     if platform.startswith('windows'):
         dependencies=re.findall(r'DLL Name:\s*(\S+)',output)

@@ -41,7 +41,9 @@ jobs:
         with:
           path: verification/build/vcpkg-cache
           key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
+          restore-keys: |
+            engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
+            engine-${{ matrix.target }}-
       - name: Boot iOS simulator
         timeout-minutes: 5
         if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
@@ -96,7 +98,9 @@ jobs:
         with:
           path: verification/build/vcpkg-cache
           key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+          restore-keys: |
+            engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-web-
       - name: Browser test runtime
         run: |
           npm ci --prefix verification
@@ -158,7 +162,9 @@ jobs:
         with:
           path: verification/build/vcpkg-cache
           key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+          restore-keys: |
+            engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-android-${{ matrix.abi }}-
       - run: python verification/ci.py 'android-${{ matrix.abi }}'
       - name: Allow emulator acceleration
         if: matrix.abi == 'x86_64'

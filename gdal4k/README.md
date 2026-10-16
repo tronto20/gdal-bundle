@@ -39,6 +39,8 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 
 한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 
+큰 배열에는 JSON 직렬화·복사 비용이 있으므로 래스터 window 단위로 나눠 처리하는 편이 좋습니다. 현재 응답성 테스트는 GDAL의 JXL 연산이 호출 스레드·웹 이벤트 루프 밖에서 실행되는지 검증합니다.
+
 대기 중인 호출은 취소할 수 있습니다. 이미 시작한 GDAL C 호출은 중간에 강제 중단하지 않고 완료한 뒤 핸들/결과를 정리합니다. 따라서 coroutine 취소가 오래 걸리는 GDAL 연산을 즉시 멈추지는 않습니다. 웹 Worker를 강제로 종료해서 데이터셋 상태를 손상시키는 동작도 하지 않습니다.
 
 JS와 wasmJs가 사용하는 **GDAL 엔진 자체는 일반 WebAssembly**입니다. JS 경로는 Kotlin/Wasm의 Wasm GC를 지원하지 않는 브라우저에서도 기본 Wasm·Worker·ES module을 지원하면 사용할 수 있습니다. WebAssembly 자체가 없는 환경에서는 동작하지 않습니다. wasmJs로 컴파일한 Kotlin 앱은 Kotlin/Wasm의 브라우저 요구 사항도 충족해야 합니다. Node는 `process.getBuiltinModule`을 제공하는 20.16+ / 22+가 필요합니다. 웹 CSP는 Blob Worker, 모듈과 Wasm 실행을 허용해야 합니다. 엔진은 pthread/SharedArrayBuffer를 요구하지 않습니다.

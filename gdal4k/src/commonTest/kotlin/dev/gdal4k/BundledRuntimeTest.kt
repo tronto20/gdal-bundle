@@ -37,7 +37,9 @@ class BundledRuntimeTest {
         val vector = "/vsimem/gdal4k-borrowed.geojson"
         runtime.writeMemoryFile(vector, """{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"GeometryCollection","geometries":[{"type":"Point","coordinates":[0,0]},{"type":"Point","coordinates":[1,1]}]}}]}""".encodeToByteArray())
         runtime.openDataset(vector).use { collection ->
+            assertTrue(runtime.datasetInfo(collection, DatasetInfoOptions(listOf("-json", "-features"))).contains("\"features\""))
             val layer = requireNotNull(collection.getLayer(0))
+            layer.resetReading() // Vector info with -features iterates the layer.
             requireNotNull(layer.getNextFeature()).use { feature ->
                 val borrowed = requireNotNull(feature.getGeometryRef())
                 borrowed.cloneGeometry().use { replacement -> assertEquals(0, feature.setGeometry(replacement)) }

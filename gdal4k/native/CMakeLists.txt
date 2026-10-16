@@ -5,6 +5,14 @@ if(VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
 endif()
 if(GDAL4K_DEPENDENCIES)
     list(PREPEND CMAKE_PREFIX_PATH "${GDAL4K_DEPENDENCIES}")
+    # FindTIFF on Apple SDKs can otherwise select an SDK stub. PROJ must use our
+    # static TIFF as well, so the Native KLIB carries its real implementation.
+    set(TIFF_INCLUDE_DIR "${GDAL4K_DEPENDENCIES}/include" CACHE PATH "" FORCE)
+    set(TIFF_LIBRARY_RELEASE "${GDAL4K_DEPENDENCIES}/lib/libtiff.a" CACHE FILEPATH "" FORCE)
+    set(TIFF_LIBRARY_DEBUG "${GDAL4K_DEPENDENCIES}/lib/libtiff.a" CACHE FILEPATH "" FORCE)
+    if(NOT EXISTS "${TIFF_LIBRARY_RELEASE}")
+        message(FATAL_ERROR "The pinned static TIFF dependency is missing")
+    endif()
     # Never silently pick a producer machine's system/Homebrew GDAL.
     find_package(GDAL CONFIG REQUIRED PATHS "${GDAL4K_DEPENDENCIES}/share/gdal" NO_DEFAULT_PATH)
 else()

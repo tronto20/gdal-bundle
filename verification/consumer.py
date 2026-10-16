@@ -73,7 +73,7 @@ class PublishedConsumerTest {
 '''
 with tempfile.TemporaryDirectory(prefix='gdal4k-published-consumer-') as temporary:
  consumer=Path(temporary)
- (consumer/'settings.gradle.kts').write_text('pluginManagement { repositories { google(); gradlePluginPortal(); mavenCentral() } }\nrootProject.name="published-gdal4k-consumer"\n')
+ (consumer/'settings.gradle.kts').write_text('pluginManagement { repositories { mavenCentral(); google(); gradlePluginPortal() } }\nrootProject.name="published-gdal4k-consumer"\n')
  android='id("com.android.kotlin.multiplatform.library") version "8.11.2"' if target=='android' else ''
  if target=='jvm':declaration='jvm()';task='jvmTest'
  elif target in ['js','wasmJs']:

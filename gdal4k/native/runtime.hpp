@@ -80,7 +80,7 @@ struct Runtime {
         if(e.type=="Dataset")GDALClose(e.pointer);
         else if(e.type=="Feature")OGR_F_Destroy(e.pointer);
         else if(e.type=="Geometry")OGR_G_DestroyGeometry(e.pointer);
-        else if(e.type=="SpatialReference")OSRDestroySpatialReference(e.pointer);
+        else if(e.type=="SpatialReference")OSRRelease(e.pointer);
         else if(e.type=="CoordinateTransformation")OCTDestroyCoordinateTransformation(e.pointer);
         else if(e.type=="FeatureDefn")OGR_FD_Release(e.pointer);
         else if(e.type=="FieldDefn")OGR_Fld_Destroy(e.pointer);

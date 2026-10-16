@@ -30,7 +30,7 @@
         auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);
     }
     if(type=="GdalRuntime" && method=="datasetInfo_Dataset_DatasetInfoOptions") {
-        Strings list(a["options"].GetArray("arguments")); auto opts=GDALInfoOptionsNew(list.data(),nullptr);if(!opts) throw std::runtime_error(CPLGetLastErrorMsg());auto ds=r.arg(a["dataset"]);char* s=nullptr;if(GDALGetRasterCount(ds)>0)s=GDALInfo(ds,opts);else {auto vectorOpts=GDALVectorInfoOptionsNew(list.data(),nullptr);if(!vectorOpts){GDALInfoOptionsFree(opts);throw std::runtime_error(CPLGetLastErrorMsg());}s=GDALVectorInfo(ds,vectorOpts);GDALVectorInfoOptionsFree(vectorOpts);}GDALInfoOptionsFree(opts);if(!s)throw std::runtime_error(CPLGetLastErrorMsg());return allocated(s);
+        Strings list(a["options"].GetArray("arguments"));auto ds=r.arg(a["dataset"]);char* s=nullptr;if(GDALGetRasterCount(ds)>0){auto opts=GDALInfoOptionsNew(list.data(),nullptr);if(!opts)throw std::runtime_error(CPLGetLastErrorMsg());s=GDALInfo(ds,opts);GDALInfoOptionsFree(opts);}else {auto opts=GDALVectorInfoOptionsNew(list.data(),nullptr);if(!opts)throw std::runtime_error(CPLGetLastErrorMsg());s=GDALVectorInfo(ds,opts);GDALVectorInfoOptionsFree(opts);}if(!s)throw std::runtime_error(CPLGetLastErrorMsg());return allocated(s);
     }
     if(type=="Dataset" && method=="flushCache") {
         auto out=apply(GDALFlushCache, Arg(r,h));return value(out);
