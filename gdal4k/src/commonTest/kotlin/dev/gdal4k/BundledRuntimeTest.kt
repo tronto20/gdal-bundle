@@ -30,6 +30,14 @@ class BundledRuntimeTest {
         dataset.close()
         assertFails { band.getXSize() }
         band.close(); band.close(); dataset.close()
+        requireNotNull(driver.create("", 2, 2, 1, GdalDataType.Float64)).use { floating ->
+            val floatingBand = requireNotNull(floating.getRasterBand(1))
+            val expected = doubleArrayOf(123.5, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)
+            assertEquals(0, floatingBand.writeRaster(expected))
+            val actual = DoubleArray(4)
+            assertEquals(0, floatingBand.readRaster(actual))
+            assertContentEquals(expected, actual)
+        }
         // 65537 * 65536 wraps to 65536 in a 32-bit size_t. VRT needs no pixel allocation.
         requireNotNull(runtime.getDriver("VRT")).use { vrt ->
             requireNotNull(vrt.create("", 65537, 65536, 1, GdalDataType.Byte)).use { huge ->

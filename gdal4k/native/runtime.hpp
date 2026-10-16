@@ -33,7 +33,8 @@ inline CPLJSONObject allocated(char* p) {auto out=value(p);CPLFree(p);return out
 template<class T> CPLJSONObject numbers(const T* p,size_t n) {CPLJSONArray a;for(size_t i=0;i<n;i++)a.Add(value(p[i])["value"]);return value(a);}
 inline CPLJSONObject numbers(std::initializer_list<double> v) {return numbers(v.begin(),v.size());}
 inline CPLJSONObject strings(char** p) {CPLJSONArray a;for(int i=0;p&&p[i];i++)a.Add(p[i]);return value(a);}
-inline std::vector<double> doubles(const CPLJSONArray& a){std::vector<double> out;for(auto v:a)out.push_back(std::stod(v.ToString()));return out;}
+// JSON numbers always use a dot, regardless of the application's LC_NUMERIC.
+inline std::vector<double> doubles(const CPLJSONArray& a){std::vector<double> out;for(auto v:a)out.push_back(CPLAtof(v.ToString().c_str()));return out;}
 inline std::vector<int> ints(const CPLJSONArray& a){std::vector<int> out;for(auto v:a)out.push_back(v.ToInteger());return out;}
 struct Strings {
     char** list=nullptr;
@@ -101,7 +102,7 @@ struct Arg {
         else if constexpr(std::is_same_v<T,const char*>){text=json.ToString();require(text.find('\0')==std::string::npos,"NUL in GDAL string");return text.c_str();}
         else if constexpr(std::is_same_v<T,char**>||std::is_same_v<T,const char* const*>){list=std::make_unique<Strings>(json.ToArray());return list->data();}
         else if constexpr(std::is_enum_v<T>)return static_cast<T>(json.ToInteger());
-        else if constexpr(std::is_floating_point_v<T>)return static_cast<T>(std::stod(json.ToString()));
+        else if constexpr(std::is_floating_point_v<T>)return static_cast<T>(CPLAtof(json.ToString().c_str()));
         else if constexpr(std::is_integral_v<T>)return static_cast<T>(json.GetType()==CPLJSONObject::Type::Boolean?json.ToBool():json.ToLong());
         else {static_assert(!sizeof(T),"An explicit GDAL mapping is required for this argument type");}
     }
@@ -119,7 +120,7 @@ template<class T> CPLJSONObject rasterTyped(GDALRasterBandH h,const CPLJSONObjec
     uint64_t count=static_cast<uint64_t>(width)*height;require(count<=static_cast<uint64_t>(json.Size()),"Raster buffer is too small");
     std::vector<T> data(count);
     if(write)for(size_t i=0;i<count;i++){
-        if constexpr(std::is_floating_point_v<T>)data[i]=static_cast<T>(std::stod(json[static_cast<int>(i)].ToString()));
+        if constexpr(std::is_floating_point_v<T>)data[i]=static_cast<T>(CPLAtof(json[static_cast<int>(i)].ToString().c_str()));
         else data[i]=static_cast<T>(std::stoll(json[static_cast<int>(i)].ToString()));
     }
     auto code=GDALRasterIO(h,write?GF_Write:GF_Read,x,y,width,height,data.data(),width,height,type,0,0);
