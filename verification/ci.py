@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build, execute and stage the actual library artifacts, never a system GDAL probe."""
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -81,6 +82,17 @@ def main():
         stage(target,[target])
     elif target=='aggregate':
         # All five JNI libraries and all four Android ABIs are mandatory before publication.
+        engines=[*PLATFORMS.values(),'web','android-arm64-v8a','android-armeabi-v7a','android-x86','android-x86_64']
+        fingerprints=set()
+        for platform in engines:
+            manifest=json.loads((BUILD/f'engine/{platform}/manifest.json').read_text())
+            if manifest['target']!=platform or manifest['gdal']!='3.12.4' or manifest['jxl'] is not True:
+                raise RuntimeError('Unexpected staged engine profile: '+platform)
+            fingerprints.add(manifest['source_fingerprint'])
+            for name,digest in manifest['artifacts'].items():
+                if hashlib.sha256((BUILD/name).read_bytes()).hexdigest()!=digest:
+                    raise RuntimeError('Staged engine payload does not match its manifest: '+name)
+        if len(fingerprints)!=1:raise RuntimeError('Staged engines were built from different sources')
         gradle(':gdal4k:jvmTest',options=['-Pgdal4kUniversalJvm=true'])
         publish('jvm')
         # jvmJar may already be up-to-date; explicitly verify its payload below.
