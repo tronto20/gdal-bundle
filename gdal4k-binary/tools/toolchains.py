@@ -52,14 +52,16 @@ def native_toolchain(target, destination):
         headers=mingw_header_overlay(gcc,destination.parent/'compiler-headers')
         # K/N's stripped GCC distribution has headers/runtime but no cc1plus.
         # Use its LLVM compiler and the matching MinGW sysroot, as K/N itself does.
+        # This GCC runtime uses emulated TLS, including std::call_once's internal
+        # variables. Match K/N's clangFlags.mingw_x64 for every dependency too.
         text = f'''set(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_C_COMPILER "{(llvm/'bin/clang.exe').as_posix()}")
 set(CMAKE_CXX_COMPILER "{(llvm/'bin/clang++.exe').as_posix()}")
 set(CMAKE_C_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_CXX_COMPILER_TARGET x86_64-w64-windows-gnu)
 set(CMAKE_SYSROOT "{gcc.as_posix()}")
-set(CMAKE_C_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()}")
-set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()} -isystem {headers.as_posix()}")
+set(CMAKE_C_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()} -femulated-tls")
+set(CMAKE_CXX_FLAGS_INIT "--target=x86_64-w64-windows-gnu --sysroot={gcc.as_posix()} -femulated-tls -isystem {headers.as_posix()}")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "--ld-path={llvm.as_posix()}/bin/ld.lld.exe")
 set(CMAKE_RC_COMPILER "{(gcc/'bin/windres.exe').as_posix()}")
