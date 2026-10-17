@@ -23,7 +23,7 @@ internal class RuntimeEngine(private val transport: GdalTransport) {
         val caller = currentCoroutineContext()
         if (method != "close") caller.ensureActive()
         val name = method.substringBefore('_')
-        val cancellable = name in setOf("translate", "translateTo", "warp", "warpTo", "translateVector", "translateVectorTo",
+        val cancellable = transport.supportsHttpInputPolicy || name in setOf("openDataset", "translate", "translateTo", "warp", "warpTo", "translateVector", "translateVectorTo",
             "demProcessing", "demProcessingTo", "rasterize", "rasterizeTo", "polygonize", "polygonizeTo", "buildVRT",
             "buildOverviews", "createCopy", "computeStatistics", "getHistogram", "getDefaultHistogram", "readRaster", "writeRaster")
         val control = if (method != "close" && (cancellable || caller[GdalProgressContext] != null))
@@ -46,7 +46,12 @@ internal class RuntimeEngine(private val transport: GdalTransport) {
                 "HTTP input policy requires a direct HTTP(S) URL"
             }
         }
-        val response = Json.parseToJsonElement(transport.call(request.toString(), attachment, control)).jsonObject
+        val response = try { Json.parseToJsonElement(transport.call(request.toString(), attachment, control)).jsonObject }
+        catch (transportFailure: Throwable) {
+            val cancelled = control?.cancellation()
+            if (cancelled != null) { cancelled.addSuppressed(transportFailure); throw cancelled }
+            throw transportFailure
+        }
         val failure = control?.cancellation() ?: response["error"]?.let { GdalException(it.jsonPrimitive.content) }
         if (failure != null) {
             for (id in response["allocatedHandles"]?.jsonArray.orEmpty().asReversed()) {
