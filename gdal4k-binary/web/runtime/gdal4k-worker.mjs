@@ -1,11 +1,12 @@
 import createModule from './gdal4k.mjs';
+import {Outputs} from './gdal4k-outputs.mjs';
 import {Inputs} from './gdal4k-inputs.mjs';
 import {resources, resourceUrl, resourceBytes} from './gdal4k-resources.mjs';
 
 const node = typeof process !== 'undefined' && process.versions?.node;
 const port = node ? process.getBuiltinModule('worker_threads').parentPort : globalThis;
 const wasmUrl = new URL('./gdal4k.wasm', import.meta.url);
-let module, context, inputs, queue = Promise.resolve();
+let module, context, inputs, outputs, queue = Promise.resolve();
 const datasets = new Map();
 function nodeWasmBinary() {
     const bytes = process.getBuiltinModule('fs').readFileSync(wasmUrl);
@@ -27,6 +28,7 @@ async function dispatch({id, operation, payload, file}) {
             const options = node ? {wasmBinary: nodeWasmBinary()} : {locateFile: () => wasmUrl.href};
             try { module = await createModule(options); } finally { delete options.wasmBinary; }
             inputs = new Inputs();
+            outputs = new Outputs(); module.gdal4kOutputs = outputs;
             inputs.registerResources(resources, resourceUrl, resourceBytes);
             module.gdal4kInputs = inputs;
             context = await module.ccall('gdal4k_create', 'number', ['string', 'string'], ['', ''], {async: true});
@@ -36,8 +38,9 @@ async function dispatch({id, operation, payload, file}) {
             const request = JSON.parse(payload);
             const args = request.args;
             if (args?.type === 'GdalRuntime' && args.method === 'openDataset_String_DatasetOpenOptions') {
-                const source = args.parameters.source;
-                const virtual = /^\/vsi[a-z0-9_]+\//i.test(source);
+                let source = args.parameters.source;
+                if (source.startsWith('opfs:/')) { source = outputs.path(source); args.parameters.source = source; }
+                const virtual = source.startsWith('/vsigdal4k-output/') || /^\/vsi[a-z0-9_]+\//i.test(source);
                 if (file || /^https?:\/\//i.test(source) || (node && !virtual)) {
                     if (args.parameters.options?.update) throw new Error('Direct web inputs are read-only');
                     mounted = await inputs.mount(source, file);
@@ -46,12 +49,14 @@ async function dispatch({id, operation, payload, file}) {
                     throw new Error('Browser paths require a selected File; use openDataset(file) or an HTTP(S) URL');
                 }
             } else if (file) throw new Error('A browser File can only be attached to openDataset');
-            inputs.lastError = null;
+            if (args?.type === 'Dataset' && /^(translateTo|warpTo|translateVectorTo)_/.test(args.method)) args.parameters.path = outputs.path(args.parameters.path);
+            if (args?.type === 'Driver' && args.method === 'delete_String') args.parameters.name = outputs.path(args.parameters.name);
+            inputs.lastError = null; outputs.lastError = null;
             result = await execute(request);
             const response = JSON.parse(result);
-            if (inputs.lastError) {
+            if (inputs.lastError || outputs.lastError) {
                 // RasterIO can return a numeric error; keep the transport error actionable.
-                const failure = inputs.lastError;
+                const failure = inputs.lastError || outputs.lastError;
                 if (mounted && typeof response.result?.value === 'string') {
                     await execute({op: 'runtime', args: {type: 'Handle', handle: response.result.value, method: 'close', parameters: {}}});
                 }
@@ -70,7 +75,7 @@ async function dispatch({id, operation, payload, file}) {
             context = 0;
             for (const input of datasets.values()) input.close();
             datasets.clear();
-            inputs?.close();
+            try { inputs?.close(); } finally { outputs?.closeAll(); }
         } else throw new Error('Unknown GDAL Worker operation');
         port.postMessage({id, result});
     } catch (error) {

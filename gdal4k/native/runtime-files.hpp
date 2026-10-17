@@ -101,10 +101,8 @@ inline CPLJSONObject outputFiles(const Directory& directory, const std::string& 
     CPLJSONObject result; result.Add("main", main); result.Add("files", files);
     return objectValue(result);
 }
-inline CPLJSONObject convertDataset(GDALDatasetH dataset, const CPLJSONObject& args, const std::string& operation) {
-    Directory output;
-    auto name = args.GetString("name"); fileBasename(name);
-    auto path = output.path + "/" + name;
+inline void convertDatasetPath(GDALDatasetH dataset, const CPLJSONObject& args, const std::string& operation, const std::string& path) {
+    require(!path.empty() && path.find('\0')==std::string::npos,"Invalid output path");
     FileOptions options(args.GetArray("arguments"));
     if (operation == "warp") { options.add("-t_srs"); options.add(args.GetString("target")); }
     options.add(operation == "vector" ? "-f" : "-of"); options.add(args.GetString("driver"));
@@ -120,7 +118,16 @@ inline CPLJSONObject convertDataset(GDALDatasetH dataset, const CPLJSONObject& a
         auto opts = GDALVectorTranslateOptionsNew(options.list, nullptr); fileEnsure(opts != nullptr, "Invalid vector translate options");
         result = GDALVectorTranslate(path.c_str(), nullptr, 1, &dataset, opts, &usageError); GDALVectorTranslateOptionsFree(opts);
     }
-    if (result) GDALClose(result);
-    fileEnsure(result != nullptr && !usageError && CPLGetLastErrorType() < CE_Failure, "GDAL conversion failed");
-    return outputFiles(output, name);
+    auto closeCode = result ? GDALClose(result) : CE_Failure;
+    fileEnsure(result != nullptr && closeCode == CE_None && !usageError, "GDAL conversion failed");
+
+}
+
+inline void convertDatasetTo(GDALDatasetH dataset,const CPLJSONObject& args,const std::string& operation) {
+    convertDatasetPath(dataset,args,operation,args.GetString("path"));
+}
+inline CPLJSONObject convertDataset(GDALDatasetH dataset,const CPLJSONObject& args,const std::string& operation) {
+    Directory output;auto name=args.GetString("name");fileBasename(name);
+    convertDatasetPath(dataset,args,operation,output.path+"/"+name);
+    return outputFiles(output,name);
 }

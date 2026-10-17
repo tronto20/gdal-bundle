@@ -59,6 +59,19 @@ struct Runtime {
     CPLJSONObject result(void* p,const char* type,bool owned,unsigned long long parent=0) {
         if(!p)return nullValue();auto id=++next;handles[id]={p,type,owned,parent};return value(std::to_string(id));
     }
+    void invalidatePointer(void* pointer) {
+        std::vector<unsigned long long> ids;
+        for(auto& item:handles)if(item.second.pointer==pointer)ids.push_back(item.first);
+        for(auto id:ids)close(id);
+    }
+    void releaseResultSets(void* dataset) {
+        std::vector<unsigned long long> ids;
+        for(auto& item:handles) {
+            auto p=handles.find(item.second.parent);
+            if(item.second.type=="Layer" && item.second.owned && p!=handles.end() && p->second.pointer==dataset)ids.push_back(item.first);
+        }
+        for(auto id:ids)close(id);
+    }
     void invalidateChildren(void* parent,const std::string& type) {
         std::vector<unsigned long long> children;
         for(auto& item:handles) {
@@ -85,6 +98,15 @@ struct Runtime {
             auto workspace=workspaces.find(id);
             if(workspace!=workspaces.end()){VSIRmdirRecursive(workspace->second.c_str());workspaces.erase(workspace);}
         }
+        else if(e.type=="Layer") {
+            auto parent=handles.find(e.parent);
+            if(parent!=handles.end())GDALDatasetReleaseResultSet(parent->second.pointer,e.pointer);
+        }
+        else if(e.type=="Group")GDALGroupRelease(static_cast<GDALGroupH>(e.pointer));
+        else if(e.type=="MDArray")GDALMDArrayRelease(static_cast<GDALMDArrayH>(e.pointer));
+        else if(e.type=="Dimension")GDALDimensionRelease(static_cast<GDALDimensionH>(e.pointer));
+        else if(e.type=="FieldDomain")OGR_FldDomain_Destroy(static_cast<OGRFieldDomainH>(e.pointer));
+        else if(e.type=="Relationship")GDALDestroyRelationship(e.pointer);
         else if(e.type=="Feature")OGR_F_Destroy(e.pointer);
         else if(e.type=="Geometry")OGR_G_DestroyGeometry(e.pointer);
         else if(e.type=="SpatialReference")OSRRelease(e.pointer);
@@ -105,7 +127,7 @@ struct Arg {
     Arg(Runtime& r,void* p):r(r),pointer(p),native(true){}
     Arg(Runtime& r,int n):r(r),json(value(n)["value"]){}
     template<class T> operator T() const {
-        if constexpr(std::is_pointer_v<T> && !std::is_same_v<T,const char*> && !std::is_same_v<T,char**> && !std::is_same_v<T,const char* const*>)return static_cast<T>(native?pointer:r.arg(json));
+        if constexpr(std::is_pointer_v<T> && !std::is_same_v<T,const char*> && !std::is_same_v<T,char**> && !std::is_same_v<T,const char* const*>)return static_cast<T>(native?pointer:(json.GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(json)));
         else if constexpr(std::is_same_v<T,const char*>){text=json.ToString();require(text.find('\0')==std::string::npos,"NUL in GDAL string");return text.c_str();}
         else if constexpr(std::is_same_v<T,char**>||std::is_same_v<T,const char* const*>){list=std::make_unique<Strings>(json.ToArray());return list->data();}
         else if constexpr(std::is_enum_v<T>)return static_cast<T>(json.ToInteger());
@@ -144,6 +166,70 @@ inline CPLJSONObject raster(GDALRasterBandH h,const CPLJSONObject& a,bool write,
     if(method.find("_FloatArray")!=std::string::npos)return rasterTyped<float>(h,a,write,GDT_Float32);
     return rasterTyped<double>(h,a,write,GDT_Float64);
 }
+template<class T> CPLJSONObject datasetRasterTyped(GDALDatasetH h,const CPLJSONObject& a,bool write,GDALDataType type) {
+    auto o=a.GetObj("options");auto bands=ints(o.GetArray("bands"));
+    if(bands.empty())for(int i=1;i<=GDALGetRasterCount(h);++i)bands.push_back(i);
+    require(!bands.empty(),"Dataset has no raster bands");
+    for(auto b:bands)require(b>=1 && b<=GDALGetRasterCount(h),"Band index is outside dataset");
+    int x=o.GetInteger("xOffset"),y=o.GetInteger("yOffset");
+    int sx=GDALGetRasterXSize(h),sy=GDALGetRasterYSize(h);
+    require(x>=0 && y>=0 && x<sx && y<sy,"Raster offset is outside dataset");
+    int w=o.GetInteger("xSize"),v=o.GetInteger("ySize");if(w==0)w=sx-x;if(v==0)v=sy-y;
+    require(w>0 && v>0 && w<=sx-x && v<=sy-y,"Raster window is outside dataset");
+    int bw=o.GetInteger("bufferWidth"),bh=o.GetInteger("bufferHeight");if(bw==0)bw=w;if(bh==0)bh=v;
+    require(bw>0 && bh>0,"Raster buffer dimensions must be positive");
+    auto pixels=static_cast<uint64_t>(bw)*bh;
+    require(pixels<=static_cast<uint64_t>(INT_MAX)/bands.size(),"Raster buffer exceeds bridge limit; read smaller windows");
+    auto count=pixels*bands.size();auto json=a.GetArray("buffer");
+    auto capacity=write?json.Size():a.GetLong("bufferSize");
+    require(capacity>=0 && count<=static_cast<uint64_t>(capacity),"Raster buffer is too small");
+    require(count<=SIZE_MAX/sizeof(T),"Raster buffer exceeds addressable memory");
+    std::vector<T> data(static_cast<size_t>(count));
+    if(write)for(size_t i=0;i<count;++i) {
+        if constexpr(std::is_floating_point_v<T>)data[i]=static_cast<T>(CPLAtof(json[static_cast<int>(i)].ToString().c_str()));
+        else data[i]=static_cast<T>(std::stoll(json[static_cast<int>(i)].ToString()));
+    }
+    GDALRasterIOExtraArg extra;INIT_RASTERIO_EXTRA_ARG(extra);
+    int alg=o.GetInteger("resampling");require((alg>=0 && alg<=7)||alg==14,"Unknown raster resampling algorithm");
+    require(!write || alg==0,"Resampling selection is only supported for reads");
+    extra.eResampleAlg=static_cast<GDALRIOResampleAlg>(alg);
+    auto code=GDALDatasetRasterIOEx(h,write?GF_Write:GF_Read,x,y,w,v,data.data(),bw,bh,type,
+        static_cast<int>(bands.size()),bands.data(),sizeof(T),static_cast<GSpacing>(bw)*sizeof(T),
+        static_cast<GSpacing>(pixels)*sizeof(T),&extra);
+    CPLJSONObject out;out.Add("code",code);
+    if(!write && code==CE_None)out.Add("buffer",numbers(data.data(),data.size())["value"]);
+    CPLJSONObject result;result.Add("value",out);return result;
+}
+inline CPLJSONObject datasetRaster(GDALDatasetH h,const CPLJSONObject& a,bool write,const std::string& method) {
+    if(method.find("_ByteArray")!=std::string::npos)return datasetRasterTyped<unsigned char>(h,a,write,GDT_Byte);
+    if(method.find("_ShortArray")!=std::string::npos)return datasetRasterTyped<short>(h,a,write,GDT_Int16);
+    if(method.find("_IntArray")!=std::string::npos)return datasetRasterTyped<int>(h,a,write,GDT_Int32);
+    if(method.find("_LongArray")!=std::string::npos)return datasetRasterTyped<int64_t>(h,a,write,GDT_Int64);
+    if(method.find("_FloatArray")!=std::string::npos)return datasetRasterTyped<float>(h,a,write,GDT_Float32);
+    return datasetRasterTyped<double>(h,a,write,GDT_Float64);
+}
+inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) {
+    auto type=GDALMDArrayGetDataType(h);bool numeric=GDALExtendedDataTypeGetClass(type)==GEDTC_NUMERIC;GDALExtendedDataTypeRelease(type);
+    require(numeric,"Only numeric multidimensional arrays support Float64 slices");
+    size_t rank=GDALMDArrayGetDimensionCount(h);auto starts=a.GetArray("start"),counts=a.GetArray("count");
+    require(starts.Size()==rank && counts.Size()==rank,"Slice rank does not match array");
+    size_t nd=0;auto dims=GDALMDArrayGetDimensions(h,&nd);std::vector<GUInt64> shape;
+    for(size_t i=0;i<nd;++i)shape.push_back(GDALDimensionGetSize(dims[i]));GDALReleaseDimensions(dims,nd);
+    std::vector<GUInt64> start;std::vector<size_t> count;size_t n=1;
+    for(size_t i=0;i<rank;++i){auto s=starts[static_cast<int>(i)].ToLong(),c=counts[static_cast<int>(i)].ToLong();
+        require(s>=0&&c>0&&static_cast<uint64_t>(s)<=shape[i]&&static_cast<uint64_t>(c)<=shape[i]-s,"Slice is outside array");
+        require(c<=INT_MAX && n<=static_cast<size_t>(INT_MAX)/c,"Slice exceeds bridge limit; read smaller windows");
+        start.push_back(s);count.push_back(static_cast<size_t>(c));n*=static_cast<size_t>(c);
+    }
+    require(n<=SIZE_MAX/sizeof(double),"Slice exceeds addressable memory");
+    auto values=a.GetArray("values");require(!write||values.Size()==n,"Slice values size does not match count");
+    std::vector<double> data(n);if(write)for(size_t i=0;i<n;++i)data[i]=CPLAtof(values[static_cast<int>(i)].ToString().c_str());
+    auto edt=GDALExtendedDataTypeCreate(GDT_Float64);
+    int ok=write?GDALMDArrayWrite(h,start.data(),count.data(),nullptr,nullptr,edt,data.data(),data.data(),n*sizeof(double)):
+        GDALMDArrayRead(h,start.data(),count.data(),nullptr,nullptr,edt,data.data(),data.data(),n*sizeof(double));
+    GDALExtendedDataTypeRelease(edt);if(write)return value(ok!=0);
+    require(ok!=0,"Multidimensional read failed");return numbers(data.data(),data.size());
+}
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));
@@ -160,7 +246,7 @@ inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     struct InvalidateAfter {
         Runtime& runtime;void* pointer;std::string type;bool overviews;
         ~InvalidateAfter(){if(!type.empty())runtime.invalidateChildren(pointer,type);if(overviews)runtime.invalidateOverviews(pointer);}
-    } invalidate{r,h,invalidated,type=="Dataset" && method.rfind("buildOverviews",0)==0};
+    } invalidate{r,h,invalidated,type=="Dataset" && (method.rfind("buildOverviews",0)==0 || method.rfind("createMaskBand",0)==0)};
 #include "runtime.generated.inc"
     throw std::runtime_error("Unknown GDAL runtime operation: "+type+"."+method);
 }

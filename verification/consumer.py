@@ -157,12 +157,25 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
 '''
  (consumer/'build.gradle.kts').write_text(build)
  (consumer/'gradle.properties').write_text('org.gradle.jvmargs=-Xmx2g\nandroid.useAndroidX=true\n')
- path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source)
+ path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source, encoding="utf-8")
+ if not a.expect_missing_jvm_binary:
+  # Exercise the expanded API from published coordinates, not producer project dependencies.
+  expanded = (ROOT/'gdal4k/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text(encoding="utf-8")
+  expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
+  expanded_path = consumer/'src/commonTest/kotlin/consumer/DatasetApiTest.kt'
+  expanded_path.write_text(expanded, encoding="utf-8")
+  test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
+  platform_path = ROOT/f'gdal4k/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
+  actual_set = test_set if target in ['android','jvm','js','wasmJs'] else target+'Test'
+  actual_path = consumer/f'src/{actual_set}/kotlin/consumer/DatasetOutputPath.kt'
+  actual_path.parent.mkdir(parents=True,exist_ok=True)
+  actual_path.write_text(platform_path.read_text(encoding="utf-8").replace('package dev.gdal4k','package consumer'), encoding="utf-8")
+
  if a.browser and target in ['js','wasmJs']:
-  browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text()
+  browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text(encoding="utf-8")
   browser_source = browser_source.replace('package dev.gdal4k\n', 'package consumer\nimport dev.gdal4k.Gdal4k\n')
   browser_test = consumer/f'src/{target}Test/kotlin/consumer/BrowserFileTest.kt'
-  browser_test.parent.mkdir(parents=True,exist_ok=True);browser_test.write_text(browser_source)
+  browser_test.parent.mkdir(parents=True,exist_ok=True);browser_test.write_text(browser_source, encoding="utf-8")
  config=consumer/'karma.config.d/timeout.js';config.parent.mkdir();config.write_text('config.browserNoActivityTimeout=240000; config.client.mocha={...config.client.mocha,timeout:180000};\n')
  if target=='android' and (ROOT/'local.properties').exists():shutil.copy2(ROOT/'local.properties',consumer/'local.properties')
  # The native consumer must link the archive stored inside its published KLIB.
@@ -179,8 +192,8 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
   runtime_files = []
   runtime_coordinates = []
   if target=='jvm':
-   runtime_files = (consumer/'build/jvm-runtime-files.txt').read_text().splitlines()
-   runtime_coordinates = (consumer/'build/jvm-runtime-coordinates.txt').read_text().splitlines()
+   runtime_files = (consumer/'build/jvm-runtime-files.txt').read_text(encoding="utf-8").splitlines()
+   runtime_coordinates = (consumer/'build/jvm-runtime-coordinates.txt').read_text(encoding="utf-8").splitlines()
    # File names become timestamped after Maven snapshot deployment. Compare resolved
    # component identities so the detached publisher roundtrip is checked correctly.
    available_payloads = {'gdal4k-binary-'+b for b in JVM_BINARIES}

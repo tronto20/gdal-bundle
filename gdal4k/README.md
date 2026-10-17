@@ -162,3 +162,42 @@ JSON/Base64 전송 코드는 binary 모듈 내부에만 있습니다. 공개 `Gd
 테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
 
 지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 ARM64 바이너리만 빌드하고 Google APIs x86_64 에뮬레이터의 native bridge로 ARM64 코드를 실행합니다. 에뮬레이터가 ARM64 호환을 보고하지 않으면 실패하며 번역 실행 여부를 결과에 기록합니다. 실제 ARM64 실행 검증과 이 CI 번역 실행 검증은 구분합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.
+
+## Dataset 확장 API
+
+Dataset의 모든 호출은 공통 `suspend` API이며 기존 플랫폼별 실행 경로를 사용합니다.
+
+- `getDescription` / `setDescription`, `getMetadataDomainList`, `getMetadata` / `setMetadata`, `getMetadataItem` / `setMetadataItem`: domain별 메타데이터. 항목 값 `null`은 삭제이며, XML domain도 보존하도록 전체 메타데이터는 GDAL의 문자열 목록을 유지합니다.
+- `getSpatialRef` / `setSpatialRef`: 공간 참조 객체와 연결합니다. 조회는 독립 복제본을 반환하므로 `use`로 닫습니다. 설정은 복사하며 `null`로 제거할 수 있습니다. `getAccess`, `addBand`, Dataset `createMaskBand`, `clearStatistics`도 제공합니다.
+- Dataset `readRaster` / `writeRaster`: Byte/Short/Int/Long/Float/Double 배열, 다중 밴드·window·출력 해상도를 지원합니다. 버퍼는 **band-sequential** 순서이며 밴드는 1부터 시작합니다. `RasterIOOptions.resampling`은 읽기에 적용합니다. Int64는 JSON에서 문자열로 전송해 정밀도를 보존합니다.
+- `createLayer`, `copyLayer`, `deleteLayer`, `executeSQL`, `startTransaction` / `commitTransaction` / `rollbackTransaction`: 벡터 관리. SQL 결과는 `Layer.use`로 해제하며 부모 Dataset을 닫을 때도 정리됩니다. 레이어 삭제는 활성 SQL 결과를 먼저 해제하고 해당 레이어의 기존 핸들을 무효화합니다. Dataset 마스크 재생성은 이전 밴드 마스크/overview 핸들을 무효화하므로 다시 조회합니다. `runtime.createFieldDefn`, `Layer.createField`, `runtime.createFeature`로 새 레이어의 피처를 구성합니다.
+- `Driver.createMultidimensional`, `Dataset.getRootGroup`, `Group` / `Dimension` / `MDArray`: 그룹·차원·숫자 배열 생성과 탐색, 부분 읽기·쓰기. `DatasetKind.Multidimensional`로 다차원 파일을 엽니다. 현재 MDArray slice는 Float64 변환으로 읽고 쓰며, 큰 Int64의 정밀도가 필요한 용도로 사용하지 않습니다. 문자열·복합 배열과 attribute API는 아직 노출하지 않습니다.
+- 필드 도메인·관계 이름 조회 및 추가·조회·갱신·삭제. `createGlobFieldDomain`과 `createRelationship`으로 객체를 만듭니다. 조회 결과는 독립 복제본입니다. coded/range 도메인의 생성과 상세 값 API는 아직 노출하지 않습니다.
+
+API가 존재해도 드라이버가 해당 기능이나 수정을 지원해야 합니다. 지원 여부는 capability와 반환 코드로 판단하며, 도메인·관계 수정 실패는 설명을 포함한 예외를 반환합니다. 기존 HDF5/netCDF 등 선택적 드라이버를 새로 번들하지 않습니다. GDAL의 전체 API를 모두 노출한다는 의미는 아닙니다.
+
+```kotlin
+val runtime = Gdal4k.runtime()
+runtime.openDataset(inputPath).use { dataset ->
+    val pixels = FloatArray(3 * 256 * 256)
+    check(dataset.readRaster(pixels, RasterIOOptions(
+        xOffset = 1024, yOffset = 512, xSize = 1024, ySize = 1024,
+        bufferWidth = 256, bufferHeight = 256,
+        bands = intArrayOf(1, 2, 3), resampling = RasterResampling.Average,
+    )) == 0)
+    dataset.translateTo(outputPath, driver = "COG",
+        arguments = listOf("-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES"))
+}
+```
+
+### 직접 경로 출력
+
+`translateTo(path, ...)`, `warpTo(path, target, ...)`, `translateVectorTo(path, ...)`는 지정한 위치에 쓰고 출력을 닫습니다. 반환형은 `Unit`이며 출력 전체를 `GdalFiles`/Base64/JSON으로 읽어 오지 않습니다. 기존 바이트 반환 API도 유지합니다.
+
+JVM·Android·Native의 출력은 접근 가능한 OS/GDAL VSI 경로입니다. Android는 앱의 cache/files 디렉터리 등 쓰기 권한이 있는 경로를 사용합니다. 읽기 전용 content URI 어댑터에 쓰기 권한을 추가하지 않습니다. Node는 OS 파일을 seek/read/write하는 전용 VSI 어댑터를 사용합니다.
+
+브라우저는 `opfs:/result.tif` 또는 `opfs:/exports/result.tif`를 사용합니다. 전용 Worker가 **OPFS의 동기 접근 핸들로 디스크에 직접 기록**하며 MEMFS 파일로 staging하지 않습니다. 디렉터리는 필요하면 생성됩니다. 같은 경로로 `openDataset("opfs:/result.tif")`를 호출해 다시 열 수 있습니다. OPFS는 해당 origin의 비공개 저장소이며, 사용자가 선택한 임의의 디렉터리에 대한 쓰기 권한과는 다릅니다. 저장된 파일은 앱에서 `navigator.storage.getDirectory()`의 `getFileHandle(...).getFile()`로 얻어 다운로드/공유할 수 있습니다. secure context와 OPFS sync access 지원이 필요하며, 저장 공간·권한 오류가 발생하면 실패합니다. 메모리 파일로 자동 fallback하지 않습니다.
+
+출력 경로와 sidecar 파일은 호출자가 소유합니다. 오류나 취소 후 부분 파일이 남을 수 있으며 라이브러리가 기존 사용자 파일을 삭제하지 않습니다. 정상 반환은 GDAL 출력 close까지 성공했다는 뜻입니다. GDAL 드라이버의 블록 캐시·압축·재투영 작업 메모리는 계속 필요합니다. `/vsimem/`을 명시하면 그 출력은 메모리를 사용합니다.
+
+CRS 객체의 축 순서는 GDAL 규칙을 따릅니다. 경도/위도 순서의 GeoTransform과 함께 쓸 경우 공간 참조에 `setAxisMappingStrategy(0)`을 설정합니다. GPKG처럼 스키마 생성을 지연하는 드라이버는 레이어/필드 생성 후 `flushCache()`로 스키마를 확정한 뒤 트랜잭션을 시작하는 편이 안전합니다.

@@ -46,11 +46,14 @@ jobs:
             engine-${{ matrix.target }}-
       - name: Build GDAL and codecs
         run: python verification/ci.py '${{ matrix.target }}' --build-engine-only
+      # First boot runs Apple's data migration before tests can start. Intel
+      # hosted runners exhausted five minutes twice during that preparation.
       - name: Boot iOS simulator
-        timeout-minutes: 5
+        timeout-minutes: 15
         if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
         run: |
           device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for g in d["devices"].values() for x in g if x["name"].startswith("iPhone")))')"
+          echo "Selected iOS simulator: $device"
           xcrun simctl boot "$device" || xcrun simctl list devices booted | grep "$device"
           xcrun simctl bootstatus "$device" -b
           echo "IOS_DEVICE=$device" >> "$GITHUB_ENV"

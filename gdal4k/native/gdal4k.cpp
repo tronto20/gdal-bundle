@@ -20,6 +20,7 @@
 
 #ifdef __EMSCRIPTEN__
 void gdal4k_install_web_inputs();
+void gdal4k_install_web_outputs();
 #endif
 namespace {
 std::once_flag registered;
@@ -49,6 +50,7 @@ extern "C" gdal4k_context *gdal4k_create(const char *proj, const char *data) {
             gdal4k_install_resources();
 #ifdef __EMSCRIPTEN__
             gdal4k_install_web_inputs();
+            gdal4k_install_web_outputs();
 #endif
             // CPL's finder snapshots GDAL_DATA on its first use. Register
             // drivers with the bundled location already visible to the finder.

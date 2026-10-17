@@ -33,8 +33,13 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
         with zipfile.ZipFile(klibs[0]) as z:
             expected={'index.mjs','gdal4k.mjs','gdal4k.wasm','gdal4k-worker.mjs','gdal4k-inputs.mjs','package.json'}
             if not a.memory_only or 'gdal4k-resources.mjs' in z.namelist():expected|={'gdal4k-resources.mjs','gdal4k-data.wasm'}
+            if not a.memory_only or 'gdal4k-outputs.mjs' in z.namelist():expected.add('gdal4k-outputs.mjs')
             if not expected.issubset(z.namelist()):raise RuntimeError('Published KLIB is missing its engine assets')
-            for name in expected:(assets/name).write_bytes(z.read(name))
+            # Extract the complete published module set: Worker imports may grow as
+            # runtime features are added. Never copy producer assets into this test.
+            for name in z.namelist():
+                if '/' not in name and (name.endswith(('.mjs','.wasm')) or name=='package.json'):
+                    (assets/name).write_bytes(z.read(name))
             if z.getinfo('default/ir/strings.knt').file_size > 1024*1024:raise RuntimeError('Web engine is still embedded in Kotlin strings')
     # A sparse, tiled, uncompressed 16384x16384 Byte TIFF: 256 MiB logical size,
     # but only its metadata and first/last tile occupy disk blocks.

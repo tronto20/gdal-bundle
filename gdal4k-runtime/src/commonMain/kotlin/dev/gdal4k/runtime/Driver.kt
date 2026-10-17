@@ -4,6 +4,8 @@ package dev.gdal4k.runtime
  * Shared GDAL driver handle.
  */
 interface Driver {
+    suspend fun createMultidimensional(name: String, rootOptions: List<String> = emptyList(), options: List<String> = emptyList()): Dataset?
+
     suspend fun close()
 
     suspend fun getShortName(): String

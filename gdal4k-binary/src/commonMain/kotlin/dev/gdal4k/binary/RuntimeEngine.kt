@@ -52,11 +52,14 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
             closed = true
         }
     }
-    fun handle(value: Any): JsonElement {
+    fun handle(value: Any?): JsonElement {
+        if (value == null) return JsonNull
         val h = value as? RuntimeHandle ?: error("Handle was not created by the bundled GDAL runtime")
         require(h.engine === engine) { "Handle belongs to another GDAL runtime" }
         h.checkOpen()
         val type = when(value) {
+            is Group -> "Group"; is MDArray -> "MDArray"; is Dimension -> "Dimension"
+            is FieldDomain -> "FieldDomain"; is Relationship -> "Relationship"
             is Dataset -> "Dataset"; is Driver -> "Driver"; is Band -> "Band"
             is SpatialReference -> "SpatialReference"; is CoordinateTransformation -> "CoordinateTransformation"
             is GCP -> "GCP"; is Layer -> "Layer"; is Feature -> "Feature"
@@ -65,7 +68,14 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         }
         return buildJsonObject { put("handle", h.id); put("type", type) }
     }
-    fun encode(value: Any): JsonElement = when(value) {
+    fun encode(value: Any?): JsonElement = when(value) {
+        null -> JsonNull
+        is RasterIOOptions -> buildJsonObject {
+            put("xOffset", value.xOffset); put("yOffset", value.yOffset)
+            put("xSize", value.xSize); put("ySize", value.ySize)
+            put("bufferWidth", value.bufferWidth); put("bufferHeight", value.bufferHeight)
+            put("bands", encode(value.bands)); put("resampling", value.resampling.code)
+        }
         is String -> { require('\u0000' !in value) { "GDAL strings cannot contain NUL" }; JsonPrimitive(value) }
         is Boolean -> JsonPrimitive(value)
         is Long -> JsonPrimitive(value.toString()) // JavaScript numbers cannot represent every Int64.
@@ -82,7 +92,7 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         is DoubleArray -> JsonArray(value.map { encode(it) })
         is DatasetOpenOptions -> buildJsonObject {
             put("update", value.accessMode == DatasetAccessMode.Update)
-            put("kind", when(value.kind) { DatasetKind.Any -> 0; DatasetKind.Raster -> 2; DatasetKind.Vector -> 4 })
+            put("kind", when(value.kind) { DatasetKind.Any -> 0; DatasetKind.Raster -> 2; DatasetKind.Vector -> 4; DatasetKind.Multidimensional -> 16 })
             put("options", encode(value.openOptions))
         }
         is DatasetInfoOptions -> buildJsonObject { put("arguments", encode(value.arguments)) }
