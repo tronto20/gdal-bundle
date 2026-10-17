@@ -5,3 +5,4 @@
 
 # Imported patches retain upstream context and removed-line whitespace verbatim.
 gdal4k-engine/ports/**/*.patch -whitespace
+gdal4k-engine/ports/**/*.diff -whitespace
