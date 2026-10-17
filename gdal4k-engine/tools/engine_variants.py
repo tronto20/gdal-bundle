@@ -14,6 +14,17 @@ TARGETS = {
     }.items()},
 }
 
+COORDINATES = {
+    'android': 'gdal4k-engine-android-arm64',
+    'js': 'gdal4k-engine-js', 'wasmJs': 'gdal4k-engine-wasm-js',
+    'macosArm64': 'gdal4k-engine-native-macos-arm64',
+    'linuxX64': 'gdal4k-engine-native-linux-x64-gnu',
+    'linuxArm64': 'gdal4k-engine-native-linux-arm64-gnu',
+    'mingwX64': 'gdal4k-engine-native-mingw-x64',
+    'iosArm64': 'gdal4k-engine-native-ios-arm64',
+    'iosSimulatorArm64': 'gdal4k-engine-native-ios-simulator-arm64',
+}
+
 
 def target_of(variant):
     attrs = variant['attributes']
@@ -60,6 +71,18 @@ def add_empty_variants(metadata, module=None):
                 'group': component['group'], 'module': android_module, 'version': version,
             }})
     if module == 'gdal4k-engine':
+        # KGP can retain default artifact IDs for targets disabled on this host.
+        # Normalize every redirect, including sources/metadata, before publishing
+        # the root on Linux after restoring independently published Apple KLIBs.
+        for variant in variants:
+            redirect = variant.get('available-at')
+            target = target_of(variant)
+            if redirect and target in COORDINATES:
+                coordinate = COORDINATES[target]
+                component = metadata['component']
+                version = component['version']
+                redirect.update(group=component['group'], module=coordinate, version=version,
+                                url=f'../../{coordinate}/{version}/{coordinate}-{version}.module')
         # JVM has no inherent OS/CPU target. A classifier must be selected explicitly.
         present = {target_of(v) for v in variants}
         if 'jvm' not in present:

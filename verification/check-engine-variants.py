@@ -8,11 +8,23 @@ from publication_versions import ANDROID_ENGINE, ENGINE_COORDINATES
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT/'gdal4k-engine/tools'))
-from engine_variants import TARGETS, target_of
+from engine_variants import COORDINATES, TARGETS, target_of
 
 
 def check(metadata, expected_targets, module=None):
     variants = metadata['variants']
+    if (module or metadata['component']['module']) == 'gdal4k-engine':
+        for variant in variants:
+            redirect = variant.get('available-at')
+            target = target_of(variant)
+            if redirect and target in COORDINATES:
+                coordinate = COORDINATES[target]
+                version = metadata['component']['version']
+                expected_url = f'../../{coordinate}/{version}/{coordinate}-{version}.module'
+                if (redirect.get('module') != coordinate or redirect.get('url') != expected_url
+                        or redirect.get('group') != metadata['component']['group']
+                        or redirect.get('version') != version):
+                    raise ValueError(f'Invalid {target} engine redirect: {redirect}')
     library = [v for v in variants if v['attributes'].get('org.gradle.category') == 'library']
     if (module or metadata['component']['module']) == 'gdal4k-engine' and not (set(TARGETS) | {'common'}) <= {target_of(v) for v in library}:
         raise ValueError('Incomplete engine target coverage: ' + metadata['component']['module'])

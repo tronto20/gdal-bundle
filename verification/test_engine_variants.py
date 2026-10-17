@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT/'gdal4k-engine/tools'))
-from engine_variants import add_empty_variants, target_of, TARGETS
+from engine_variants import add_empty_variants, target_of, TARGETS, COORDINATES
 spec = importlib.util.spec_from_file_location('check_engine_variants', ROOT/'verification/check-engine-variants.py')
 checks = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checks)
@@ -34,6 +34,7 @@ class EngineVariantsTest(unittest.TestCase):
 
     def test_root_adds_android_redirect_and_empty_jvm_without_changing_native_variants(self):
         metadata = {'component': {'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-engine', 'version': '0.1.0-SNAPSHOT'}, 'variants': [{'name': 'macosArm64Api', 'attributes': {'org.gradle.category': 'library', 'org.gradle.usage': 'kotlin-api', **TARGETS['macosArm64']}, 'available-at': {'module': 'gdal4k-engine-native-macos-arm64'}}]}
+        metadata['variants'][0]['available-at'].update(group='dev.tronto.gdal4k', version='0.1.0-SNAPSHOT', url='../../gdal4k-engine-native-macos-arm64/0.1.0-SNAPSHOT/gdal4k-engine-native-macos-arm64-0.1.0-SNAPSHOT.module')
         original = copy.deepcopy(metadata['variants'][0])
         add_empty_variants(metadata)
         self.assertEqual(metadata['variants'][0], original)
@@ -51,6 +52,27 @@ class EngineVariantsTest(unittest.TestCase):
         original = copy.deepcopy(metadata)
         self.assertEqual(add_empty_variants(metadata, 'gdal4k-engine-native-macos-arm64'), original)
         checks.check(metadata, {'macosArm64'}, 'gdal4k-engine-native-macos-arm64')
+
+    def test_disabled_host_targets_redirect_to_published_coordinates(self):
+        component = {'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-engine', 'version': '0.1.0-SNAPSHOT'}
+        variants = [{'name': 'metadataApi', 'attributes': {'org.gradle.category': 'library', 'org.jetbrains.kotlin.platform.type': 'common'}}]
+        for target, coordinate in COORDINATES.items():
+            for category in ['library', 'documentation']:
+                default = 'gdal4k-engine-' + target.lower()
+                variants.append({'name': target + category, 'attributes': {'org.gradle.category': category, **TARGETS[target]},
+                                 'available-at': {**component, 'module': default, 'url': '../../' + default + '/old.module'}})
+        metadata = {'component': component, 'variants': variants}
+        with self.assertRaisesRegex(ValueError, 'Invalid .* engine redirect'):
+            checks.check(metadata, set(COORDINATES))
+        add_empty_variants(metadata)
+        checks.check(metadata, set(COORDINATES))
+        for variant in variants:
+            if 'available-at' in variant:
+                redirect = variant['available-at']
+                coordinate = COORDINATES[target_of(variant)]
+                self.assertEqual(redirect['module'], coordinate)
+                self.assertEqual(redirect['url'], f'../../{coordinate}/0.1.0-SNAPSHOT/{coordinate}-0.1.0-SNAPSHOT.module')
+        self.assertEqual(add_empty_variants(copy.deepcopy(metadata)), metadata)
 
     def test_non_engine_coordinate_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'Not an engine coordinate'):
