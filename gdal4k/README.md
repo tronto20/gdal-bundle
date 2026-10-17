@@ -2,6 +2,19 @@
 
 `gdal4k-runtime`의 기존 GDAL 객체 인터페이스를 모든 지원 타깃에 공개하고, `gdal4k-binary`가 구현합니다. 테스트 전용 인터페이스/contract 모듈은 없습니다. `gdal4k`는 두 모듈을 함께 제공하는 진입점입니다.
 
+## 엔진 의존성 선택
+
+모든 Maven 아티팩트의 버전은 `0.1.0-SNAPSHOT`입니다. GDAL 버전은 별도 빌드 manifest와 `runtime.versionInfo()`로 확인합니다. `dev.tronto.gdal4k:gdal4k`는 공통 API와 Kotlin 구현을 제공하며 엔진 바이너리를 기본 포함하지 않습니다. 앱에서 아래 의존성을 명시적으로 선택합니다.
+
+| 앱 타깃 | 추가 의존성 (버전 `0.1.0-SNAPSHOT`) |
+| --- | --- |
+| JVM | 해당 OS/CPU의 `gdal4k-binary-macos-arm64`, `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-windows-x64`를 `runtimeOnly`로 선택 |
+| Android ARM64 | `gdal4k-android-runtime` |
+| Kotlin/Native | `gdal4k-engine`을 해당 Native source set의 `implementation`으로 선택 |
+| JS·wasmJs | `gdal4k-engine`을 해당 웹 source set의 `implementation`으로 선택 |
+
+모두 같은 `dev.tronto.gdal4k` group을 사용합니다. 선택한 엔진은 앱 의존성에 함께 패키징되므로 별도 GDAL 설치·라이브러리 경로·새 초기화 API가 필요하지 않습니다. 아래의 모든 기능과 고급 API도 같은 의존성 선택 규칙을 따릅니다.
+
 ## 초기화와 수명
 
 ```kotlin

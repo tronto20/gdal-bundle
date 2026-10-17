@@ -189,7 +189,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  hidden=[]
  try:
   if platform:
-   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
+   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop',ROOT/f'gdal4k-binary/build/classes/kotlin/{target}/main/cinterop']:
     if original.exists():
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))
