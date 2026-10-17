@@ -23,10 +23,9 @@ val gdalVersion = providers.gradleProperty("gdalVersion")
     .orElse("3.12.4")
     .get()
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
-    .orElse("1.0.1-SNAPSHOT")
+    .orElse("0.1.0-SNAPSHOT")
     .get()
 require(gdalVersion == "3.12.4") { "The embedded engine is pinned to GDAL 3.12.4; update its source manifest before changing gdalVersion" }
-val gdalPackageVersion = "$gdalVersion-$gdal4kVersion"
 val requestedPublishTarget = providers.gradleProperty("publishTarget").orElse("mavenCentral").get()
 val publishTargetParam = if (requestedPublishTarget == "ossrh") "mavenCentral" else requestedPublishTarget
 val githubPackagesUrl = providers.gradleProperty("githubPackagesUrl").orNull
@@ -70,7 +69,7 @@ plugins {
 
 allprojects {
     group = "dev.tronto.gdal4k"
-    version = gdalPackageVersion
+    version = gdal4kVersion
 }
 
 subprojects {

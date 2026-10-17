@@ -10,7 +10,7 @@ Apple 타깃은 `macosArm64`, `iosArm64`, `iosSimulatorArm64`입니다. macOS와
 
 ```kotlin
 commonMain.dependencies {
-    implementation("dev.tronto.gdal4k:gdal4k:3.12.4-1.0.1-SNAPSHOT")
+    implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
 }
 ```
 
@@ -18,8 +18,8 @@ commonMain.dependencies {
 
 ```kotlin
 dependencies {
-    implementation("dev.tronto.gdal4k:gdal4k:3.12.4-1.0.1-SNAPSHOT")
-    runtimeOnly("dev.tronto.gdal4k:gdal4k-binary-linux-x64-gnu:3.12.4-1.0.1-SNAPSHOT")
+    implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
+    runtimeOnly("dev.tronto.gdal4k:gdal4k-binary-linux-x64-gnu:0.1.0-SNAPSHOT")
 }
 ```
 
@@ -30,7 +30,33 @@ dependencies {
 | macOS Apple Silicon | `gdal4k-binary-macos-arm64` |
 | Windows x64 | `gdal4k-binary-windows-x64` |
 
-KMP 앱에서는 같은 `runtimeOnly`를 `jvmMain.dependencies`에 추가합니다. 모든 좌표는 `gdal4k`와 같은 버전을 사용합니다. 여러 OS로 배포하는 앱은 필요한 좌표를 여러 개 추가할 수 있고, 런타임은 현재 OS/CPU에 맞는 리소스만 로드합니다. 미선택 또는 다른 플랫폼용만 선택했다면 `runtime()`에서 필요한 좌표를 안내하며 실패합니다. 자동 다운로드나 시스템 GDAL fallback은 없습니다. Alpine/musl은 지원하지 않습니다.
+KMP 앱에서는 같은 `runtimeOnly`를 `jvmMain.dependencies`에 추가합니다. 모든 아티팩트는 같은 라이브러리 버전 `0.1.0-SNAPSHOT`을 사용합니다. GDAL 버전은 빌드 설정과 엔진 manifest에서 별도로 관리합니다. 여러 OS로 배포하는 앱은 필요한 좌표를 여러 개 추가할 수 있고, 런타임은 현재 OS/CPU에 맞는 리소스만 로드합니다. 미선택 또는 다른 플랫폼용만 선택했다면 `runtime()`에서 필요한 좌표를 안내하며 실패합니다. 자동 다운로드나 시스템 GDAL fallback은 없습니다. Alpine/musl은 지원하지 않습니다.
+
+모든 플랫폼에서 `gdal4k`만 의존하면 GDAL 엔진을 포함하지 않습니다. Android, Native, JS, wasmJs도 엔진을 명시적으로 추가합니다.
+
+```kotlin
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
+        }
+        androidMain.dependencies {
+            implementation("dev.tronto.gdal4k:gdal4k-android-runtime:0.1.0-SNAPSHOT")
+        }
+        nativeMain.dependencies {
+            implementation("dev.tronto.gdal4k:gdal4k-engine:0.1.0-SNAPSHOT")
+        }
+        jsMain.dependencies {
+            implementation("dev.tronto.gdal4k:gdal4k-engine:0.1.0-SNAPSHOT")
+        }
+        wasmJsMain.dependencies {
+            implementation("dev.tronto.gdal4k:gdal4k-engine:0.1.0-SNAPSHOT")
+        }
+    }
+}
+```
+
+위 예시에서는 앱에서 사용하는 타깃의 소스셋만 설정합니다. `gdal4k-engine`은 Gradle이 선택한 Native 플랫폼의 정적 라이브러리 또는 웹 Worker·Wasm 자산을 제공합니다. JVM은 위 표의 리소스 JAR을, Android는 ARM64 JNI AAR을 선택합니다. 선택 후에는 모든 플랫폼에서 `Gdal4k.runtime()`으로 자동 로딩하며 설치 경로나 초기화 API는 추가하지 않습니다. Native 실행 파일 링크와 웹 번들에는 선택한 엔진이 필요합니다.
 
 main CI는 전체 검증이 통과하면 Maven Central을 기본 대상으로 게시합니다. 정식 버전은 서명·업로드·최종 공개까지 자동으로 진행하고 `PUBLISHED` 상태를 확인합니다. 현재 `SNAPSHOT` 버전은 Sonatype Snapshot 저장소에 게시되므로 소비 앱에도 다음 저장소를 추가합니다. 아직 게시하지 않은 버전은 [개발·검증 절차](gdal4k-binary/README.md)에 따라 로컬 Maven 저장소에서 사용합니다.
 

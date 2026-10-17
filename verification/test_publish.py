@@ -8,11 +8,12 @@ import runpy
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 from urllib.error import HTTPError
 
 from central_release import CentralRelease
-from jvm_binaries import JVM_BINARIES
+from publication_versions import expected_coordinates, validate_versions
 
 ROOT = Path(__file__).resolve().parent
 ENV = {'MAVEN_CENTRAL_USERNAME': 'fixture-user', 'MAVEN_CENTRAL_PASSWORD': 'fixture-password',
@@ -83,18 +84,20 @@ class CentralLifecycleTest(unittest.TestCase):
 
 
 class PublisherRoutingTest(unittest.TestCase):
-    def run_publisher(self, version='3.12.4-1.0.1', target='mavenCentral', local=False, fail_upload=False, missing_key=False):
-        targets = ['jvm', 'android', 'js', 'wasm-js', 'macosarm64', 'linuxx64', 'linuxarm64', 'mingwx64', 'iosarm64', 'iossimulatorarm64']
-        coordinates = {m + s for m in ['gdal4k', 'gdal4k-runtime', 'gdal4k-binary'] for s in ['', *['-' + t for t in targets]]} | {'gdal4k-android-runtime'} | {'gdal4k-binary-' + b for b in JVM_BINARIES}
+    def run_publisher(self, version='0.1.0', target='mavenCentral', local=False, fail_upload=False, missing_key=False, wrong_binary_version=False):
+        coordinates = expected_coordinates()
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary) / 'repo'
             for coordinate in coordinates:
-                directory = repo / 'dev/tronto/gdal4k' / coordinate / version
+                published_version = version
+                if wrong_binary_version and coordinate == 'gdal4k-engine':
+                    published_version = '0.2.0'
+                directory = repo / 'dev/tronto/gdal4k' / coordinate / published_version
                 directory.mkdir(parents=True)
-                (directory / f'{coordinate}-{version}.pom').write_text(
+                (directory / f'{coordinate}-{published_version}.pom').write_text(
                     '<project xmlns="http://maven.apache.org/POM/4.0.0"><groupId>dev.tronto.gdal4k</groupId>' +
-                    f'<artifactId>{coordinate}</artifactId><version>{version}</version></project>')
-                (directory / f'{coordinate}-{version}.jar').write_bytes(b'fixture')
+                    f'<artifactId>{coordinate}</artifactId><version>{published_version}</version></project>')
+                (directory / f'{coordinate}-{published_version}.jar').write_bytes(b'fixture')
             arguments = ['publish.py', '--repo', str(repo)]
             if local:
                 arguments += ['--destination', str(Path(temporary) / 'destination')]
@@ -120,7 +123,7 @@ class PublisherRoutingTest(unittest.TestCase):
         self.assertEqual(self.run_publisher(), ['upload', 'finalize'])
 
     def test_snapshot_github_and_local_never_finalize(self):
-        for options in [{'version': '3.12.4-1.0.1-SNAPSHOT'}, {'target': 'githubPackages'}, {'local': True}]:
+        for options in [{'version': '0.1.0-SNAPSHOT'}, {'target': 'githubPackages'}, {'local': True}]:
             with self.subTest(options=options):
                 self.assertEqual(self.run_publisher(**options, missing_key=True), ['upload'])
 
@@ -133,6 +136,59 @@ class PublisherRoutingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'SIGNING_KEY'):
             self.run_publisher(missing_key=True)
         self.assertEqual(self.events, [])
+
+    def test_incompatible_binary_version_fails_before_upload(self):
+        with self.assertRaisesRegex(ValueError, 'Unexpected coordinate version'):
+            self.run_publisher(wrong_binary_version=True)
+        self.assertEqual(self.events, [])
+
+
+class PublicationVersionsTest(unittest.TestCase):
+    def test_mixed_snapshot_and_release_are_rejected(self):
+        items = [{'coordinate': ['dev.tronto.gdal4k', 'gdal4k', '0.1.0-SNAPSHOT']},
+                 {'coordinate': ['dev.tronto.gdal4k', 'gdal4k-engine', '0.1.0']}]
+        with self.assertRaisesRegex(ValueError, 'Unexpected coordinate version'):
+            validate_versions(items)
+
+
+class OptionalBinariesTest(unittest.TestCase):
+    def check_repository(self, defect=None):
+        with tempfile.TemporaryDirectory() as temporary:
+            repo = Path(temporary)
+            for module in ['gdal4k', 'gdal4k-binary']:
+                directory = repo/'dev/tronto/gdal4k'/module/'0.1.0-SNAPSHOT'
+                directory.mkdir(parents=True)
+                dependency = ''
+                if defect == 'pom' and module == 'gdal4k-binary':
+                    dependency = '<dependencies><dependency><groupId>dev.tronto.gdal4k</groupId><artifactId>gdal4k-engine</artifactId></dependency></dependencies>'
+                (directory/(module+'.pom')).write_text(
+                    '<project xmlns="http://maven.apache.org/POM/4.0.0"><groupId>dev.tronto.gdal4k</groupId>'+
+                    '<artifactId>'+module+'</artifactId><version>0.1.0-SNAPSHOT</version>'+dependency+'</project>')
+                metadata = {'variants': []}
+                if defect == 'metadata' and module == 'gdal4k-binary':
+                    metadata['variants'] = [{'dependencies': [{'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-android-runtime'}]}]
+                (directory/(module+'.module')).write_text(json.dumps(metadata))
+                with zipfile.ZipFile(directory/(module+'.klib'), 'w') as archive:
+                    archive.writestr('default/manifest', 'fixture')
+                    if defect == 'payload' and module == 'gdal4k-binary':
+                        archive.writestr('default/targets/macos_arm64/included/libgdal4k.a', b'fixture')
+            with patch('sys.argv', ['check-optional-binaries.py', '--repo', str(repo), '--partial']), contextlib.redirect_stdout(io.StringIO()):
+                runpy.run_path(str(ROOT/'check-optional-binaries.py'), run_name='__main__')
+
+    def test_library_without_payload_or_engine_dependency(self):
+        self.check_repository()
+
+    def test_implicit_engine_pom_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'implicit engine'):
+            self.check_repository('pom')
+
+    def test_implicit_engine_metadata_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'implicit engine'):
+            self.check_repository('metadata')
+
+    def test_engine_embedded_in_library_klib_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'engine payload'):
+            self.check_repository('payload')
 
 
 if __name__ == '__main__':

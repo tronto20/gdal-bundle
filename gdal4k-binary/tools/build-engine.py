@@ -3,6 +3,7 @@
 import argparse, hashlib, json, os, platform, re, shlex, shutil, subprocess
 from pathlib import Path
 from toolchains import native_toolchain
+from versions import configured_binary_version
 ROOT=Path(__file__).resolve().parents[2]
 BINARY=ROOT/'gdal4k-binary'
 VCPKG_REV='3cd21e48a75f67acfef289da52893ce79144aaa1'
@@ -24,6 +25,7 @@ def link_arguments(command):
  return shlex.split(command.replace('\\','/'))
 def fingerprint():
  digest=hashlib.sha256()
+ digest.update(configured_binary_version().encode())
  for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web']:
   # WindowsPath sorts without case; compare the same slash-separated names on every host.
   for source in sorted(directory.rglob('*'),key=lambda p:p.relative_to(ROOT).as_posix()):

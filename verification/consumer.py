@@ -8,9 +8,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 from jvm_binaries import JVM_BINARIES, host_binary
+from publication_versions import ENGINE_TARGETS, library_version_from_repo
 
 ROOT=Path(__file__).resolve().parent.parent
-VERSION='3.12.4-1.0.1-SNAPSHOT'
 p=argparse.ArgumentParser()
 p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','android'])
 p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-maven')
@@ -29,11 +29,14 @@ gradle=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
 def run(args,**kwargs):subprocess.run([str(x) for x in args],check=True,**kwargs)
 if not a.no_publish:
  tasks=[]
- for module in ['gdal4k-runtime','gdal4k-binary','gdal4k']:
+ modules=['gdal4k-runtime','gdal4k-binary','gdal4k']
+ if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
+ for module in modules:
   tasks += [f':{module}:publishKotlinMultiplatformPublicationToMavenLocal',f':{module}:publish{title}PublicationToMavenLocal']
  if target=='jvm':tasks += [f':gdal4k-jvm-binaries:publish{JVM_BINARIES[b][0]}PublicationToMavenLocal' for b in binaries]
  if target=='android':tasks+=[':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal']
  run([gradle,'--console=plain',f'-Dmaven.repo.local={repo}',*tasks],cwd=ROOT)
+VERSION=library_version_from_repo(repo)
 source='''package consumer
 
 import dev.gdal4k.Gdal4k
@@ -121,6 +124,8 @@ withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRu
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
  extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
+ if target=='android':extra+='getByName("androidMain").dependencies { implementation("dev.tronto.gdal4k:gdal4k-android-runtime:'+VERSION+'") }'
+ elif target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:extra+='getByName("'+target+'Main").dependencies { implementation("dev.tronto.gdal4k:gdal4k-engine:'+VERSION+'") }'
  build='''plugins { kotlin("multiplatform") version "2.4.21"; '''+android+''' }
 repositories {
     exclusiveContent { forRepository { maven { url=uri('''+json.dumps(repo.as_uri())+''') } }; filter { includeGroup("dev.tronto.gdal4k") } }
@@ -184,7 +189,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  hidden=[]
  try:
   if platform:
-   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-binary/build/classes/kotlin/{target}/main/cinterop']:
+   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
     if original.exists():
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))

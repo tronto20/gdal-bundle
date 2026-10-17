@@ -14,7 +14,7 @@ env:
 
 jobs:
   publisher:
-    name: Central publication lifecycle
+    name: Publication and binary isolation
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

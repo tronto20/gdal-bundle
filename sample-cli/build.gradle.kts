@@ -7,13 +7,9 @@ plugins {
     alias(libs.plugins.beryx.runtime)
 }
 
-val gdalVersion = providers.gradleProperty("gdalVersion")
-    .orElse("3.12.4")
-    .get()
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
-    .orElse("1.0.1-SNAPSHOT")
+    .orElse("0.1.0-SNAPSHOT")
     .get()
-val gdal4kPackageVersion = "$gdalVersion-$gdal4kVersion"
 
 repositories {
     mavenCentral()
@@ -22,7 +18,7 @@ repositories {
         val packagesUrl = providers.gradleProperty("gdal4kPackagesUrl")
             .orElse(providers.environmentVariable("GITHUB_PACKAGES_URL"))
             .orElse(
-                if (gdal4kPackageVersion.endsWith("SNAPSHOT")) {
+                if (gdal4kVersion.endsWith("SNAPSHOT")) {
                     "https://central.sonatype.com/repository/maven-snapshots/"
                 } else {
                     "https://repo1.maven.org/maven2/"
@@ -113,8 +109,8 @@ require(jvmBinary in setOf("macos-arm64", "linux-x64-gnu", "linux-arm64-gnu", "w
     "Unsupported gdal4kJvmBinary: $jvmBinary"
 }
 dependencies {
-    implementation("$gdal4kGroup:gdal4k:$gdal4kPackageVersion")
-    runtimeOnly("$gdal4kGroup:gdal4k-binary-$jvmBinary:$gdal4kPackageVersion")
+    implementation("$gdal4kGroup:gdal4k:$gdal4kVersion")
+    runtimeOnly("$gdal4kGroup:gdal4k-binary-$jvmBinary:$gdal4kVersion")
 }
 
 kotlin {
