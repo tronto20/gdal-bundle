@@ -477,13 +477,13 @@
         require(GDALGetRasterDataType(h)==GDT_Int64,"Exact NoData type does not match band");int ok=0;auto v=GDALGetRasterNoDataValueAsInt64(h,&ok);return ok?value(v):nullValue();
     }
     if(type=="Band" && method=="setNoDataValueAsInt64_Long") {
-        require(GDALGetRasterDataType(h)==GDT_Int64,"Exact NoData type does not match band");return value(GDALSetRasterNoDataValueAsInt64(h,std::stoll(a["value"].ToString())));
+        return setBandNoData(r,h,a,"setNoDataValueAsInt64");
     }
     if(type=="Band" && method=="getNoDataValueAsUInt64") {
         require(GDALGetRasterDataType(h)==GDT_UInt64,"Exact NoData type does not match band");int ok=0;auto v=GDALGetRasterNoDataValueAsUInt64(h,&ok);return ok?value(v):nullValue();
     }
     if(type=="Band" && method=="setNoDataValueAsUInt64_ULong") {
-        require(GDALGetRasterDataType(h)==GDT_UInt64,"Exact NoData type does not match band");return value(GDALSetRasterNoDataValueAsUInt64(h,std::stoull(a["value"].ToString())));
+        return setBandNoData(r,h,a,"setNoDataValueAsUInt64");
     }
     if(type=="Band" && method=="fill_Double_Double") {
         auto out=apply(GDALFillRaster, Arg(r,h), Arg(r,a["realValue"]), Arg(r,a["imaginaryValue"]));return value(out);
@@ -534,10 +534,10 @@
         int ok;auto v=GDALGetRasterNoDataValue(h,&ok);return ok?value(v):nullValue();
     }
     if(type=="Band" && method=="setNoDataValue_Double") {
-        auto out=apply(GDALSetRasterNoDataValue, Arg(r,h), Arg(r,a["value"]));return value(out);
+        return setBandNoData(r,h,a,"setNoDataValue");
     }
     if(type=="Band" && method=="deleteNoDataValue") {
-        auto out=apply(GDALDeleteRasterNoDataValue, Arg(r,h));return value(out);
+        return setBandNoData(r,h,a,"deleteNoDataValue");
     }
     if(type=="Band" && method=="getUnitType") {
         auto out=apply(GDALGetRasterUnitType, Arg(r,h));return value(out);
