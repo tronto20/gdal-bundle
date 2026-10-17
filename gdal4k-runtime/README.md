@@ -40,6 +40,7 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 | 재투영 | `Dataset.warp`, CRS 생성·변환 및 좌표 목록 변환 |
 | 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, `Dataset.translateVector`(GDAL 공간 필터 옵션 포함) |
 | Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
+| 래스터→벡터 | `Dataset.polygonize` / `polygonizeTo`, 밴드·마스크·4/8방향 연결, GPKG·GeoJSON 등 새 벡터 파일 생성 |
 | 메모리 파일 | `/vsimem/` 바이트 입출력, 다중 파일 묶음(예: Shapefile) |
 
 다음은 객체 API를 사용하는 COG/JXL 무손실 변환 예시입니다. `runtime()`이 필요할 때 자동으로 초기화합니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
@@ -276,6 +277,17 @@ Histogram snapshots are detached; setters validate bounds and reject negative co
 Exact integer NoData APIs require the corresponding Int64/UInt64 band and retain every
 bit across the web bridge. Color tables, raster attribute tables and native block I/O
 are documented in the root README. Virtual-memory/cache pointers and progress callbacks remain unexposed.
+
+## 래스터 Polygonize
+
+분류·마스크 래스터의 같은 값 영역을 벡터 폴리곤으로 변환합니다.
+`source.polygonize("-8")`은 GPKG `GdalFiles`를 반환하고,
+`source.polygonizeTo("classes.gpkg", "-8")`는 파일에 직접 씁니다.
+`band`, `mask`, `layerName`, `fieldName`, `driver`를 named argument로 지정할 수 있습니다.
+기본 NoData/유효성 마스크를 사용하며 `-nomask`로 무시합니다. 기존 출력은 덮어쓰지 않습니다.
+정수 값은 Int64 속성에 기록합니다(UInt64·복소수 제외). 실수는 GDALFPolygonize의
+Float32 비교 규칙을 따릅니다. 입력은 호출자 소유이고, 반환 파일은 입력을 닫은 뒤에도
+사용할 수 있습니다. [옵션과 정밀도·출력 정책](../README.md#분류-래스터를-폴리곤으로-변환-polygonize)을 참고하세요.
 
 ## 벡터 Rasterize
 

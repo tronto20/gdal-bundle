@@ -71,6 +71,12 @@
     if(type=="GdalRuntime" && method=="datasetInfo_Dataset_DatasetInfoOptions") {
         return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));
     }
+    if(type=="Dataset" && method=="polygonize_String_String_Int_Band_String_String_List_String") {
+        return polygonizeDataset(r,h,a,false);
+    }
+    if(type=="Dataset" && method=="polygonizeTo_String_String_Int_Band_String_String_List_String") {
+        return polygonizeDataset(r,h,a,true);
+    }
     if(type=="Dataset" && method=="demProcessing_String_String_String_List_String") {
         return demProcessing(h,a,false);
     }
