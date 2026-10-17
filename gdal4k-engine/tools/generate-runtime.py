@@ -180,6 +180,9 @@ special('Dataset','info','return value(datasetInfo(h,a.GetArray("arguments"),tru
 special('Dataset','translate','return convertDataset(h,a,"translate");')
 special('Dataset','warp','return convertDataset(h,a,"warp");')
 special('Dataset','translateVector','return convertDataset(h,a,"vector");')
+special('Dataset','demProcessing','return demProcessing(h,a,false);')
+special('Dataset','demProcessingTo','return demProcessing(h,a,true);')
+
 special('Dataset','rasterize','return rasterizeDataset(h,a,false);')
 special('Dataset','rasterizeTo','return rasterizeDataset(h,a,true);')
 special('Dataset','getDriverShortName','return value(GDALGetDriverShortName(GDALGetDatasetDriver(h)));')

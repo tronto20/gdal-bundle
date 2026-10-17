@@ -33,6 +33,8 @@ internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine,
 }
 
 internal class BundledDataset(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Dataset {
+    override suspend fun demProcessing(processing: String, driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "demProcessing_String_String_String_List_String", mapOf("processing" to encode(processing), "driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
+    override suspend fun demProcessingTo(path: String, processing: String, driver: String, arguments: List<String>): Unit { invoke("Dataset", "demProcessingTo_String_String_String_List_String", mapOf("path" to encode(path), "processing" to encode(processing), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
     override suspend fun rasterize(driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "rasterize_String_String_List_String", mapOf("driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
     override suspend fun rasterizeTo(path: String, driver: String, arguments: List<String>): Unit { invoke("Dataset", "rasterizeTo_String_String_List_String", mapOf("path" to encode(path), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
     override suspend fun getRootGroup(): Group? { val result = invoke("Dataset", "getRootGroup", mapOf()); return engine.wrapGroup(result, this) }
