@@ -27,6 +27,9 @@ interface GdalRuntime {
      */
     suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String = "GTiff", arguments: List<String> = emptyList())
 
+
+    suspend fun createColorTable(paletteInterpretation: Int = 1): ColorTable
+    suspend fun createRasterAttributeTable(): RasterAttributeTable
     suspend fun createFeature(definition: FeatureDefn): Feature
     suspend fun createFieldDefn(name: String, type: Int): FieldDefn
 

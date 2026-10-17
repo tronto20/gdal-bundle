@@ -114,3 +114,25 @@ NoData/마스크·해상도·extent·리샘플링은 GDAL 옵션을 `arguments`�
 사용합니다. 웹의 직접 출력은 Node 파일 경로 또는 브라우저 `opfs:/`를 사용합니다.
 이 두 Warp API는 실제 파일 형식에 기록하며 VRT/MEM 출력은 지원하지 않습니다.
 실패·취소 후 부분 출력 파일은 호출자가 정리합니다. 기존 단일 Dataset 변환 API는 유지됩니다.
+
+### Band 색상표·RAT·블록 접근
+
+`runtime.createColorTable()`은 수정 가능한 색상표를 만듭니다. `band.getColorTable()`은
+Band와 수명이 분리된 복사본을 반환하므로 변경을 반영하려면 `band.setColorTable(table)`을
+호출합니다. `use` 또는 `close()`로 소유한 색상표를 해제합니다.
+
+`runtime.createRasterAttributeTable()`은 Integer/Real/String 열을 가진 RAT를 만듭니다.
+`readIntegerValues(column, startRow, count)` 등의 열 구간 API는 요청한 행만 읽습니다.
+`band.getDefaultRAT()`은 전체 표를 복사하지 않는 참조입니다. Band/Dataset이 닫히거나
+`setDefaultRAT`으로 표를 교체하면 기존 참조는 무효화됩니다. 독립 사본은 `cloneTable()`로
+명시적으로 만듭니다. 변경의 파일 반영 여부는 `changesAreWrittenToFile()`과 드라이버 정책을
+따르며, 자동 반영되지 않는 표는 `setDefaultRAT`으로 다시 연결합니다. Boolean/DateTime/WKB의
+전용 RAT 접근은 아직 노출하지 않습니다. 값 읽기·쓰기는 열의 형식과 일치하는 메서드를
+사용하며 암시적인 문자열/숫자 변환을 하지 않습니다.
+
+`readBlock`/`writeBlock`은 변환 없는 **원래 픽셀 형식의 바이트**를 사용합니다. 버퍼는
+`getBlockSize()`의 폭 × 높이 × 픽셀 바이트 수를 담아야 하며 다중 바이트 값은 네이티브
+바이트 순서를 따릅니다. `getActualBlockSize`로 가장자리 유효 영역을 구할 수 있고,
+읽을 때 유효 영역 밖 패딩은 0으로 채웁니다. 큰 버퍼의 나머지는 보존합니다.
+타입 변환이나 리샘플링에는 기존 `readRaster`/`writeRaster`를 사용합니다. 직접 블록 접근
+전에 대기 중인 RasterIO 쓰기를 flush하며, 직접 쓰기는 기존 블록 캐시도 비웁니다.
