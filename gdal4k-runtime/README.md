@@ -274,3 +274,14 @@ Histogram snapshots are detached; setters validate bounds and reject negative co
 Exact integer NoData APIs require the corresponding Int64/UInt64 band and retain every
 bit across the web bridge. Color tables, raster attribute tables, native block I/O,
 virtual-memory/cache pointers and progress callbacks are still unexposed.
+
+## 벡터 Rasterize
+
+벡터 Dataset의 `rasterize(arguments=...)`는 `GdalFiles`를 반환하고, `rasterizeTo(path, arguments=...)`는 Node 파일·브라우저 `opfs:/`·OS 경로에 직접 씁니다. 입력 핸들은 호출자가 계속 소유합니다. GDAL `gdal_rasterize` 인자(`-burn`/`-a`, `-te`, `-ts`/`-tr`, `-l`/`-where`/`-sql`, `-add`, `-i`, `-at`, NoData·자료형·생성 옵션)를 사용합니다. 기본 출력은 GTiff이며, MEM/VRT 출력과 기존 Dataset 핸들에 대한 in-place 갱신은 제공하지 않습니다. 레이어 필터·읽기 위치의 변화와 geometry/CRS 처리는 GDAL 유틸리티 정책을 따릅니다. 출력 크기를 명시하고 큰 결과에는 `rasterizeTo`를 사용하세요. 직접 출력의 실패·취소 시 부분 파일은 호출자가 관리합니다.
+
+```kotlin
+source.rasterizeTo(
+    outputPath,
+    arguments = listOf("-a", "value", "-te", "0", "0", "2", "2", "-ts", "256", "256"),
+)
+```
