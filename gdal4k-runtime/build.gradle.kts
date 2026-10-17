@@ -1,32 +1,18 @@
-import org.gradle.api.publish.PublishingExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
-    id("maven-publish")
+    id("com.android.kotlin.multiplatform.library") version "8.11.2"
+    `maven-publish`
 }
-
-repositories {
-    mavenCentral()
-}
-
-extensions.configure<PublishingExtension> {
-    publications.withType<org.gradle.api.publish.maven.MavenPublication>().configureEach {
-        pom {
-            name.set("gdal4k-runtime")
-            description.set("Kotlin Multiplatform runtime API for GDAL")
-        }
-    }
-}
-
+repositories { google(); mavenCentral() }
 kotlin {
-    jvmToolchain(libs.versions.jvm.jdk.get().toInt())
-    jvm()
+    jvmToolchain(21)
+    jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
+    androidLibrary { namespace = "dev.gdal4k.runtime"; compileSdk = 35; minSdk = 28 }
+    js { nodejs(); browser() }; wasmJs { nodejs(); browser() }
+    macosArm64(); macosX64(); linuxX64(); linuxArm64(); mingwX64()
+    iosArm64(); iosSimulatorArm64(); iosX64()
+    sourceSets.commonMain.dependencies { api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") }
 }
 
-tasks.withType<KotlinCompile>().configureEach {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.fromTarget(libs.versions.jvm.compatibility.get()))
-    }
-}
+tasks.withType<JavaCompile>().configureEach { options.release.set(17) }

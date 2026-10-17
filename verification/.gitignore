@@ -1,0 +1,8 @@
+/tools/
+/build/
+/.gradle/
+/.kotlin/
+/node_modules/
+/results/
+/local.properties
+__pycache__/

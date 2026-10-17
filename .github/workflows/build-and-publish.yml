@@ -1,179 +1,55 @@
 name: Build and Publish
-
 on:
   pull_request:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - 'buildSrc/**'
-      - 'gdal4k-runtime/**'
-      - 'gdal-bundler/**'
-      - 'sample-app/**'
+    branches: [main]
+    paths: ['.github/workflows/**', 'gdal4k*/**', 'verification/**', 'sample-cli/**', 'sample-app/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'kotlin-js-store/**']
   push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradle/**'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - 'buildSrc/**'
-      - 'gdal4k-runtime/**'
-      - 'gdal-bundler/**'
-      - 'sample-app/**'
+    branches: [main]
+    paths: ['.github/workflows/**', 'gdal4k*/**', 'verification/**', 'sample-cli/**', 'sample-app/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'kotlin-js-store/**']
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Also publish the GitHub Packages artifacts'
-        required: false
+        description: Publish the verified artifacts after all platform checks pass
         type: boolean
         default: false
-
+      publish_target:
+        description: Maven repository
+        type: choice
+        options: [githubPackages, mavenCentral]
+        default: githubPackages
 permissions:
   contents: read
-
 concurrency:
-  group: gdal4k-${{ github.workflow }}-${{ github.ref }}
+  group: gdal4k-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
-
-defaults:
-  run:
-    shell: bash
-
 jobs:
-  build-binary:
-    name: Build ${{ matrix.classifier }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 240
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - classifier: linux-amd64
-            runner: ubuntu-24.04
-            python-version: '3.12'
-            allow-failure: false
-          - classifier: linux-arm64
-            runner: ubuntu-24.04-arm
-            python-version: '3.12'
-            allow-failure: false
-          - classifier: macos-arm64
-            runner: macos-latest
-            python-version: '3.12'
-            allow-failure: false
-          - classifier: windows-amd64
-            runner: windows-latest
-            python-version: '3.12'
-            allow-failure: false
-    continue-on-error: ${{ matrix.allow-failure }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Build GDAL bundle
-        if: matrix.runner != 'windows-latest'
-        run: ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none :gdal4k-binary:buildAndBundleGdal
-
-      - name: Install Conda
-        if: matrix.runner == 'windows-latest'
-        shell: pwsh
-        run: .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none :gdal4k-binary:installConda
-
-      - name: Install GDAL deps
-        if: matrix.runner == 'windows-latest'
-        shell: pwsh
-        run: .\gdal-bundler\scripts\install_gdal_deps_windows.ps1 -CondaPrefix .\gdal-bundler\build\conda -CondaExe .\gdal-bundler\build\conda\Scripts\conda.exe
-
-      - name: Build GDAL bundle (Windows)
-        if: matrix.runner == 'windows-latest'
-        shell: pwsh
-        run: .\gradlew.bat --no-daemon --no-watch-fs --console=plain -q --warning-mode=none -PskipCondaDepsInstall=true :gdal4k-binary:buildAndBundleGdal
-
-      - name: Upload bundle artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: gdal-bundle-${{ matrix.classifier }}
-          path: gdal-bundler/build/gdal-bundle/${{ matrix.classifier }}/gdal/**
-          if-no-files-found: error
-          retention-days: 7
-
-  publish-github-packages:
-    name: Publish GitHub Packages
-    if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish)
-    needs:
-      - build-binary
+  verify:
+    uses: ./.github/workflows/library-tests.yml
+  publish:
+    needs: verify
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
-    env:
-      GITHUB_PACKAGES_URL: https://maven.pkg.github.com/${{ github.repository }}
-      GITHUB_ACTOR: ${{ github.actor }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-
-      - name: Download Linux amd64 bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gdal-bundle-linux-amd64
-          path: gdal-bundler/build/gdal-bundle/linux-amd64
-
-      - name: Download Linux arm64 bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gdal-bundle-linux-arm64
-          path: gdal-bundler/build/gdal-bundle/linux-arm64
-
-      - name: Download macOS arm64 bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gdal-bundle-macos-arm64
-          path: gdal-bundler/build/gdal-bundle/macos-arm64
-
-      - name: Download Windows amd64 bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gdal-bundle-windows-amd64
-          path: gdal-bundler/build/gdal-bundle/windows-amd64
-
-      - name: Publish runtime and binary packages
-        run: >
-          ./gradlew --no-daemon --no-watch-fs --console=plain -q --warning-mode=none
-          -Pgdal4kVersion=0.1.0-${{ github.sha }}
-          -PskipNativeBundleBuild=true
-          :gdal4k-runtime:publish
-          :gdal4k-binary:publish
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: '21' }
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - uses: actions/download-artifact@v4
+        with: { name: gdal4k-maven, path: verification/build/downloads }
+      - run: python -c 'import tarfile; tarfile.open("verification/build/downloads/complete-maven.tar.gz").extractall(filter="data")'
+      - name: Publish exactly the tested Maven artifacts
+        env:
+          PUBLISH_TARGET: ${{ inputs.publish_target || 'githubPackages' }}
+          GITHUB_PACKAGES_URL: https://maven.pkg.github.com/${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: python verification/publish.py

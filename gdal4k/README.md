@@ -1,0 +1,131 @@
+# 공통 API
+
+`gdal4k-runtime`의 기존 GDAL 객체 인터페이스를 모든 지원 타깃에 공개하고, `gdal4k-binary`가 구현합니다. 테스트 전용 인터페이스/contract 모듈은 없습니다. `gdal4k`는 두 모듈을 함께 제공하는 진입점입니다.
+
+## 초기화와 수명
+
+```kotlin
+import dev.gdal4k.Gdal4k
+import dev.gdal4k.runtime.*
+
+suspend fun readBand(bytes: ByteArray): ByteArray {
+    val runtime = Gdal4k.runtime() // 초기화되지 않았다면 자동 준비
+    return runtime.openDataset("image.tif", bytes).use { dataset ->
+        val result = ByteArray(dataset.getRasterXSize() * dataset.getRasterYSize())
+        requireNotNull(dataset.getRasterBand(1)).use { band ->
+            check(band.readRaster(result) == 0)
+        }
+        result
+    }
+}
+```
+
+이 예시는 작은 Byte 래스터용입니다. 큰 영상은 밴드의 window 인자를 사용해 나눠 읽습니다. `GdalDataType`은 공통 GDAL 데이터 타입 상수를 제공합니다. JVM의 `org.gdal.*` SWIG 클래스에는 의존하지 않습니다.
+
+`runtime()`은 `suspend` 함수입니다. 최초 호출이 내장 엔진을 초기화하고, 동시에 호출한 coroutine들은 하나의 초기화 결과를 공유합니다. 준비된 뒤에는 같은 런타임을 반환합니다. 초기화와 명시적 종료는 같은 잠금으로 직렬화하며, 닫은 뒤 다음 `runtime()` 호출은 새 엔진을 만듭니다. 기존 핸들은 새 엔진으로 자동 이관되지 않습니다.
+
+`prepare()`는 앱 시작 시 엔진을 미리 로딩하고 싶은 경우만 호출하는 선택 기능입니다. binary 모듈의 호환 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 같은 초기화·수명 규칙을 사용합니다. GDAL 호출과 런타임 초기화는 `suspend`이고, 이미 확보한 Kotlin 값의 프로퍼티 접근은 동기입니다.
+
+`Gdal4k.close()`는 앱 종료 시 반드시 호출해야 하는 함수가 아닙니다. 앱이 살아 있는 동안 엔진 컨텍스트·데이터셋 핸들·Worker를 명시적으로 반환하거나 테스트 사이 상태를 초기화할 때 사용합니다. 프로세스가 종료되면 메모리는 회수되지만, 이는 출력 파일 쓰기의 정상 완료를 보장하지 않습니다. **데이터셋은 계속 `use`로 닫아 flush와 자원 정리를 보장해야 합니다.**
+
+공유 런타임을 각 작업이나 Android Activity 종료마다 닫으면 다른 작업의 핸들도 무효화됩니다. 다른 사용자가 없음을 아는 소유자가 명시적 종료를 결정합니다. Android 실제 기기에서는 [`Application.onTerminate()`가 호출되지 않으므로](https://developer.android.com/reference/android/app/Application#onTerminate()), 여기에 정리를 의존하지 않습니다.
+
+## 제공 기능
+
+| 영역 | 공통 API에서 가능한 작업 |
+| --- | --- |
+| 래스터 | 데이터셋·밴드 열기/생성, Byte/Short/Int/Long/Float/Double 배열 읽기·쓰기, window 읽기·쓰기 |
+| 공간 정보 | 영상 크기·밴드 타입·투영·GeoTransform·GCP, NoData·색 해석·마스크·overview 조회/생성 |
+| 포맷 변환 | `Driver.createCopy` 또는 `Dataset.translate`, GTiff·COG·JPEGXL 출력과 JXL 압축 |
+| 재투영 | `Dataset.warp`, CRS 생성·변환 및 좌표 목록 변환 |
+| 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, `Dataset.translateVector`(GDAL 공간 필터 옵션 포함) |
+| Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
+| 메모리 파일 | `/vsimem/` 바이트 입출력, 다중 파일 묶음(예: Shapefile) |
+
+다음은 객체 API를 사용하는 COG/JXL 무손실 변환 예시입니다. `runtime()`이 필요할 때 자동으로 초기화합니다. 호출자는 서로 겹치지 않는 `/vsimem/` 경로를 사용합니다.
+
+```kotlin
+suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): ByteArray {
+    val runtime = Gdal4k.runtime()
+    try {
+        runtime.writeMemoryFile(inputPath, input)
+        runtime.openDataset(inputPath).use { source ->
+            requireNotNull(runtime.getDriver("COG")).use { driver ->
+                requireNotNull(driver.createCopy(
+                    outputPath, source,
+                    options = listOf("COMPRESS=JXL", "JXL_LOSSLESS=YES"),
+                )).close()
+            }
+        }
+        return runtime.readMemoryFile(outputPath)
+    } finally {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+            runtime.deleteMemoryFile(inputPath)
+            runtime.deleteMemoryFile(outputPath)
+        }
+    }
+}
+```
+
+단독 JPEG XL 파일은 드라이버를 `JPEGXL`, 옵션을 `LOSSLESS=YES`로 바꿉니다. 입력 타입·밴드 구성은 선택한 드라이버가 지원해야 합니다. GDAL 전체 C/C++ API를 모두 노출한 것은 아니며, 객체 API의 정확한 메서드는 `gdal4k-runtime` 인터페이스가 기준입니다.
+
+## 실행과 취소
+
+| 플랫폼 | GDAL 실행 위치 | 내장 방식 |
+| --- | --- | --- |
+| JVM | `Dispatchers.IO` | JAR의 OS/아키텍처별 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
+| Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
+| Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
+| JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
+
+Android는 API 28 이상에서 64비트 `arm64-v8a`, `x86_64`만 지원합니다. 32비트 ARM/x86은 배포·테스트 대상에서 제외합니다.
+
+한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
+
+큰 배열에는 JSON 직렬화·복사 비용이 있으므로 래스터 window 단위로 나눠 처리하는 편이 좋습니다. 현재 응답성 테스트는 GDAL의 JXL 연산이 호출 스레드·웹 이벤트 루프 밖에서 실행되는지 검증합니다.
+
+대기 중인 호출은 취소할 수 있습니다. 이미 시작한 GDAL C 호출은 중간에 강제 중단하지 않고 완료한 뒤 핸들/결과를 정리합니다. 따라서 coroutine 취소가 오래 걸리는 GDAL 연산을 즉시 멈추지는 않습니다. 웹 Worker를 강제로 종료해서 데이터셋 상태를 손상시키는 동작도 하지 않습니다.
+
+JS와 wasmJs가 사용하는 **GDAL 엔진 자체는 일반 WebAssembly**입니다. JS 경로는 Kotlin/Wasm의 Wasm GC를 지원하지 않는 브라우저에서도 기본 Wasm·Worker·ES module을 지원하면 사용할 수 있습니다. WebAssembly 자체가 없는 환경에서는 동작하지 않습니다. wasmJs로 컴파일한 Kotlin 앱은 Kotlin/Wasm의 브라우저 요구 사항도 충족해야 합니다. Node는 `process.getBuiltinModule`을 제공하는 20.16+ / 22+가 필요합니다. 웹 CSP는 Blob Worker, 모듈과 Wasm 실행을 허용해야 합니다. 엔진은 pthread/SharedArrayBuffer를 요구하지 않습니다.
+
+## 데이터와 드라이버
+
+GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브러리의 라이선스 고지를 바이너리에 포함합니다. 외부 설치나 `GDAL_DATA` / `PROJ_DATA` 지정이 필요하지 않습니다. 선택적 지역 변환 grid 파일은 포함하지 않습니다.
+
+공통 빌드 프로필은 GDAL 기본 드라이버와 GEOS, JPEG, PNG, SQLite, WebP, Zstd, Expat, OpenJPEG, JPEG XL입니다. JPEGXL 드라이버와 GTiff/COG의 `COMPRESS=JXL`을 검증합니다. **모든 GDAL 선택 드라이버를 포함한다는 뜻은 아닙니다.** HDF5/netCDF/Parquet/PostgreSQL 등의 추가 SDK와 CURL 기반 원격 VFS는 이 프로필에 포함하지 않습니다. 웹에서는 앱이 HTTP로 받은 바이트를 `writeMemoryFile`로 전달할 수 있습니다. 원래 Conda 배포와 드라이버 목록이 같다고 가정하지 마세요.
+
+`runtime.versionInfo("THIRD_PARTY_LICENSES")`로 실제 포함된 고지를 조회합니다. 기능 감지는 `getDriver(name)`의 결과로 수행합니다.
+
+## 하나의 진입점과 바이트 입력
+
+공개 사용 진입점은 `Gdal4k`입니다. `Gdal.create()`, `GdalSession`, 별도의 `GdalDataset` 및 Android 전용 세션 팩토리는 제거했습니다. 초기화·Worker·호출 직렬화·종료를 기존 runtime에 통합했습니다. 기존 `Gdal4kBinary` 초기화 함수는 binary 모듈의 호환 진입점으로 유지합니다.
+
+경로, 단일 바이트 파일, 다중 파일 입력 모두 `runtime.openDataset(...)`으로 열고 **같은 `Dataset` 인터페이스**를 반환합니다. 따라서 바이트 입력에서도 `getRasterBand`, `getLayer` 같은 기존 API와 편의 변환을 함께 사용합니다.
+
+```kotlin
+import dev.gdal4k.Gdal4k
+import dev.gdal4k.runtime.*
+
+suspend fun toCog(bytes: ByteArray): ByteArray {
+    val runtime = Gdal4k.runtime()
+    return runtime.openDataset("input.tif", bytes).use { dataset ->
+        dataset.translate(
+            driver = "COG",
+            name = "output.tif",
+            arguments = listOf("-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES"),
+        ).mainFile().bytes
+    }
+}
+```
+
+`Dataset.info()`는 JSON 문자열, `translate` / `warp` / `translateVector`는 `GdalFiles`를 반환합니다. `Dataset.readRaster(band, window)`는 기존 `Band.readRaster`를 통해 `DoubleArray`를 읽습니다. `runtime.drivers()`는 포함된 드라이버 목록을, `runtime.transform(source, target, points)`는 기존 SRS·좌표변환 API를 이용한 좌표 목록 변환을 제공합니다.
+
+`GdalFile`은 이름과 바이트, `GdalFiles`는 Shapefile 같은 다중 파일 묶음을 담는 값입니다. 두 타입 모두 `gdal4k-runtime`에 있으며, 별도 엔진이나 데이터셋 핸들이 아닙니다. 바이트 입력은 서로 다른 임시 `/vsimem/` 디렉터리를 사용하고 데이터셋을 닫을 때 정리됩니다. 직접 지정한 경로나 `writeMemoryFile`의 파일은 호출자가 관리합니다.
+
+JSON/Base64 전송 코드는 binary 모듈 내부에만 있습니다. 공개 `GdalOptions` 없이 내장 엔진을 사용합니다. GDAL·PROJ 경로나 웹 엔진 URL을 앱에서 지정하지 않습니다.
+
+## 검증
+
+테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
+
+지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 64비트 ABI 2종을 빌드하고 x86_64 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.
