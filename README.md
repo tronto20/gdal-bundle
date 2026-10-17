@@ -234,3 +234,5 @@ are ambiguous. Terrain analysis in a geographic CRS may require reprojection.
 The source stays caller-owned. Direct outputs and sidecars, including partial
 outputs after failure/cancellation, belong to the caller. Direct output avoids
 copying the resulting file into a `GdalFiles` buffer.
+
+선택적 HDF5·netCDF, Parquet, PostgreSQL 엔진은 [드라이버 프로필](gdal4k-engine/DRIVER-PROFILES.md)에서 별도 버전·로컬 Maven 아카이브로 빌드합니다. 기본 패키지와 타깃은 유지하며, 추가 드라이버 지원은 해당 프로필의 실제 CI 검증 범위에 한정합니다.
