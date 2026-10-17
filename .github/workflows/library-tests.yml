@@ -81,6 +81,7 @@ jobs:
         with:
           name: evidence-${{ matrix.target }}
           path: |
+            gdal4k/build/test-results/
             gdal4k-runtime/build/test-results/
             gdal4k-runtime/build/reports/tests/
             verification/results/published-consumer-*/

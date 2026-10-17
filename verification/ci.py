@@ -74,7 +74,7 @@ def main():
         cross=target in ['iosArm64','linuxArm64']
         options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
         tasks=[f':gdal4k-runtime:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k-runtime:{target}Test']
-        if target in ['macosArm64','linuxX64','mingwX64']:tasks+=[':gdal4k-runtime:jvmTest']
+        if target in ['macosArm64','linuxX64','mingwX64']:tasks+=[':gdal4k:jvmTest',':gdal4k-runtime:jvmTest']
         gradle(*tasks,options=options)
         run(sys.executable, ROOT/'verification/audit-engine.py', PLATFORMS[target])
         publish(target)

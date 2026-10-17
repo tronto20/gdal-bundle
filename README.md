@@ -180,8 +180,8 @@ Supported modes are `hillshade`, `slope`, `aspect`, `TRI`, `TPI` and `roughness`
 color-relief palette input and progress callbacks are not exposed in this API.
 
 ```kotlin
-val files = dem.demProcessing("slope", arguments = listOf("-s", "1"))
-dem.demProcessingTo("opfs:/terrain/slope.tif", "slope", arguments = listOf("-p", "-compute_edges"))
+val files = dem.demProcessing("slope", "-s", "1")
+dem.demProcessingTo("opfs:/terrain/slope.tif", "slope", "-p", "-compute_edges")
 ```
 
 Arguments are the selected gdaldem mode's options, including band selection,

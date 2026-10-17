@@ -132,6 +132,31 @@ GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브
 
 ## 하나의 진입점과 바이트 입력
 
+GDAL 유틸리티 옵션은 `import dev.gdal4k.runtime.*` 후 vararg로 전달할 수 있습니다.
+`info`, `translate`/`translateTo`, `warp`/`warpTo`, `translateVector`/`translateVectorTo`,
+`rasterize`/`rasterizeTo`, `demProcessing`/`demProcessingTo`와 런타임의
+`buildVRT`, 다중 입력 `warp`/`warpTo`에 적용합니다.
+
+```kotlin
+dem.demProcessing("slope", "-compute_edges", "-s", "1", driver = "COG")
+dataset.translateTo("result.tif", "-co", "COMPRESS=JXL", driver = "COG")
+runtime.warpTo(listOf(left, right), "mosaic.tif", "EPSG:3857", "-r", "bilinear")
+
+// 동적으로 만든 List도 기존 방식으로 전달합니다.
+dem.demProcessing("slope", arguments = listOf("-compute_edges", "-s", "1"))
+```
+
+vararg 뒤의 `driver`·`name`은 이름으로 지정합니다. 이전의 `translate("COG")`는
+`translate(driver = "COG")`로, `translateVector("GPKG", "out.gpkg")`는
+`translateVector(driver = "GPKG", name = "out.gpkg")`로 옮깁니다. 기존 List를 명시한
+호출과 옵션 생략 호출은 지원합니다. 옵션을 생략하는 호출도 확장 함수를 사용하므로
+명시적 import를 쓰는 앱은 해당 함수 또는 `dev.gdal4k.runtime.*`를 import하고 다시 컴파일합니다.
+기존 바이너리의 기본 인자 호출과의 호환성을 보장하는 변경은 아닙니다.
+
+vararg 확장 함수는 `arguments.asList()`로 배열 뷰를 전달합니다. 이 단계에서 요소를
+복사하지 않으며, 내장 런타임은 첫 suspend 지점 전에 옵션을 직렬화합니다. Kotlin의
+vararg 배열 생성이나 spread 전달 자체의 할당·복사까지 없애는 것은 아닙니다.
+
 공개 사용 진입점은 `Gdal4k`입니다. `Gdal.create()`, `GdalSession`, 별도의 `GdalDataset` 및 Android 전용 세션 팩토리는 제거했습니다. 초기화·Worker·호출 직렬화·종료를 기존 runtime에 통합했습니다.
 
 경로, 단일 바이트 파일, 다중 파일 입력 모두 `runtime.openDataset(...)`으로 열고 **같은 `Dataset` 인터페이스**를 반환합니다. 따라서 바이트 입력에서도 `getRasterBand`, `getLayer` 같은 기존 API와 편의 변환을 함께 사용합니다.
