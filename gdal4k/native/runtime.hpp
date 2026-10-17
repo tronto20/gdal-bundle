@@ -5,6 +5,7 @@
 #include <cpl_vsi.h>
 #include <ogr_api.h>
 #include <ogr_srs_api.h>
+#include <ogrsf_frmts.h>
 #include <cpl_json.h>
 #include <cpl_string.h>
 #include <functional>
@@ -17,6 +18,7 @@
 #include <atomic>
 
 #include <cstring>
+#include <cctype>
 #include <charconv>
 #include <cpl_float.h>
 #include <iomanip>
@@ -284,6 +286,7 @@ inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) 
 #include "runtime-md.hpp"
 #include "runtime-band.hpp"
 #include "runtime-band-structures.hpp"
+#include "runtime-vector.hpp"
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));

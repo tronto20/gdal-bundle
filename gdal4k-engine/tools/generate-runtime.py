@@ -78,6 +78,19 @@ for m in ['cloneGeometry','centroid','pointOnSurface','boundary','convexHull','b
 SPECIAL={}
 def special(cls,name,body):SPECIAL[(cls,name)]=body
 
+for method in ['createGeometryFromWkt','createGeometryFromWkb','createGeometryFromGeoJson']:
+    OWNED.add(('GdalRuntime',method))
+    special('GdalRuntime',method,'return createVectorGeometry(r,a,"'+method+'");')
+for method in ['intersection','union','difference']:
+    OWNED.add(('Geometry',method))
+    special('Geometry',method,'return vectorOverlay(r,h,a,"'+method+'");')
+OWNED.update({('Geometry','getSpatialReference'),('Layer','getSpatialFilter')})
+special('Geometry','getSpatialReference','auto s=OGR_G_GetSpatialReference(h);return r.result(s?OSRClone(s):nullptr,"SpatialReference",true);')
+special('Geometry','assignSpatialReference','auto s=a["spatialReference"].GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(a["spatialReference"]);OGR_G_AssignSpatialReference(h,s);return nullValue();')
+special('Layer','getSpatialFilter','auto g=OGR_L_GetSpatialFilter(h);return r.result(g?OGR_G_Clone(g):nullptr,"Geometry",true);')
+for method in ['setSpatialFilter','setSpatialFilterRect']:
+    special('Layer',method,'return setVectorSpatialFilter(r,h,a,'+str(method.endswith('Rect')).lower()+');')
+
 special('GdalRuntime','writeMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");auto slash=path.find_last_of(char(47));VSIMkdirRecursive(path.substr(0,slash).c_str(),0700);auto f=VSIFOpenL(path.c_str(),"wb");require(f!=nullptr,"Cannot create memory file");auto input=a.GetArray("bytes");std::vector<GByte> data;for(auto v:input)data.push_back(static_cast<GByte>(v.ToInteger()));auto written=VSIFWriteL(data.data(),1,data.size(),f);auto code=VSIFCloseL(f);require(written==data.size()&&code==0,"Cannot write memory file");return nullValue();')
 special('GdalRuntime','readMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");vsi_l_offset size=0;auto p=VSIGetMemFileBuffer(path.c_str(),&size,false);require(p!=nullptr,"Memory file does not exist");return numbers(p,size);')
 special('GdalRuntime','deleteMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");VSIStatBufL info;if(VSIStatL(path.c_str(),&info)==0){auto code=VSI_ISDIR(info.st_mode)?VSIRmdirRecursive(path.c_str()):VSIUnlink(path.c_str());require(code==0,"Cannot remove memory file");}return nullValue();')
