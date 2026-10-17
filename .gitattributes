@@ -2,3 +2,6 @@
 *.jar binary
 *.png binary
 *.tif binary
+
+# Imported patches retain upstream context and removed-line whitespace verbatim.
+gdal4k-engine/ports/**/*.patch -whitespace
