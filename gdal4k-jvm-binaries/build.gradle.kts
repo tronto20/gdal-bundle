@@ -9,7 +9,7 @@ val binaries = listOf(
     JvmBinary("windowsX64", "windows-x64", "windows-amd64", "gdal4k.dll"),
 )
 binaries.forEach { binary ->
-    val artifactName = "gdal4k-binary-${binary.suffix}"
+    val artifactName = "gdal4k-engine-jvm-${binary.suffix}"
     val payload = project(":gdal4k-binary").layout.buildDirectory.file("jvm-resources/gdal4k/${binary.platform}/${binary.library}")
     val jar = tasks.register<Jar>("${binary.publication}Jar") {
         val engineTask = binary.platform.split('-').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }

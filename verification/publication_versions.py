@@ -3,16 +3,27 @@ import xml.etree.ElementTree as ET
 from jvm_binaries import JVM_BINARIES
 
 LIBRARY_TARGETS = ['jvm','android','js','wasm-js','macosarm64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64']
-ENGINE_TARGETS = ['js','wasm-js','macosarm64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64']
-JVM_PAYLOADS = {'gdal4k-binary-'+b for b in JVM_BINARIES}
+ENGINE_COORDINATES = {
+    'js': 'gdal4k-engine-js',
+    'wasm-js': 'gdal4k-engine-wasm-js',
+    'macosarm64': 'gdal4k-engine-native-macos-arm64',
+    'linuxx64': 'gdal4k-engine-native-linux-x64-gnu',
+    'linuxarm64': 'gdal4k-engine-native-linux-arm64-gnu',
+    'mingwx64': 'gdal4k-engine-native-mingw-x64',
+    'iosarm64': 'gdal4k-engine-native-ios-arm64',
+    'iossimulatorarm64': 'gdal4k-engine-native-ios-simulator-arm64',
+}
+ENGINE_TARGETS = list(ENGINE_COORDINATES)
+ANDROID_ENGINE = 'gdal4k-engine-android-arm64'
+JVM_PAYLOADS = {'gdal4k-engine-jvm-'+b for b in JVM_BINARIES}
 
 
 def is_binary_module(module):
-    return module == 'gdal4k-android-runtime' or module == 'gdal4k-engine' or module.startswith('gdal4k-engine-') or module in JVM_PAYLOADS
+    return module == 'gdal4k-engine' or module.startswith('gdal4k-engine-')
 
 
 def expected_coordinates():
-    return {m+s for m in ['gdal4k','gdal4k-runtime','gdal4k-binary'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine'+s for s in ['', *['-'+t for t in ENGINE_TARGETS]]} | {'gdal4k-android-runtime'} | JVM_PAYLOADS
+    return {m+s for m in ['gdal4k','gdal4k-runtime','gdal4k-binary'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine', ANDROID_ENGINE} | set(ENGINE_COORDINATES.values()) | JVM_PAYLOADS
 
 
 def library_version_from_repo(repo):

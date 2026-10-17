@@ -8,10 +8,10 @@
 
 | 앱 타깃 | 추가 의존성 (버전 `0.1.0-SNAPSHOT`) |
 | --- | --- |
-| JVM | 해당 OS/CPU의 `gdal4k-binary-macos-arm64`, `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-windows-x64`를 `runtimeOnly`로 선택 |
-| Android ARM64 | `gdal4k-android-runtime` |
-| Kotlin/Native | `gdal4k-engine`을 해당 Native source set의 `implementation`으로 선택 |
-| JS·wasmJs | `gdal4k-engine`을 해당 웹 source set의 `implementation`으로 선택 |
+| JVM | 해당 OS/CPU의 `gdal4k-engine-jvm-macos-arm64`, `gdal4k-engine-jvm-linux-x64-gnu`, `gdal4k-engine-jvm-linux-arm64-gnu`, `gdal4k-engine-jvm-windows-x64`를 `runtimeOnly`로 선택 |
+| Android ARM64 | `gdal4k-engine-android-arm64` |
+| Kotlin/Native | `gdal4k-engine`을 해당 Native source set의 `implementation`으로 선택 (해당 `gdal4k-engine-native-*` 좌표로 리다이렉트) |
+| JS·wasmJs | `gdal4k-engine`을 해당 웹 source set의 `implementation`으로 선택 (`gdal4k-engine-js` / `gdal4k-engine-wasm-js`) |
 
 모두 같은 `dev.tronto.gdal4k` group을 사용합니다. 선택한 엔진은 앱 의존성에 함께 패키징되므로 별도 GDAL 설치·라이브러리 경로·새 초기화 API가 필요하지 않습니다. 아래의 모든 기능과 고급 API도 같은 의존성 선택 규칙을 따릅니다.
 
