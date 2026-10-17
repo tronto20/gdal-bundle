@@ -103,7 +103,7 @@ interface Dataset {
 
     suspend fun createLayer(name: String, spatialReference: SpatialReference? = null, geometryType: Int = 0, options: List<String> = emptyList()): Layer?
     suspend fun copyLayer(source: Layer, name: String, options: List<String> = emptyList()): Layer?
-    /** Invalidates handles to the deleted layer and its borrowed children. */
+    /** Invalidates handles to the deleted layer and its borrowed children. Closes active SQL result sets before deleting. */
     suspend fun deleteLayer(index: Int): Int
     /** Close the returned result with use; SQL without a result set returns null. */
     suspend fun executeSQL(statement: String, spatialFilter: Geometry? = null, dialect: String = ""): Layer?
