@@ -90,6 +90,10 @@ special('GdalRuntime','createGCP','auto p=static_cast<GDAL_GCP*>(CPLCalloc(1,siz
 special('GdalRuntime','openDataset','if(a["files"].IsValid())return openMemoryDataset(r,a);auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);')
 special('GdalRuntime','datasetInfo','return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));')
 special('GdalRuntime','drivers','return driverList();')
+OWNED.add(('GdalRuntime','buildVRT'))
+special('GdalRuntime','buildVRT','return buildVirtualDataset(r,a);')
+special('GdalRuntime','warp','return warpDatasets(r,a,false);')
+special('GdalRuntime','warpTo','return warpDatasets(r,a,true);')
 PARENT_OWNED={('Dataset','getRootGroup'),('Group','openGroup'),('Group','openArray'),('Group','createGroup'),('Group','createDimension'),('Group','createArray')}
 OWNED.update({('Driver','createMultidimensional'),('GdalRuntime','createGlobFieldDomain'),('GdalRuntime','createRelationship'),('Dataset','getFieldDomain'),('Dataset','getRelationship')})
 PREFIX.update({'Group':'GDALGroup','Dimension':'GDALDimension','MDArray':'GDALMDArray','FieldDomain':'OGR_FldDomain_','Relationship':'GDALRelationship'})

@@ -49,7 +49,7 @@ async function dispatch({id, operation, payload, file}) {
                     throw new Error('Browser paths require a selected File; use openDataset(file) or an HTTP(S) URL');
                 }
             } else if (file) throw new Error('A browser File can only be attached to openDataset');
-            if (args?.type === 'Dataset' && /^(translateTo|warpTo|translateVectorTo)_/.test(args.method)) args.parameters.path = outputs.path(args.parameters.path);
+            if ((args?.type === 'Dataset' || args?.type === 'GdalRuntime') && /^(translateTo|warpTo|translateVectorTo)_/.test(args.method)) args.parameters.path = outputs.path(args.parameters.path);
             if (args?.type === 'Driver' && args.method === 'delete_String') args.parameters.name = outputs.path(args.parameters.name);
             inputs.lastError = null; outputs.lastError = null;
             result = await execute(request);
@@ -66,9 +66,12 @@ async function dispatch({id, operation, payload, file}) {
                 if (response.error) { mounted.close(); mounted = null; }
                 else { datasets.set(response.result.value, mounted); mounted = null; }
             }
-            if (!response.error && args?.method === 'close') {
-                datasets.get(args.handle)?.close();
-                datasets.delete(args.handle);
+            // Native VRT leases may retain mounts after the public source handle closes.
+            // Release only datasets whose native resources were actually destroyed.
+            const released = response.releasedDatasets ?? (!response.error && args?.method === 'close' ? [args.handle] : []);
+            for (const handle of released) {
+                datasets.get(handle)?.close();
+                datasets.delete(handle);
             }
         } else if (operation === 'close') {
             if (context) await module.ccall('gdal4k_destroy', null, ['number'], [context], {async: true});

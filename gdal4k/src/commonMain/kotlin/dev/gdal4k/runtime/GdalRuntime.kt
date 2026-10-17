@@ -7,6 +7,26 @@ import dev.gdal4k.GdalFiles
  * Common GDAL entry point for dataset, spatial reference, and transformation operations.
  */
 interface GdalRuntime {
+    /** Builds a lazy, in-memory VRT without copying pixels. Inputs are used in list order.
+     * Keeps native inputs, URI/file mounts and their workspaces alive even after their Kotlin handles close;
+     * closes those resources when the last dependent VRT closes. Close the returned Dataset.
+     * Defaults to -strict; pass -non_strict explicitly to permit GDAL to skip incompatible inputs.
+     * This returns a live dataset, not a portable XML file with transient source paths.
+     */
+    suspend fun buildVRT(sources: List<Dataset>, arguments: List<String> = emptyList()): Dataset
+
+    /** Warps/mosaics in list order, with later valid pixels taking precedence.
+     * Returns all generated files in memory. Use warpTo for large outputs.
+     * Output must be a concrete file format, not VRT or MEM; arguments use GDAL utility syntax.
+     */
+    suspend fun warp(sources: List<Dataset>, target: String, driver: String = "GTiff", name: String = "warped.tif", arguments: List<String> = emptyList()): GdalFiles
+
+    /** Writes directly to the GDAL/OS path (Node file / browser opfs:/ on web).
+     * Does not return or stage the complete output in memory. Caller owns partial output on failure.
+     * Uses a concrete output format; source handles remain owned by the caller.
+     */
+    suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+
     suspend fun createFeature(definition: FeatureDefn): Feature
     suspend fun createFieldDefn(name: String, type: Int): FieldDefn
 

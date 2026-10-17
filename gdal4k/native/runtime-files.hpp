@@ -131,3 +131,43 @@ inline CPLJSONObject convertDataset(GDALDatasetH dataset,const CPLJSONObject& ar
     convertDatasetPath(dataset,args,operation,output.path+"/"+name);
     return outputFiles(output,name);
 }
+
+struct RasterSources {
+    std::vector<GDALDatasetH> datasets;
+    std::vector<unsigned long long> ids;
+    RasterSources(Runtime& r,const CPLJSONArray& array) {
+        require(array.Size()>0,"At least one source dataset is required");
+        for(auto source:array) {
+            auto id=std::stoull(source.GetString("handle"));auto p=r.get(id,"Dataset");
+            require(GDALGetRasterCount(p)>0,"Source dataset has no raster bands");
+            datasets.push_back(p);ids.push_back(id);
+        }
+    }
+};
+inline CPLJSONObject buildVirtualDataset(Runtime& r,const CPLJSONObject& a) {
+    RasterSources sources(r,a.GetArray("sources"));auto arguments=a.GetArray("arguments");bool permissive=false;
+    for(auto arg:arguments)if(arg.ToString()=="-non_strict")permissive=true;
+    FileOptions options(arguments);if(!permissive)options.add("-strict");
+    auto opts=GDALBuildVRTOptionsNew(options.list,nullptr);fileEnsure(opts!=nullptr,"Invalid VRT options");
+    int usage=0;auto p=GDALBuildVRT("",static_cast<int>(sources.datasets.size()),sources.datasets.data(),nullptr,opts,&usage);
+    GDALBuildVRTOptionsFree(opts);
+    if(!p||usage){if(p)GDALClose(p);fileEnsure(false,"Cannot build VRT");}
+    auto result=r.result(p,"Dataset",true);auto id=std::stoull(result.GetString("value"));r.retainSources(id,sources.ids);return result;
+}
+inline void warpDatasetPath(Runtime& r,const CPLJSONObject& a,const std::string& path) {
+    RasterSources sources(r,a.GetArray("sources"));
+    require(!path.empty()&&path.find('\0')==std::string::npos,"Invalid output path");
+    auto driver=a.GetString("driver"),target=a.GetString("target");
+    require(!target.empty()&&target.find('\0')==std::string::npos,"Target SRS is required");
+    require(!EQUAL(driver.c_str(),"VRT")&&!EQUAL(driver.c_str(),"MEM"),"Warp file output requires a concrete format, not VRT or MEM");
+    FileOptions options(a.GetArray("arguments"));options.add("-t_srs");options.add(target);options.add("-of");options.add(driver);
+    auto opts=GDALWarpAppOptionsNew(options.list,nullptr);fileEnsure(opts!=nullptr,"Invalid warp options");
+    int usage=0;auto p=GDALWarp(path.c_str(),nullptr,static_cast<int>(sources.datasets.size()),sources.datasets.data(),opts,&usage);
+    GDALWarpAppOptionsFree(opts);auto code=p?GDALClose(p):CE_Failure;
+    fileEnsure(p!=nullptr&&code==CE_None&&!usage,"Cannot warp datasets");
+}
+inline CPLJSONObject warpDatasets(Runtime& r,const CPLJSONObject& a,bool direct) {
+    if(direct){warpDatasetPath(r,a,a.GetString("path"));return nullValue();}
+    Directory output;auto name=a.GetString("name");fileBasename(name);
+    warpDatasetPath(r,a,output.path+"/"+name);return outputFiles(output,name);
+}

@@ -3,7 +3,7 @@
 const fs = typeof process !== 'undefined' && process.versions?.node ? process.getBuiltinModule('fs') : null;
 const prefix = '/vsigdal4k-output/';
 export class Outputs {
-    constructor() { this.handles = new Map(); this.sequence = 0; this.lastError = null; }
+    constructor() { this.handles = new Map(); this.readers = new Map(); this.sequence = 0; this.lastError = null; }
     path(path) {
         if (path.startsWith(prefix) || /^\/vsi[a-z0-9_]+\//i.test(path)) return path;
         if (fs) return prefix + path;
@@ -28,6 +28,15 @@ export class Outputs {
     async open(path, mode) {
         const write = /[wa+]/.test(mode);
         try {
+            // GDAL VRT proxy datasets can reopen an already-open OPFS source.
+            // OPFS permits only one sync access handle; positional reads can share it.
+            let shared = !fs && !write ? this.readers.get(path) : null;
+            if (shared) {
+                ++shared.references;
+                const id = ++this.sequence;
+                this.handles.set(id, {path, handle: shared.handle, write, shared});
+                return id;
+            }
             let handle;
             if (fs) {
                 const fd = fs.openSync(this.nativePath(path), mode.replace('b', ''));
@@ -40,7 +49,11 @@ export class Outputs {
                 handle = {read: (view, at) => access.read(view, {at}), write: (view, at) => access.write(view, {at}), size: () => access.getSize(), truncate: n => access.truncate(n), flush: () => access.flush(), close: () => access.close()};
                 if (mode.startsWith('w')) handle.truncate(0);
             }
-            const id = ++this.sequence; this.handles.set(id, {path, handle, write}); return id;
+            if (!fs && !write) {
+                shared = {handle, references: 1};
+                this.readers.set(path, shared);
+            }
+            const id = ++this.sequence; this.handles.set(id, {path, handle, write, shared}); return id;
         } catch (error) {
             if (!write && (error.name === 'NotFoundError' || error.code === 'ENOENT' || error.code === 'ENOTDIR')) return 0;
             this.lastError = error; return 0;
@@ -73,6 +86,10 @@ export class Outputs {
         const entry = this.handles.get(id);
         if (!entry) return;
         this.handles.delete(id);
+        if (entry.shared) {
+            if (--entry.shared.references > 0) return;
+            this.readers.delete(entry.path);
+        }
         try { if (entry.write) entry.handle.flush(); } finally { entry.handle.close(); }
     }
     async unlink(path) {
