@@ -110,7 +110,7 @@ require(jvmBinary in setOf("macos-arm64", "linux-x64-gnu", "linux-arm64-gnu", "w
 }
 dependencies {
     implementation("$gdal4kGroup:gdal4k:$gdal4kVersion")
-    runtimeOnly("$gdal4kGroup:gdal4k-binary-$jvmBinary:$gdal4kVersion")
+    runtimeOnly("$gdal4kGroup:gdal4k-engine-jvm-$jvmBinary:$gdal4kVersion")
 }
 
 kotlin {

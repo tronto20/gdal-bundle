@@ -10,7 +10,7 @@ import sys
 import tarfile
 from pathlib import Path
 from jvm_binaries import JVM_BINARIES, host_binary
-from publication_versions import ENGINE_TARGETS
+from publication_versions import ANDROID_ENGINE, ENGINE_COORDINATES, ENGINE_TARGETS
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT/'gdal4k-binary/build'
@@ -45,9 +45,9 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
         files.update(BUILD/f for f in data['artifacts'])
     suffixes={'wasmJs':'wasm-js'}
     coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for t in targets]
-    coordinates+=['gdal4k-engine-'+suffixes.get(t,t.lower()) for t in targets if suffixes.get(t,t.lower()) in ENGINE_TARGETS]
-    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-engine','gdal4k-android-runtime']
-    if include_jvm_binaries:coordinates += ['gdal4k-binary-'+b for b in JVM_BINARIES]
+    coordinates+=[ENGINE_COORDINATES[suffixes.get(t,t.lower())] for t in targets if suffixes.get(t,t.lower()) in ENGINE_TARGETS]
+    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-engine',ANDROID_ENGINE]
+    if include_jvm_binaries:coordinates += ['gdal4k-engine-jvm-'+b for b in JVM_BINARIES]
     for coordinate in coordinates:
         directory=REPO/'dev/tronto/gdal4k'/coordinate
         if not directory.exists():raise RuntimeError('Missing publication '+coordinate)
@@ -113,7 +113,7 @@ def main():
         import zipfile
         publish('android')
         gradle(':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal')
-        aar=next((REPO/'dev/tronto/gdal4k/gdal4k-android-runtime').glob('*/*.aar'))
+        aar=next((REPO/'dev/tronto/gdal4k'/ANDROID_ENGINE).glob('*/*.aar'))
         with zipfile.ZipFile(aar) as z:
             expected={'jni/arm64-v8a/libgdal4k.so'}
             actual={name for name in z.namelist() if name.startswith('jni/') and name.endswith('.so')}

@@ -52,12 +52,32 @@ python3 verification/consumer.py --target wasmJs
 ## 산출물과 게시
 
 - JVM 코드: `gdal4k-binary-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
-- JVM 리소스: `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-macos-arm64`, `gdal4k-binary-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
-- Native: 구현체 `gdal4k-binary-<target>`에는 C 바인딩만 포함. 명시적으로 선택하는 `gdal4k-engine-<target>` KLIB에 GDAL과 선택된 종속성의 정적 archive 포함
-- Android: 플랫폼 Kotlin 구현체에는 JNI를 포함하지 않음. 별도 `gdal4k-android-runtime` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
+- JVM 리소스: `gdal4k-engine-jvm-linux-x64-gnu`, `gdal4k-engine-jvm-linux-arm64-gnu`, `gdal4k-engine-jvm-macos-arm64`, `gdal4k-engine-jvm-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
+- Native: 구현체 `gdal4k-binary-<target>`에는 C 바인딩만 포함. 명시적으로 선택하는 `gdal4k-engine-native-<platform>` KLIB에 GDAL과 선택된 종속성의 정적 archive 포함
+- Android: 플랫폼 Kotlin 구현체에는 JNI를 포함하지 않음. 별도 `gdal4k-engine-android-arm64` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
 - 웹: 구현체 `gdal4k-binary-js` / `gdal4k-binary-wasm-js`에는 엔진 자산을 포함하지 않음. 별도 `gdal4k-engine-js` / `gdal4k-engine-wasm-js`가 같은 Worker·ES module·Wasm 자산 제공
 - `gdal4k`, `gdal4k-runtime`, Kotlin 구현체 `gdal4k-binary`: `0.1.0-SNAPSHOT`
 - `gdal4k-engine`, JVM 리소스 JAR, Android JNI AAR: `0.1.0-SNAPSHOT`
+
+엔진 게시 좌표는 `gdal4k-engine-<실행 대상>-<플랫폼>` 규칙을 사용합니다. 모든 버전은 `0.1.0-SNAPSHOT`입니다.
+
+| 실행 대상 | 엔진 artifactId |
+| --- | --- |
+| Native macOS ARM64 | `gdal4k-engine-native-macos-arm64` |
+| Native Linux x64 / glibc | `gdal4k-engine-native-linux-x64-gnu` |
+| Native Linux ARM64 / glibc | `gdal4k-engine-native-linux-arm64-gnu` |
+| Native Windows MinGW x64 | `gdal4k-engine-native-mingw-x64` |
+| Native iOS ARM64 | `gdal4k-engine-native-ios-arm64` |
+| Native iOS Simulator ARM64 | `gdal4k-engine-native-ios-simulator-arm64` |
+| JS | `gdal4k-engine-js` |
+| wasmJs | `gdal4k-engine-wasm-js` |
+| JVM macOS ARM64 | `gdal4k-engine-jvm-macos-arm64` |
+| JVM Linux x64 / glibc | `gdal4k-engine-jvm-linux-x64-gnu` |
+| JVM Linux ARM64 / glibc | `gdal4k-engine-jvm-linux-arm64-gnu` |
+| JVM Windows x64 | `gdal4k-engine-jvm-windows-x64` |
+| Android ARM64 | `gdal4k-engine-android-arm64` |
+
+`gdal4k-engine` 루트의 Gradle metadata는 Native·JS·wasmJs 타깃에 맞는 위 좌표를 선택합니다. JVM과 Android는 해당 엔진 좌표를 명시적으로 선택합니다. Kotlin API·구현체의 기존 좌표(`gdal4k`, `gdal4k-runtime`, `gdal4k-binary` 및 KMP 타깃 좌표)는 유지합니다. Gradle producer 모듈 이름과 네이티브 파일의 리소스 경로는 Maven artifactId와 독립적입니다.
 
 Kotlin 소비자는 `gdal4k` 루트 좌표를 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. 모든 플랫폼에서 엔진을 명시적으로 선택해야 합니다. JVM에서는 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
 

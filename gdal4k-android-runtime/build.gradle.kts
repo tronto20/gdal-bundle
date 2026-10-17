@@ -20,4 +20,9 @@ android {
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
     dependsOn(androidAbis.map { abi -> ":gdal4k-binary:buildEngine" + "android-$abi".split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) } })
 }
-afterEvaluate { publishing.publications.create<MavenPublication>("androidRuntime") { from(components["release"]) } }
+afterEvaluate {
+    publishing.publications.create<MavenPublication>("androidRuntime") {
+        artifactId = "gdal4k-engine-android-arm64"
+        from(components["release"])
+    }
+}

@@ -23,13 +23,13 @@ for module in ['gdal4k', 'gdal4k-runtime', 'gdal4k-binary']:
         if len(poms) != 1 or len(metadata_files) != 1: raise RuntimeError('Missing JVM dependency descriptors: '+str(directory))
         for pom in poms:
             for artifact in ET.parse(pom).findall('.//m:dependency/m:artifactId', ns):
-                if artifact.text in {'gdal4k-binary-'+b for b in JVM_BINARIES}:
+                if artifact.text in {'gdal4k-engine-jvm-'+b for b in JVM_BINARIES}:
                     raise RuntimeError('Implicit JVM payload dependency: '+str(pom))
         for metadata in metadata_files:
             data = json.loads(metadata.read_text())
             for variant in data['variants']:
                 for dependency in variant.get('dependencies', []):
-                    if dependency['module'] in {'gdal4k-binary-'+b for b in JVM_BINARIES}:
+                    if dependency['module'] in {'gdal4k-engine-jvm-'+b for b in JVM_BINARIES}:
                         raise RuntimeError('Implicit JVM payload dependency: '+str(metadata))
     jars = list((base/(module+'-jvm')).glob('*/*-SNAPSHOT.jar'))
     if len(jars) != 1: raise RuntimeError('Missing JVM implementation JAR: '+module)
@@ -38,7 +38,7 @@ for module in ['gdal4k', 'gdal4k-runtime', 'gdal4k-binary']:
             raise RuntimeError('JVM implementation contains a native payload: '+str(jars[0]))
 for suffix in a.binary or JVM_BINARIES:
     _, platform, filename = JVM_BINARIES[suffix]
-    directory = base/('gdal4k-binary-'+suffix)
+    directory = base/('gdal4k-engine-jvm-'+suffix)
     jars = list(directory.glob('*/*-SNAPSHOT.jar'))
     if len(jars) != 1: raise RuntimeError('Missing resource JAR: '+suffix)
     resource = f'gdal4k/{platform}/{filename}'

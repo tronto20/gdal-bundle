@@ -166,7 +166,7 @@ class OptionalBinariesTest(unittest.TestCase):
                     '<artifactId>'+module+'</artifactId><version>0.1.0-SNAPSHOT</version>'+dependency+'</project>')
                 metadata = {'variants': []}
                 if defect == 'metadata' and module == 'gdal4k-binary':
-                    metadata['variants'] = [{'dependencies': [{'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-android-runtime'}]}]
+                    metadata['variants'] = [{'dependencies': [{'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-engine-android-arm64'}]}]
                 (directory/(module+'.module')).write_text(json.dumps(metadata))
                 with zipfile.ZipFile(directory/(module+'.klib'), 'w') as archive:
                     archive.writestr('default/manifest', 'fixture')

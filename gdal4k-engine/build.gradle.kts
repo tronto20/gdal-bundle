@@ -4,12 +4,18 @@ plugins { alias(libs.plugins.kotlin.multiplatform); `maven-publish` }
 repositories { mavenCentral() }
 val engineBuild = project(":gdal4k-binary").layout.buildDirectory
 val nativeTargets = mapOf("macosArm64" to "macos-arm64", "linuxX64" to "linux-amd64", "linuxArm64" to "linux-arm64", "mingwX64" to "windows-amd64", "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64")
+val nativeArtifacts = mapOf(
+    "macosArm64" to "macos-arm64", "linuxX64" to "linux-x64-gnu",
+    "linuxArm64" to "linux-arm64-gnu", "mingwX64" to "mingw-x64",
+    "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64",
+)
 fun engineTask(platform: String) = ":gdal4k-binary:buildEngine" + platform.split('-').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
 kotlin {
     js { nodejs(); browser() }; wasmJs { nodejs(); browser() }
     macosArm64(); linuxX64(); linuxArm64(); mingwX64(); iosArm64(); iosSimulatorArm64()
     targets.withType<KotlinNativeTarget>().configureEach {
         val targetName = name
+        mavenPublication { artifactId = "gdal4k-engine-native-${nativeArtifacts.getValue(targetName)}" }
         val platform = nativeTargets.getValue(targetName)
         val prepareDefinition = tasks.register("prepare${name.replaceFirstChar(Char::uppercaseChar)}EngineDefinition") {
             dependsOn(engineTask(platform))
