@@ -70,6 +70,7 @@ inline CPLJSONObject setVectorSpatialFilter(Runtime& runtime, OGRLayerH layer, c
 
 inline CPLJSONObject layerOverlay(Runtime& runtime, OGRLayerH source, const CPLJSONObject& args) {
     auto method = runtime.arg(args["method"]), result = runtime.arg(args["result"]);
+    require(source != method, "Overlay inputs require independent native layer cursors; obtaining another handle to the same layer does not create one");
     require(result != source && result != method, "Overlay result must differ from both inputs");
     auto operation = args.GetString("operation");
     require(operation == "intersection" || operation == "union" || operation == "symDifference" || operation == "identity" || operation == "update" || operation == "clip" || operation == "erase", "Unsupported layer overlay operation");

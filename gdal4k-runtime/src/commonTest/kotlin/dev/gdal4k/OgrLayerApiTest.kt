@@ -31,6 +31,30 @@ class OgrLayerApiTest {
     private suspend fun area(layer: Layer): Double {
         var sum = 0.0; layer.forEachFeatureBatch(2) { batch -> for (f in batch) requireNotNull(f.getGeometryRef()).use { sum += it.getArea() } }; return sum
     }
+    @Test fun aliasedInputCursorsAreRejectedBeforeChangingOutputOrIteration() = runTest(timeout = 120.seconds) { vector { ds ->
+        layer(ds, "input", first).use { input -> layer(ds, "method", second).use { method -> layer(ds, "output").use { output ->
+            requireNotNull(input.getLayerDefn()).use { schema ->
+                repeat(3) { Gdal4k.runtime().createFeature(schema).use { feature ->
+                    Gdal4k.runtime().createGeometryFromWkt(first).use { feature.setGeometry(it) }
+                    assertEquals(0, input.createFeature(feature))
+                } }
+            }
+            requireNotNull(ds.getLayer(0)).use { alias ->
+                assertNotSame(input, alias)
+                input.resetReading(); requireNotNull(input.getNextFeature()).close()
+                requireNotNull(output.getLayerDefn()).use { definition ->
+                    for (operation in LayerOverlayOperation.entries) {
+                        val failure = assertFails { input.overlayTo(alias, output, operation) }
+                        assertTrue(failure.message.orEmpty().contains("independent"))
+                        assertEquals(0, definition.getFieldCount()); assertEquals(0, output.getFeatureCount(true))
+                    }
+                    requireNotNull(input.getNextFeature()).use { assertEquals(1L, it.getFID()) }
+                }
+            }
+            assertEquals(0, input.overlayTo(method, output, LayerOverlayOperation.Intersection))
+            assertEquals(4, output.getFeatureCount(true))
+        } } }
+    } }
     @Test fun allSevenLayerOverlaysHaveExpectedAreas() = runTest(timeout = 120.seconds) { vector { ds ->
         layer(ds, "input", first).use { input -> layer(ds, "method", second).use { method ->
             val expected = mapOf(LayerOverlayOperation.Intersection to 2.0, LayerOverlayOperation.Union to 6.0, LayerOverlayOperation.SymDifference to 4.0,

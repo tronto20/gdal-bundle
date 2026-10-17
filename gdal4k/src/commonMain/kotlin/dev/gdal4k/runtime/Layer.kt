@@ -9,6 +9,8 @@ interface Layer {
     /** GEOS planar overlay of default geometry fields into a distinct, writable, empty result
      * layer with no attribute fields or active filters. operation is intersection/union/
      * symDifference/identity/update/clip/erase. Known CRS mismatches are rejected; no reprojection.
+     * Input and method must be different native layers with independent cursors, including aliases.
+     * Drivers sharing cursor state across layers may require separately opened input datasets.
      * Output schema aliases are invalidated before native execution, even if the driver fails.
      * Close all result Features first. Inputs remain owned; their read cursors may change.
      * Returns the native error code. Partial output/schema changes stay caller-owned; no
