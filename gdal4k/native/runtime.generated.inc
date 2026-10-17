@@ -5,6 +5,12 @@
     if(type=="GdalRuntime" && method=="createFieldDefn_String_Int") {
         return r.result(OGR_Fld_Create(a["name"].ToString().c_str(),static_cast<OGRFieldType>(a.GetInteger("type"))),"FieldDefn",true);
     }
+    if(type=="GdalRuntime" && method=="createCodedFieldDomain_String_String_Int_List_CodedFieldValue_Int") {
+        return createCodedDomain(r,a);
+    }
+    if(type=="GdalRuntime" && method=="createRangeFieldDomain_String_String_Int_FieldDomainBound_FieldDomainBound_Int") {
+        return createRangeDomain(r,a);
+    }
     if(type=="GdalRuntime" && method=="createGlobFieldDomain_String_String_Int_String_Int") {
         return r.result(OGR_GlobFldDomain_Create(a["name"].ToString().c_str(),a["description"].ToString().c_str(),static_cast<OGRFieldType>(a.GetInteger("fieldType")),static_cast<OGRFieldSubType>(a.GetInteger("fieldSubType")),a["glob"].ToString().c_str()),"FieldDomain",true);
     }
@@ -60,10 +66,10 @@
         auto p=GDALDatasetGetFieldDomainNames(h,nullptr);auto out=strings(p);CSLDestroy(p);return out;
     }
     if(type=="Dataset" && method=="addFieldDomain_FieldDomain") {
-        char* reason=nullptr;auto ok=GDALDatasetAddFieldDomain(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])),&reason);std::string message=reason?reason:"GDAL add FieldDomain failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();
+        validateDomainStorage(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])));char* reason=nullptr;auto ok=GDALDatasetAddFieldDomain(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])),&reason);std::string message=reason?reason:"GDAL add FieldDomain failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();
     }
     if(type=="Dataset" && method=="updateFieldDomain_FieldDomain") {
-        char* reason=nullptr;auto ok=GDALDatasetUpdateFieldDomain(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])),&reason);std::string message=reason?reason:"GDAL update FieldDomain failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();
+        validateDomainStorage(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])));char* reason=nullptr;auto ok=GDALDatasetUpdateFieldDomain(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])),&reason);std::string message=reason?reason:"GDAL update FieldDomain failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();
     }
     if(type=="Dataset" && method=="deleteFieldDomain_String") {
         char* reason=nullptr;auto ok=GDALDatasetDeleteFieldDomain(h,a["name"].ToString().c_str(),&reason);std::string message=reason?reason:"GDAL delete FieldDomain failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();
@@ -1394,6 +1400,21 @@
     if(type=="Group" && method=="createArray_String_List_Dimension_Int_List_String") {
         std::vector<GDALDimensionH> dims;for(auto d:a.GetArray("dimensions"))dims.push_back(static_cast<GDALDimensionH>(r.arg(d)));auto type=static_cast<GDALDataType>(a.GetInteger("dataType"));require(type>GDT_Unknown&&type<GDT_TypeCount,"Invalid numeric data type");auto edt=GDALExtendedDataTypeCreate(type);Strings opts(a.GetArray("options"));auto array=GDALGroupCreateMDArray(static_cast<GDALGroupH>(h),a["name"].ToString().c_str(),dims.size(),dims.data(),edt,opts.data());GDALExtendedDataTypeRelease(edt);return r.result(array,"MDArray",true,id);
     }
+    if(type=="Group" && method=="getAttribute_String") {
+        return attributeOperation(r,static_cast<GDALGroupH>(h),a,id,"Group","getAttribute");
+    }
+    if(type=="Group" && method=="getAttributes_List_String") {
+        return attributeOperation(r,static_cast<GDALGroupH>(h),a,id,"Group","getAttributes");
+    }
+    if(type=="Group" && method=="createAttribute_String_LongArray_MDDataType_List_String") {
+        return attributeOperation(r,static_cast<GDALGroupH>(h),a,id,"Group","createAttribute");
+    }
+    if(type=="Group" && method=="deleteAttribute_String_List_String") {
+        return attributeOperation(r,static_cast<GDALGroupH>(h),a,id,"Group","deleteAttribute");
+    }
+    if(type=="Group" && method=="createArray_String_List_Dimension_MDDataType_List_String") {
+        return createExtendedArray(r,static_cast<GDALGroupH>(h),a,id);
+    }
     if(type=="MDArray" && method=="getName") {
         auto out=apply(GDALMDArrayGetName, Arg(r,h));return value(out);
     }
@@ -1411,6 +1432,27 @@
     }
     if(type=="MDArray" && method=="write_LongArray_LongArray_DoubleArray") {
         return mdRaster(static_cast<GDALMDArrayH>(h),a,true);
+    }
+    if(type=="MDArray" && method=="getAttribute_String") {
+        return attributeOperation(r,static_cast<GDALMDArrayH>(h),a,id,"MDArray","getAttribute");
+    }
+    if(type=="MDArray" && method=="getAttributes_List_String") {
+        return attributeOperation(r,static_cast<GDALMDArrayH>(h),a,id,"MDArray","getAttributes");
+    }
+    if(type=="MDArray" && method=="createAttribute_String_LongArray_MDDataType_List_String") {
+        return attributeOperation(r,static_cast<GDALMDArrayH>(h),a,id,"MDArray","createAttribute");
+    }
+    if(type=="MDArray" && method=="deleteAttribute_String_List_String") {
+        return attributeOperation(r,static_cast<GDALMDArrayH>(h),a,id,"MDArray","deleteAttribute");
+    }
+    if(type=="MDArray" && method=="getExtendedDataType") {
+        return extendedTypeResult(GDALMDArrayGetDataType(static_cast<GDALMDArrayH>(h)));
+    }
+    if(type=="MDArray" && method=="readValues_LongArray_LongArray") {
+        return mdValues(static_cast<GDALMDArrayH>(h),a,false);
+    }
+    if(type=="MDArray" && method=="writeValues_LongArray_LongArray_List_MDValue") {
+        return mdValues(static_cast<GDALMDArrayH>(h),a,true);
     }
     if(type=="Dimension" && method=="getName") {
         auto out=apply(GDALDimensionGetName, Arg(r,h));return value(out);
@@ -1441,6 +1483,15 @@
     }
     if(type=="FieldDomain" && method=="getFieldSubType") {
         auto out=apply(OGR_FldDomain_GetFieldSubType, Arg(r,h));return value(out);
+    }
+    if(type=="FieldDomain" && method=="getCodedValues") {
+        return codedDomainValues(static_cast<OGRFieldDomainH>(h));
+    }
+    if(type=="FieldDomain" && method=="getMinimum") {
+        return rangeDomainBound(static_cast<OGRFieldDomainH>(h),true);
+    }
+    if(type=="FieldDomain" && method=="getMaximum") {
+        return rangeDomainBound(static_cast<OGRFieldDomainH>(h),false);
     }
     if(type=="FieldDomain" && method=="getGlob") {
         return value(OGR_FldDomain_GetDomainType(static_cast<OGRFieldDomainH>(h))==OFDT_GLOB?OGR_GlobFldDomain_GetGlob(static_cast<OGRFieldDomainH>(h)):nullptr);
@@ -1492,4 +1543,22 @@
     }
     if(type=="Relationship" && method=="setType_Int") {
         apply(GDALRelationshipSetType, Arg(r,h), Arg(r,a["type"])); return nullValue();
+    }
+    if(type=="Attribute" && method=="getName") {
+        auto out=apply(GDALAttributeGetName, Arg(r,h));return value(out);
+    }
+    if(type=="Attribute" && method=="getFullName") {
+        auto out=apply(GDALAttributeGetFullName, Arg(r,h));return value(out);
+    }
+    if(type=="Attribute" && method=="getDimensions") {
+        size_t n=0;auto p=GDALAttributeGetDimensionsSize(static_cast<GDALAttributeH>(h),&n);auto out=numbers(p,n);CPLFree(p);return out;
+    }
+    if(type=="Attribute" && method=="getDataType") {
+        return extendedTypeResult(GDALAttributeGetDataType(static_cast<GDALAttributeH>(h)));
+    }
+    if(type=="Attribute" && method=="readValues") {
+        return attributeValues(static_cast<GDALAttributeH>(h),a,false);
+    }
+    if(type=="Attribute" && method=="writeValues_List_MDValue") {
+        return attributeValues(static_cast<GDALAttributeH>(h),a,true);
     }

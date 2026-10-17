@@ -15,7 +15,7 @@ p=argparse.ArgumentParser()
 p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','android'])
 p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-maven')
 p.add_argument('--no-publish',action='store_true')
-p.add_argument('--compile-only',action='store_true')
+p.add_argument('--compile-only',action='store_true',help='Link Native tests or compile Android device tests without running them')
 p.add_argument('--browser',action='store_true')
 p.add_argument('--ios-device')
 p.add_argument('--jvm-binary', action='append', choices=JVM_BINARIES, help='Explicit payload; repeat to verify a multi-OS application')
@@ -118,13 +118,13 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-published-consumer-') as tempora
  elif target=='android':
   declaration='''androidLibrary { namespace="consumer.gdal4k"; compileSdk=35; minSdk=28
 withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRunner="androidx.test.runner.AndroidJUnitRunner" } }'''
-  task='connectedAndroidDeviceTest'
+  task='compileAndroidDeviceTest' if a.compile_only else 'connectedAndroidDeviceTest'
  else:
   declaration=target+'()'
   if target == 'iosSimulatorArm64' and a.ios_device:
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
- extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
+ extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }\n' if target=='android' else ''
  build='''plugins { kotlin("multiplatform") version "2.4.21"; '''+android+''' }
 repositories {
     exclusiveContent { forRepository { maven { url=uri('''+json.dumps(repo.as_uri())+''') } }; filter { includeGroup("dev.tronto.gdal4k") } }
@@ -164,10 +164,11 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source, encoding="utf-8")
  if not a.expect_missing_jvm_binary:
   # Exercise the expanded API from published coordinates, not producer project dependencies.
-  expanded = (ROOT/'gdal4k-runtime/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text(encoding="utf-8")
-  expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
-  expanded_path = consumer/'src/commonTest/kotlin/consumer/DatasetApiTest.kt'
-  expanded_path.write_text(expanded, encoding="utf-8")
+  for test_name in ['DatasetApiTest', 'AdvancedDatasetApiTest']:
+   expanded = (ROOT/f'gdal4k-runtime/src/commonTest/kotlin/dev/gdal4k/{test_name}.kt').read_text(encoding="utf-8")
+   expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
+   expanded_path = consumer/f'src/commonTest/kotlin/consumer/{test_name}.kt'
+   expanded_path.write_text(expanded, encoding="utf-8")
   test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
   platform_path = ROOT/f'gdal4k-runtime/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
   actual_set = test_set if target in ['android','jvm','js','wasmJs'] else target+'Test'
@@ -187,7 +188,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  hidden=[]
  try:
   if platform:
-   for original in [ROOT/f'gdal4k-engine/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
+   for original in [ROOT/f'gdal4k-engine/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop',ROOT/f'gdal4k-runtime/build/classes/kotlin/{target}/main/cinterop']:
     if original.exists():
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))
@@ -203,7 +204,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
    actual_payloads = {b for b in JVM_BINARIES if any(name.endswith('-'+b+'.jar') for name in engine_files)}
    if actual_payloads != set(binaries) or len(engine_files) != len(binaries):
     raise RuntimeError(f'Unexpected JVM classifier files: {engine_files}; expected {binaries}')
-  case = '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
+  case = '-compile' if target=='android' and a.compile_only else '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else '')+case)
   destination.mkdir(parents=True,exist_ok=True)
   for folder in ['build/test-results','build/outputs/androidTest-results','build/bin']:
