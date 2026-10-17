@@ -251,8 +251,13 @@ tasks.register("locations") {
             command = (['cmd.exe', '/d', '/c'] if os.name == 'nt' else []) + [os.environ['GRADLE_EXECUTABLE'], '-p', str(root), 'locations', '--offline', '--configuration-cache', '--max-workers=1', '--console=plain', '-Dorg.gradle.jvmargs=-Xmx256m']
             first = subprocess.run(command, text=True, capture_output=True)
             self.assertEqual(0, first.returncode, first.stdout + first.stderr)
-            for name in ('custom cmake', 'custom ninja', 'custom emsdk', 'custom vcpkg'):
-                self.assertIn(str(root / name), first.stdout)
+            # Windows TEMP can use an 8.3 alias while Gradle prints the long path.
+            locations = [Path(line.removeprefix('TOOL_LOCATION=')).parents[1]
+                         for line in first.stdout.splitlines() if line.startswith('TOOL_LOCATION=')]
+            names = ('custom cmake', 'custom ninja', 'custom emsdk', 'custom vcpkg')
+            self.assertEqual({os.path.normcase(str((root / name).resolve())) for name in names},
+                             {os.path.normcase(str(path.resolve())) for path in locations})
+            for name in names:
                 self.assertFalse((root / name).exists(), 'Configuration must not install tools')
             second = subprocess.run(command, text=True, capture_output=True)
             self.assertEqual(0, second.returncode, second.stdout + second.stderr)
