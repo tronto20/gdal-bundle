@@ -52,7 +52,11 @@ kotlin {
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
-        androidMain.dependencies { api(project(":gdal4k-android-runtime")) }
+        androidMain.dependencies {
+            api(project(":gdal4k-android-runtime"))
+            implementation("androidx.startup:startup-runtime:1.2.0")
+            implementation("androidx.annotation:annotation:1.9.1")
+        }
         getByName("webMain").dependencies { api("org.jetbrains.kotlinx:kotlinx-browser:0.5.0") }
     }
     targets.withType<KotlinNativeTarget>().configureEach {

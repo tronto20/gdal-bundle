@@ -2,24 +2,26 @@
 #include <emscripten.h>
 #include <cpl_vsi.h>
 #include <cpl_conv.h>
+#include <cpl_json.h>
+#include <cpl_string.h>
 #include <cerrno>
 #include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
-EM_JS(double, web_input_size, (const char* path), {
-    return Module.gdal4kInputs.size(UTF8ToString(path));
+EM_ASYNC_JS(double, web_input_size, (const char* path), {
+    try { return await Module.gdal4kInputs.size(UTF8ToString(path)); }
+    catch (error) { Module.gdal4kInputs.lastError = error; return -1; }
 });
-EM_JS(int, web_input_list_size, (const char* path, int index), {
-    const names = Module.gdal4kInputs.list(UTF8ToString(path));
-    return index < 0 ? names.length : names[index].length + 1;
+EM_JS(int, web_input_names_size, (const char* path), {
+    const names = Module.gdal4kInputs.names(UTF8ToString(path));
+    return names === null ? -1 : new TextEncoder().encode(JSON.stringify({names})).length;
 });
-EM_JS(void, web_input_list_name, (const char* path, int index, char* output), {
-    const name = Module.gdal4kInputs.list(UTF8ToString(path))[index];
-    for (let i = 0; i < name.length; i++) HEAPU8[output+i] = name.charCodeAt(i);
-    HEAPU8[output+name.length] = 0;
+EM_JS(void, web_input_names_copy, (const char* path, char* output), {
+    HEAPU8.set(new TextEncoder().encode(JSON.stringify({names: Module.gdal4kInputs.names(UTF8ToString(path))})), output);
 });
 EM_ASYNC_JS(int, web_input_read, (const char* path, double offset, char* output, int length), {
     try {
@@ -33,6 +35,16 @@ EM_ASYNC_JS(int, web_input_read, (const char* path, double offset, char* output,
 });
 namespace {
 struct Input {std::string path; vsi_l_offset position = 0; bool eof = false, error = false;};
+char** namesInput(void*, const char* path) {
+    const int size = web_input_names_size(path);
+    if (size < 0) return nullptr;
+    std::vector<char> bytes(size + 1, 0); web_input_names_copy(path, bytes.data());
+    CPLJSONDocument doc;
+    if (!doc.LoadMemory(bytes.data())) return nullptr;
+    char** names = nullptr;
+    for (const auto& name: doc.GetRoot().GetArray("names")) names = CSLAddString(names, name.ToString().c_str());
+    return names ? names : static_cast<char**>(CPLCalloc(1, sizeof(char*)));
+}
 void* openInput(void*, const char* path, const char* mode) {
     if (!mode || mode[0] != 'r' || std::strchr(mode, '+')) {errno = EACCES; return nullptr;}
     if (web_input_size(path) < 0) {errno = ENOENT; return nullptr;}
@@ -67,22 +79,15 @@ size_t readInput(void* handle, void* buffer, size_t size, size_t count) {
 void gdal4k_install_web_inputs() {
     auto* callbacks = VSIAllocFilesystemPluginCallbacksStruct();
     callbacks->open = openInput; callbacks->stat = statInput;
-    callbacks->read_dir = [](void*, const char* path, int) -> char** {
-        const int count = web_input_list_size(path, -1);
-        auto** names = static_cast<char**>(CPLCalloc(count + 1, sizeof(char*)));
-        for (int i = 0; i < count; ++i) {
-            names[i] = static_cast<char*>(CPLMalloc(web_input_list_size(path, i)));
-            web_input_list_name(path, i, names[i]);
-        }
-        return names;
-    };
     callbacks->tell = [](void* p) {return static_cast<Input*>(p)->position;};
     callbacks->seek = seekInput; callbacks->read = readInput;
     callbacks->eof = [](void* p) {return static_cast<Input*>(p)->eof ? 1 : 0;};
     callbacks->error = [](void* p) {return static_cast<Input*>(p)->error ? 1 : 0;};
     callbacks->clear_err = [](void* p) {auto& i = *static_cast<Input*>(p); i.error = i.eof = false;};
     callbacks->close = [](void* p) {delete static_cast<Input*>(p); return 0;};
-    callbacks->sibling_files = [](void*, const char*) {return static_cast<char**>(CPLCalloc(1, sizeof(char*)));};
+    callbacks->flush = [](void*) {return 0;}; // Read-only inputs have no pending writes.
+    callbacks->sibling_files = namesInput;
+    callbacks->read_dir = [](void* p, const char* path, int) {return namesInput(p, path);};
     VSIInstallPluginHandler("/vsigdal4k/", callbacks);
     VSIFreeFilesystemPluginCallbacksStruct(callbacks);
 }

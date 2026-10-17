@@ -79,6 +79,7 @@ def main():
         stage(target,[PLATFORMS[target]],[target],include_tests=target=='linuxArm64')
     elif target=='web':
         gradle(':gdal4k:jsNodeTest',':gdal4k:wasmJsNodeTest',':gdal4k:jsBrowserTest',':gdal4k:wasmJsBrowserTest')
+        run('node', ROOT/'verification/related-inputs.mjs')
         run(sys.executable, ROOT/'verification/audit-engine.py', 'web')
         for t in ['js','wasmJs']:
             publish(t);consumer(t);consumer(t,'--browser')
