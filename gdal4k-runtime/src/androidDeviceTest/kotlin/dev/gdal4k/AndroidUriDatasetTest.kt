@@ -122,6 +122,23 @@ class AndroidUriDatasetTest {
         assertEquals(45.0, point[1].jsonPrimitive.double, 1e-7)
     }
 
+    @Test fun virtualDatasetsRetainUriAndDirectoryInputs() = runTest(timeout = 120.seconds) {
+        val (provider, resolver) = provider()
+        try {
+            val runtime=Gdal4k.runtime()
+            for (directory in listOf(false,true)) {
+                val source=if(directory) runtime.openDataset("image.tif",mapOf("image.tif" to input("offset")),resolver)
+                    else runtime.openDataset(input("offset"),resolver)
+                val asset=requireNotNull(provider.lastAsset)
+                val first=runtime.buildVRT(listOf(source));val last=runtime.buildVRT(listOf(source))
+                source.close();assertFalse(asset.closed);assertFails { source.getRasterXSize() }
+                verify(first);first.close();assertFalse(asset.closed)
+                verify(last);last.close();assertTrue(asset.closed)
+            }
+            assertTrue(provider.openedAssets.all { it.closed })
+        } finally { Gdal4k.close() }
+    }
+
     @Test fun shapefileUriSetReadsSidecarsLazilyAndClosesThem() = runTest(timeout = 120.seconds) {
         val (provider, resolver) = provider()
         try {

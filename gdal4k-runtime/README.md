@@ -240,6 +240,8 @@ requireNotNull(runtime.getDriver("MEM")).use { driver ->
 
 독립 도메인과 배열의 Int64 값은 정확히 전달합니다. 다만 GDAL 3.12.4의 GeoPackage 드라이버는 range 경계를 REAL로 저장합니다. 이때 정밀도를 잃는 Integer64 경계값은 `addFieldDomain` / `updateFieldDomain`에서 저장 전에 명확히 거부합니다. 다른 드라이버·파일 형식의 저장 제약도 별도로 확인해야 합니다. 이 API 확장은 GDAL 전체 API의 완전한 노출을 의미하지 않습니다.
 
+Warp의 COG/CreateCopy 경로에 필요한 임시 GeoTIFF는 출력과 같은 파일시스템의 디렉터리에 생성됩니다. 메모리 결과는 해당 메모리 workspace, 직접 출력은 출력 파일의 디렉터리를 사용하며 기존 CPL_TMPDIR 설정이 있으면 그대로 따릅니다. 작업 후 thread-local 설정을 복원합니다. 브라우저 OPFS에서는 하나의 쓰기 핸들에 대한 읽기 재개방도 위치 기반 읽기 참조로 유지하며 쓰기 핸들을 추가로 공유하지 않습니다. 마지막 참조가 닫힐 때 실제 sync access handle을 해제합니다.
+
 
 ### Band analysis and resampled windows
 
