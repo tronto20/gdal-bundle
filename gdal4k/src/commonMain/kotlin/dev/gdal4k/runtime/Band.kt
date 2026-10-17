@@ -1,11 +1,39 @@
 package dev.gdal4k.runtime
 
+/** Access hints; LargestChunkPossible may be combined with a traversal value. */
+object BlockAccessPattern {
+    const val Unknown = 0
+    const val Random = 1
+    const val TopToBottom = 2
+    const val BottomToTop = 3
+    const val LargestChunkPossible = 0x100
+}
+
 /**
  * Shared raster band handle.
  *
  * Provides band metadata, overview/mask access, and full-band or windowed raster I/O.
  */
 interface Band {
+    /** Detached caller-owned copy, unaffected by later palette replacement. */
+    suspend fun getColorTable(): ColorTable?
+    /** Copies the table; null removes the palette if the driver supports it. */
+    suspend fun setColorTable(table: ColorTable?): Int
+    /** Borrowed table, with row-window reads; replacement invalidates all aliases. */
+    suspend fun getDefaultRAT(): RasterAttributeTable?
+    /** Copies the table; borrowed aliases are invalidated after successful replacement. */
+    suspend fun setDefaultRAT(table: RasterAttributeTable?): Int
+    suspend fun getActualBlockSize(blockX: Int, blockY: Int): IntArray
+    /** Driver access hint using [BlockAccessPattern] values and flags. */
+    suspend fun getSuggestedBlockAccessPattern(): Int
+    /** Raw native pixel bytes, no conversion or resampling. Buffer holds the full nominal
+     * block (blockWidth * blockHeight * bytesPerPixel). Native byte order applies.
+     * Edge padding is zeroed on read; oversized buffer tails are unchanged.
+     * Pending RasterIO writes are flushed before accessing the direct block.
+     */
+    suspend fun readBlock(blockX: Int, blockY: Int, buffer: ByteArray): Int
+    suspend fun writeBlock(blockX: Int, blockY: Int, buffer: ByteArray): Int
+
     suspend fun close()
 
     suspend fun writeRaster(options: BandRasterIOOptions, buffer: DoubleArray): Int

@@ -9,6 +9,20 @@ private fun selectedFile(name: String, data: String): File = js("new File([Uint8
 private fun fixtureFile(): File = js("new File([Uint8Array.from(atob('SUkqAAgAAAAOAAABBAABAAAAAwAAAAEBBAABAAAAAgAAAAIBAwABAAAACAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAHgEAABUBAwABAAAAAQAAABYBBAABAAAAAgAAABcBBAABAAAABgAAAFMBAwABAAAAAQAAAA6DDAADAAAAtgAAAIKEDAAGAAAAzgAAAK+HAwAQAAAA/gAAAIGkAgACAAAAMAAAAAAAAAAAAAAAAADgPwAAAAAAAOA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABZQAAAAAAAAElAAAAAAAAAAAABAAEAAAADAAAEAAABAAIAAQQAAAEAAQAACAAAAQDmEAABAgME/w=='), c => c.charCodeAt(0))], 'selected.tif')")
 private fun inBrowser(): Boolean = js("typeof window !== 'undefined'")
 class BrowserFileTest {
+    @Test fun virtualDatasetRetainsSelectedFileMount() = runTest {
+        if (!inBrowser()) return@runTest
+        try {
+            val r=Gdal4k.runtime();val source=r.openDataset(fixtureFile())
+            val vrt=r.buildVRT(listOf(source));source.close()
+            assertFails { source.getRasterXSize() }
+            try {
+                val pixels=ByteArray(6);assertEquals(0,vrt.readRaster(pixels))
+                assertContentEquals(byteArrayOf(0,1,2,3,4,-1),pixels)
+            } finally { vrt.close() }
+            r.openDataset(fixtureFile()).use { assertEquals(3,it.getRasterXSize()) }
+        } finally { Gdal4k.close() }
+    }
+
     @Test fun shapefileSelectedFilesUseSidecars() = runTest {
         if (!inBrowser()) return@runTest
         try {

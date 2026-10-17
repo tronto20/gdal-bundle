@@ -80,9 +80,13 @@ extern "C" char *gdal4k_execute(gdal4k_context *ctx, const char *request) {
     if (!ctx->gdalData.empty()) CPLPushFinderLocation(ctx->gdalData.c_str());
     CPLErrorReset();
     CPLJSONObject response;
+    ctx->runtime.releasedDatasets.clear();
     try { response.Add("result", execute(*ctx, parse(request))); }
     catch (const std::exception &e) { response.Add("error", e.what()); }
     catch (...) { response.Add("error", "Unknown GDAL error"); }
+    CPLJSONArray released;
+    for(auto id:ctx->runtime.releasedDatasets)released.Add(std::to_string(id));
+    response.Add("releasedDatasets",released);
     if (!ctx->gdalData.empty()) CPLPopFinderLocation();
     if (previousPaths) { OSRSetPROJSearchPaths(previousPaths); CSLDestroy(previousPaths); }
     CPLSetThreadLocalConfigOptions(previous);

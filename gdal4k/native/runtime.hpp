@@ -54,6 +54,11 @@ struct Runtime {
     struct Entry {void* pointer;std::string type;bool owned;unsigned long long parent;};
     std::map<unsigned long long,Entry> handles;
     std::map<unsigned long long,std::string> workspaces;
+    // Dataset handle lifetime and native resource lifetime differ for lazy VRT sources.
+    std::map<unsigned long long,size_t> datasetLeases;
+    std::map<unsigned long long,Entry> deferredDatasets;
+    std::map<unsigned long long,std::vector<unsigned long long>> datasetSources;
+    std::vector<unsigned long long> releasedDatasets;
     unsigned long long next=0;
     ~Runtime(){while(!handles.empty())close(handles.rbegin()->first);}
     void* get(unsigned long long id,const std::string& type="") {
@@ -95,20 +100,46 @@ struct Runtime {
         }
         for(auto band:bands)invalidateChildren(band,"Band");
     }
+    void retainSources(unsigned long long id,const std::vector<unsigned long long>& sources) {
+        std::set<unsigned long long> unique(sources.begin(),sources.end());
+        datasetSources[id]={unique.begin(),unique.end()};
+        for(auto source:unique)++datasetLeases[source];
+    }
+    void destroyDataset(unsigned long long id,void* pointer) {
+        GDALClose(pointer);
+        auto workspace=workspaces.find(id);
+        if(workspace!=workspaces.end()){VSIRmdirRecursive(workspace->second.c_str());workspaces.erase(workspace);}
+        releasedDatasets.push_back(id);
+        auto inputs=datasetSources.find(id);
+        if(inputs==datasetSources.end())return;
+        auto sources=std::move(inputs->second);datasetSources.erase(inputs);
+        for(auto source:sources) {
+            auto lease=datasetLeases.find(source);
+            if(lease!=datasetLeases.end()&&--lease->second==0) {
+                datasetLeases.erase(lease);
+                auto deferred=deferredDatasets.find(source);
+                if(deferred!=deferredDatasets.end()) {
+                    auto p=deferred->second.pointer;deferredDatasets.erase(deferred);destroyDataset(source,p);
+                }
+            }
+        }
+    }
     void close(unsigned long long id) {
         auto found=handles.find(id);if(found==handles.end())return;
         std::vector<unsigned long long> children;for(auto& item:handles)if(item.second.parent==id)children.push_back(item.first);
         for(auto child:children)close(child);
         auto e=found->second;handles.erase(found);if(!e.owned)return;
         if(e.type=="Dataset") {
-            GDALClose(e.pointer);
-            auto workspace=workspaces.find(id);
-            if(workspace!=workspaces.end()){VSIRmdirRecursive(workspace->second.c_str());workspaces.erase(workspace);}
+            if(datasetLeases.count(id)) {
+                GDALFlushCache(e.pointer);deferredDatasets[id]=e;
+            } else destroyDataset(id,e.pointer);
         }
         else if(e.type=="Layer") {
             auto parent=handles.find(e.parent);
             if(parent!=handles.end())GDALDatasetReleaseResultSet(parent->second.pointer,e.pointer);
         }
+        else if(e.type=="ColorTable")GDALDestroyColorTable(e.pointer);
+        else if(e.type=="RasterAttributeTable")GDALDestroyRasterAttributeTable(e.pointer);
         else if(e.type=="Group")GDALGroupRelease(static_cast<GDALGroupH>(e.pointer));
         else if(e.type=="MDArray")GDALMDArrayRelease(static_cast<GDALMDArrayH>(e.pointer));
         else if(e.type=="Attribute")GDALAttributeRelease(static_cast<GDALAttributeH>(e.pointer));
@@ -252,6 +283,7 @@ inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) 
 }
 #include "runtime-md.hpp"
 #include "runtime-band.hpp"
+#include "runtime-band-structures.hpp"
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));

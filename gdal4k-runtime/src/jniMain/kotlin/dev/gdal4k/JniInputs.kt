@@ -18,9 +18,13 @@ internal class JniInputs(private val mount: (JniDirectory) -> String, private va
             jniSourceAttachment(args.getValue("parameters").jsonObject.getValue("source").jsonPrimitive.content) else null
         if (sourceAttachment == null) {
             val response = execute(request)
-            if (args["type"]?.jsonPrimitive?.content == "Handle" && args["method"]?.jsonPrimitive?.content == "close" &&
-                "error" !in Json.parseToJsonElement(response).jsonObject) {
-                sources.remove(args.getValue("handle").jsonPrimitive.content)?.close()
+            if (args["type"]?.jsonPrimitive?.content == "Handle" && args["method"]?.jsonPrimitive?.content == "close") {
+                val parsed = Json.parseToJsonElement(response).jsonObject
+                // A VRT lease can outlive its source's public handle. Descriptors and
+                // directory mounts follow native destruction, including transitive releases.
+                val released = parsed["releasedDatasets"]?.jsonArray?.map { it.jsonPrimitive.content }
+                    ?: if ("error" !in parsed) listOf(args.getValue("handle").jsonPrimitive.content) else emptyList()
+                released.forEach { sources.remove(it)?.close() }
             }
             return response
         }

@@ -6,6 +6,11 @@ import dev.gdal4k.*
 import kotlinx.serialization.json.*
 
 internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine, "0", null), GdalRuntime {
+    override suspend fun buildVRT(sources: List<Dataset>, arguments: List<String>): Dataset { val result = invoke("GdalRuntime", "buildVRT_List_Dataset_List_String", mapOf("sources" to encode(sources), "arguments" to encode(arguments))); return requireNotNull(engine.wrapDataset(result, null)) }
+    override suspend fun warp(sources: List<Dataset>, target: String, driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("GdalRuntime", "warp_List_Dataset_String_String_String_List_String", mapOf("sources" to encode(sources), "target" to encode(target), "driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
+    override suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String, arguments: List<String>): Unit { invoke("GdalRuntime", "warpTo_List_Dataset_String_String_String_List_String", mapOf("sources" to encode(sources), "path" to encode(path), "target" to encode(target), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
+    override suspend fun createColorTable(paletteInterpretation: Int): ColorTable { val result = invoke("GdalRuntime", "createColorTable_Int", mapOf("paletteInterpretation" to encode(paletteInterpretation))); return requireNotNull(engine.wrapColorTable(result, null)) }
+    override suspend fun createRasterAttributeTable(): RasterAttributeTable { val result = invoke("GdalRuntime", "createRasterAttributeTable", mapOf()); return requireNotNull(engine.wrapRasterAttributeTable(result, null)) }
     override suspend fun createFeature(definition: FeatureDefn): Feature { val result = invoke("GdalRuntime", "createFeature_FeatureDefn", mapOf("definition" to handle(definition))); return requireNotNull(engine.wrapFeature(result, null)) }
     override suspend fun createFieldDefn(name: String, type: Int): FieldDefn { val result = invoke("GdalRuntime", "createFieldDefn_String_Int", mapOf("name" to encode(name), "type" to encode(type))); return requireNotNull(engine.wrapFieldDefn(result, null)) }
     override suspend fun createCodedFieldDomain(name: String, description: String, fieldType: Int, values: List<CodedFieldValue>, fieldSubType: Int): FieldDomain { val result = invoke("GdalRuntime", "createCodedFieldDomain_String_String_Int_List_CodedFieldValue_Int", mapOf("name" to encode(name), "description" to encode(description), "fieldType" to encode(fieldType), "values" to encode(values), "fieldSubType" to encode(fieldSubType))); return requireNotNull(engine.wrapFieldDomain(result, null)) }
@@ -128,6 +133,14 @@ internal class BundledDriver(engine: RuntimeEngine, id: String, parent: RuntimeH
 }
 
 internal class BundledBand(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Band {
+    override suspend fun getColorTable(): ColorTable? { val result = invoke("Band", "getColorTable", mapOf()); return engine.wrapColorTable(result, null) }
+    override suspend fun setColorTable(table: ColorTable?): Int { val result = invoke("Band", "setColorTable_ColorTable", mapOf("table" to handle(table))); return result.jsonPrimitive.int }
+    override suspend fun getDefaultRAT(): RasterAttributeTable? { val result = invoke("Band", "getDefaultRAT", mapOf()); return engine.wrapRasterAttributeTable(result, this) }
+    override suspend fun setDefaultRAT(table: RasterAttributeTable?): Int { val result = invoke("Band", "setDefaultRAT_RasterAttributeTable", mapOf("table" to handle(table))); return result.jsonPrimitive.int }
+    override suspend fun getActualBlockSize(blockX: Int, blockY: Int): IntArray { val result = invoke("Band", "getActualBlockSize_Int_Int", mapOf("blockX" to encode(blockX), "blockY" to encode(blockY))); return result.jsonArray.map { it.jsonPrimitive.content.toInt() }.toIntArray() }
+    override suspend fun getSuggestedBlockAccessPattern(): Int { val result = invoke("Band", "getSuggestedBlockAccessPattern", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun readBlock(blockX: Int, blockY: Int, buffer: ByteArray): Int { val result = invoke("Band", "readBlock_Int_Int_ByteArray", mapOf("blockX" to encode(blockX), "blockY" to encode(blockY), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeBlock(blockX: Int, blockY: Int, buffer: ByteArray): Int { val result = invoke("Band", "writeBlock_Int_Int_ByteArray", mapOf("blockX" to encode(blockX), "blockY" to encode(blockY), "buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
     override suspend fun close() = closeHandle()
     override suspend fun writeRaster(options: BandRasterIOOptions, buffer: DoubleArray): Int { val result = invoke("Band", "writeRaster_BandRasterIOOptions_DoubleArray", mapOf("options" to encode(options), "buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
     override suspend fun writeRaster(options: BandRasterIOOptions, buffer: FloatArray): Int { val result = invoke("Band", "writeRaster_BandRasterIOOptions_FloatArray", mapOf("options" to encode(options), "buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
@@ -642,6 +655,51 @@ internal class BundledAttribute(engine: RuntimeEngine, id: String, parent: Runti
     override suspend fun writeValues(values: List<MDValue>): Boolean { val result = invoke("Attribute", "writeValues_List_MDValue", mapOf("values" to encode(values))); return result.jsonPrimitive.boolean }
 }
 
+internal class BundledColorTable(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), ColorTable {
+    override suspend fun close() = closeHandle()
+    override suspend fun cloneColorTable(): ColorTable { val result = invoke("ColorTable", "cloneColorTable", mapOf()); return requireNotNull(engine.wrapColorTable(result, null)) }
+    override suspend fun getPaletteInterpretation(): Int { val result = invoke("ColorTable", "getPaletteInterpretation", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getColorEntryCount(): Int { val result = invoke("ColorTable", "getColorEntryCount", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getColorEntry(index: Int): ColorEntry? { val result = invoke("ColorTable", "getColorEntry_Int", mapOf("index" to encode(index))); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonArray.let { ColorEntry(it[0].jsonPrimitive.int, it[1].jsonPrimitive.int, it[2].jsonPrimitive.int, it[3].jsonPrimitive.int) } } }
+    override suspend fun getColorEntryAsRGB(index: Int): ColorEntry? { val result = invoke("ColorTable", "getColorEntryAsRGB_Int", mapOf("index" to encode(index))); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonArray.let { ColorEntry(it[0].jsonPrimitive.int, it[1].jsonPrimitive.int, it[2].jsonPrimitive.int, it[3].jsonPrimitive.int) } } }
+    override suspend fun setColorEntry(index: Int, entry: ColorEntry): Unit { invoke("ColorTable", "setColorEntry_Int_ColorEntry", mapOf("index" to encode(index), "entry" to encode(entry))); return Unit }
+    override suspend fun createColorRamp(startIndex: Int, start: ColorEntry, endIndex: Int, end: ColorEntry): Unit { invoke("ColorTable", "createColorRamp_Int_ColorEntry_Int_ColorEntry", mapOf("startIndex" to encode(startIndex), "start" to encode(start), "endIndex" to encode(endIndex), "end" to encode(end))); return Unit }
+}
+
+internal class BundledRasterAttributeTable(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), RasterAttributeTable {
+    override suspend fun close() = closeHandle()
+    override suspend fun cloneTable(): RasterAttributeTable { val result = invoke("RasterAttributeTable", "cloneTable", mapOf()); return requireNotNull(engine.wrapRasterAttributeTable(result, null)) }
+    override suspend fun getColumnCount(): Int { val result = invoke("RasterAttributeTable", "getColumnCount", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getRowCount(): Int { val result = invoke("RasterAttributeTable", "getRowCount", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun setRowCount(count: Int): Unit { invoke("RasterAttributeTable", "setRowCount_Int", mapOf("count" to encode(count))); return Unit }
+    override suspend fun getNameOfCol(column: Int): String { val result = invoke("RasterAttributeTable", "getNameOfCol_Int", mapOf("column" to encode(column))); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getTypeOfCol(column: Int): Int { val result = invoke("RasterAttributeTable", "getTypeOfCol_Int", mapOf("column" to encode(column))); return result.jsonPrimitive.int }
+    override suspend fun getUsageOfCol(column: Int): Int { val result = invoke("RasterAttributeTable", "getUsageOfCol_Int", mapOf("column" to encode(column))); return result.jsonPrimitive.int }
+    override suspend fun getColOfUsage(usage: Int): Int { val result = invoke("RasterAttributeTable", "getColOfUsage_Int", mapOf("usage" to encode(usage))); return result.jsonPrimitive.int }
+    override suspend fun createColumn(name: String, type: Int, usage: Int): Int { val result = invoke("RasterAttributeTable", "createColumn_String_Int_Int", mapOf("name" to encode(name), "type" to encode(type), "usage" to encode(usage))); return result.jsonPrimitive.int }
+    override suspend fun getValueAsInt(row: Int, column: Int): Int { val result = invoke("RasterAttributeTable", "getValueAsInt_Int_Int", mapOf("row" to encode(row), "column" to encode(column))); return result.jsonPrimitive.int }
+    override suspend fun getValueAsDouble(row: Int, column: Int): Double { val result = invoke("RasterAttributeTable", "getValueAsDouble_Int_Int", mapOf("row" to encode(row), "column" to encode(column))); return result.jsonPrimitive.content.toDouble() }
+    override suspend fun getValueAsString(row: Int, column: Int): String { val result = invoke("RasterAttributeTable", "getValueAsString_Int_Int", mapOf("row" to encode(row), "column" to encode(column))); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun setValueAsInt(row: Int, column: Int, value: Int): Unit { invoke("RasterAttributeTable", "setValueAsInt_Int_Int_Int", mapOf("row" to encode(row), "column" to encode(column), "value" to encode(value))); return Unit }
+    override suspend fun setValueAsDouble(row: Int, column: Int, value: Double): Unit { invoke("RasterAttributeTable", "setValueAsDouble_Int_Int_Double", mapOf("row" to encode(row), "column" to encode(column), "value" to encode(value))); return Unit }
+    override suspend fun setValueAsString(row: Int, column: Int, value: String): Unit { invoke("RasterAttributeTable", "setValueAsString_Int_Int_String", mapOf("row" to encode(row), "column" to encode(column), "value" to encode(value))); return Unit }
+    override suspend fun readIntegerValues(column: Int, startRow: Int, count: Int): IntArray { val result = invoke("RasterAttributeTable", "readIntegerValues_Int_Int_Int", mapOf("column" to encode(column), "startRow" to encode(startRow), "count" to encode(count))); return result.jsonArray.map { it.jsonPrimitive.content.toInt() }.toIntArray() }
+    override suspend fun writeIntegerValues(column: Int, startRow: Int, values: IntArray): Int { val result = invoke("RasterAttributeTable", "writeIntegerValues_Int_Int_IntArray", mapOf("column" to encode(column), "startRow" to encode(startRow), "values" to encode(values))); return result.jsonPrimitive.int }
+    override suspend fun readDoubleValues(column: Int, startRow: Int, count: Int): DoubleArray { val result = invoke("RasterAttributeTable", "readDoubleValues_Int_Int_Int", mapOf("column" to encode(column), "startRow" to encode(startRow), "count" to encode(count))); return result.jsonArray.map { it.jsonPrimitive.content.toDouble() }.toDoubleArray() }
+    override suspend fun writeDoubleValues(column: Int, startRow: Int, values: DoubleArray): Int { val result = invoke("RasterAttributeTable", "writeDoubleValues_Int_Int_DoubleArray", mapOf("column" to encode(column), "startRow" to encode(startRow), "values" to encode(values))); return result.jsonPrimitive.int }
+    override suspend fun readStringValues(column: Int, startRow: Int, count: Int): List<String> { val result = invoke("RasterAttributeTable", "readStringValues_Int_Int_Int", mapOf("column" to encode(column), "startRow" to encode(startRow), "count" to encode(count))); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun writeStringValues(column: Int, startRow: Int, values: List<String>): Unit { invoke("RasterAttributeTable", "writeStringValues_Int_Int_List_String", mapOf("column" to encode(column), "startRow" to encode(startRow), "values" to encode(values))); return Unit }
+    override suspend fun getLinearBinning(): DoubleArray? { val result = invoke("RasterAttributeTable", "getLinearBinning", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonArray.map { it.jsonPrimitive.content.toDouble() }.toDoubleArray() } }
+    override suspend fun setLinearBinning(rowZeroMinimum: Double, binSize: Double): Int { val result = invoke("RasterAttributeTable", "setLinearBinning_Double_Double", mapOf("rowZeroMinimum" to encode(rowZeroMinimum), "binSize" to encode(binSize))); return result.jsonPrimitive.int }
+    override suspend fun getRowOfValue(value: Double): Int { val result = invoke("RasterAttributeTable", "getRowOfValue_Double", mapOf("value" to encode(value))); return result.jsonPrimitive.int }
+    override suspend fun getTableType(): Int { val result = invoke("RasterAttributeTable", "getTableType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun setTableType(type: Int): Int { val result = invoke("RasterAttributeTable", "setTableType_Int", mapOf("type" to encode(type))); return result.jsonPrimitive.int }
+    override suspend fun changesAreWrittenToFile(): Boolean { val result = invoke("RasterAttributeTable", "changesAreWrittenToFile", mapOf()); return result.jsonPrimitive.boolean }
+    override suspend fun initializeFromColorTable(table: ColorTable): Int { val result = invoke("RasterAttributeTable", "initializeFromColorTable_ColorTable", mapOf("table" to handle(table))); return result.jsonPrimitive.int }
+    override suspend fun translateToColorTable(entryCount: Int): ColorTable? { val result = invoke("RasterAttributeTable", "translateToColorTable_Int", mapOf("entryCount" to encode(entryCount))); return engine.wrapColorTable(result, null) }
+    override suspend fun removeStatistics(): Unit { invoke("RasterAttributeTable", "removeStatistics", mapOf()); return Unit }
+}
+
 internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: RuntimeHandle?): RuntimeHandle? {
     if (value is JsonNull) return null
     val id = value.jsonPrimitive.content
@@ -664,6 +722,8 @@ internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: Runtim
         "FieldDomain" -> BundledFieldDomain(this, id, parent)
         "Relationship" -> BundledRelationship(this, id, parent)
         "Attribute" -> BundledAttribute(this, id, parent)
+        "ColorTable" -> BundledColorTable(this, id, parent)
+        "RasterAttributeTable" -> BundledRasterAttributeTable(this, id, parent)
         else -> error("Unknown GDAL handle type: $type")
     }
 }
@@ -685,3 +745,5 @@ internal fun RuntimeEngine.wrapDimension(value: JsonElement, parent: RuntimeHand
 internal fun RuntimeEngine.wrapFieldDomain(value: JsonElement, parent: RuntimeHandle?): FieldDomain? = wrap("FieldDomain", value, parent) as FieldDomain?
 internal fun RuntimeEngine.wrapRelationship(value: JsonElement, parent: RuntimeHandle?): Relationship? = wrap("Relationship", value, parent) as Relationship?
 internal fun RuntimeEngine.wrapAttribute(value: JsonElement, parent: RuntimeHandle?): Attribute? = wrap("Attribute", value, parent) as Attribute?
+internal fun RuntimeEngine.wrapColorTable(value: JsonElement, parent: RuntimeHandle?): ColorTable? = wrap("ColorTable", value, parent) as ColorTable?
+internal fun RuntimeEngine.wrapRasterAttributeTable(value: JsonElement, parent: RuntimeHandle?): RasterAttributeTable? = wrap("RasterAttributeTable", value, parent) as RasterAttributeTable?
