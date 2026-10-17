@@ -78,9 +78,9 @@ suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): B
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
 | JS / wasmJs | 전용 Worker | 같은 자체 GDAL Wasm을 정적 자산으로 배포하고 Worker에서 로드·초기화 |
 
-JVM은 기본 바이너리가 없으며 `gdal4k-engine-jvm-<platform>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
+JVM은 기본 바이너리가 없으며 `gdal4k-engine:<version>:<classifier>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
 
-Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않습니다.
+Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않으며, ARM64 실행을 지원하지 않는 환경과 32비트 프로세스는 초기화 시 거절합니다.
 
 한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 

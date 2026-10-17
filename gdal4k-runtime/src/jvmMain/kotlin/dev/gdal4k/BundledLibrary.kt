@@ -25,8 +25,8 @@ private object BundledLibrary {
             else -> platform
         }
         val bytes = checkNotNull(javaClass.getResourceAsStream(resource)) {
-            "Missing GDAL JVM binary for $platform. Add runtimeOnly(\"dev.tronto.gdal4k:gdal4k-engine-jvm-$artifact:<gdal4k-version>\") " +
-                "using the same version as gdal4k. No JVM binary is included by default. Missing resource: $resource"
+            "Missing GDAL JVM binary for $platform. Add runtimeOnly(\"dev.tronto.gdal4k:gdal4k-engine:<gdal4k-version>:$artifact\") " +
+                "using the same version as gdal4k-runtime. No JVM binary is included by default. Missing resource: $resource"
         }.use { it.readBytes() }
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val directory = java.io.File(System.getProperty("java.io.tmpdir"), "gdal4k/$digest").toPath()
