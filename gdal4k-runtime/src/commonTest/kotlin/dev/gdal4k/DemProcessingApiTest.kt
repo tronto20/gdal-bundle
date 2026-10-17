@@ -87,6 +87,13 @@ class DemProcessingApiTest {
             }
         } finally { driver.delete(path); driver.delete(cogPath) } }
     }
+    @Test fun virtualSourceKeepsInputsForTerrainProcessing() = runTest(timeout = 120.seconds) {
+        val vrt = source { ds -> Gdal4k.runtime().buildVRT(listOf(ds)) }
+        // The original Kotlin dataset has closed, but the VRT retains its native input.
+        vrt.use { ds ->
+            assertEquals(45f, pixels(ds.demProcessing("slope", arguments = listOf("-s", "1")))[12], 0.0001f)
+        }
+    }
     @Test fun validationFailuresPreserveSource() = runTest(timeout = 120.seconds) {
         source { ds ->
             for (mode in listOf("", "missing", "color-relief", "slope\u0000")) assertFails { ds.demProcessing(mode) }

@@ -3,7 +3,7 @@
 const fs = typeof process !== 'undefined' && process.versions?.node ? process.getBuiltinModule('fs') : null;
 const prefix = '/vsigdal4k-output/';
 export class Outputs {
-    constructor() { this.handles = new Map(); this.sequence = 0; this.lastError = null; }
+    constructor() { this.handles = new Map(); this.accesses = new Map(); this.sequence = 0; this.lastError = null; }
     path(path) {
         if (path.startsWith(prefix) || /^\/vsi[a-z0-9_]+\//i.test(path)) return path;
         if (fs) return prefix + path;
@@ -28,6 +28,17 @@ export class Outputs {
     async open(path, mode) {
         const write = /[wa+]/.test(mode);
         try {
+            // VRT proxies and COG CreateCopy can reopen a live dataset for reading.
+            // Share positional reads even with the single writer's OPFS access handle.
+            // Logical handles keep their own offset and read/write permissions.
+            let shared = !fs && !write ? this.accesses.get(path) : null;
+            if (shared) {
+                shared.handle.flush();
+                ++shared.references;
+                const id = ++this.sequence;
+                this.handles.set(id, {path, handle: shared.handle, write, shared});
+                return id;
+            }
             let handle;
             if (fs) {
                 const fd = fs.openSync(this.nativePath(path), mode.replace('b', ''));
@@ -40,7 +51,11 @@ export class Outputs {
                 handle = {read: (view, at) => access.read(view, {at}), write: (view, at) => access.write(view, {at}), size: () => access.getSize(), truncate: n => access.truncate(n), flush: () => access.flush(), close: () => access.close()};
                 if (mode.startsWith('w')) handle.truncate(0);
             }
-            const id = ++this.sequence; this.handles.set(id, {path, handle, write}); return id;
+            if (!fs) {
+                shared = {handle, references: 1};
+                this.accesses.set(path, shared);
+            }
+            const id = ++this.sequence; this.handles.set(id, {path, handle, write, shared}); return id;
         } catch (error) {
             if (!write && (error.name === 'NotFoundError' || error.code === 'ENOENT' || error.code === 'ENOTDIR')) return 0;
             this.lastError = error; return 0;
@@ -73,7 +88,17 @@ export class Outputs {
         const entry = this.handles.get(id);
         if (!entry) return;
         this.handles.delete(id);
-        try { if (entry.write) entry.handle.flush(); } finally { entry.handle.close(); }
+        let failure;
+        try { if (entry.write) entry.handle.flush(); } catch (error) { failure = error; }
+        if (entry.shared) {
+            if (--entry.shared.references === 0) {
+                this.accesses.delete(entry.path);
+                try { entry.handle.close(); } catch (error) { failure ??= error; }
+            }
+        } else {
+            try { entry.handle.close(); } catch (error) { failure ??= error; }
+        }
+        if (failure) throw failure;
     }
     async unlink(path) {
         try {

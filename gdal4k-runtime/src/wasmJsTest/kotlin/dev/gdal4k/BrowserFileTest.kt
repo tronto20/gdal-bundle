@@ -13,6 +13,20 @@ private external fun fixtureFile(): File
 @JsFun("() => typeof window !== 'undefined'")
 private external fun inBrowser(): Boolean
 class BrowserFileTest {
+    @Test fun virtualDatasetRetainsSelectedFileMount() = runTest {
+        if (!inBrowser()) return@runTest
+        try {
+            val r=Gdal4k.runtime();val source=r.openDataset(fixtureFile())
+            val vrt=r.buildVRT(listOf(source));source.close()
+            assertFails { source.getRasterXSize() }
+            try {
+                val pixels=ByteArray(6);assertEquals(0,vrt.readRaster(pixels))
+                assertContentEquals(byteArrayOf(0,1,2,3,4,-1),pixels)
+            } finally { vrt.close() }
+            r.openDataset(fixtureFile()).use { assertEquals(3,it.getRasterXSize()) }
+        } finally { Gdal4k.close() }
+    }
+
     @Test fun shapefileSelectedFilesUseSidecars() = runTest {
         if (!inBrowser()) return@runTest
         try {

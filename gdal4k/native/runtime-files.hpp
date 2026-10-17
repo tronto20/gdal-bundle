@@ -20,6 +20,23 @@ struct FileOptions {
     }
     ~FileOptions() { CSLDestroy(list); }
 };
+// GDALWarp's CreateCopy path (including COG) materializes a temporary GTiff.
+// Without CPL_TMPDIR it can use the process cwd, which is read-only on Android.
+// Use the output filesystem rather than staging a direct output in memory.
+struct OutputTemporaryDirectory {
+    char** previous = nullptr;
+    bool changed = false;
+    explicit OutputTemporaryDirectory(const std::string& path, bool enabled = true) {
+        if (enabled && !CPLGetConfigOption("CPL_TMPDIR", nullptr)) {
+            previous = CPLGetThreadLocalConfigOptions(); changed = true;
+            auto directory = CPLGetPathSafe(path.c_str());
+            CPLSetThreadLocalConfigOption("CPL_TMPDIR", directory.empty() ? "." : directory.c_str());
+        }
+    }
+    ~OutputTemporaryDirectory() {
+        if (changed) { CPLSetThreadLocalConfigOptions(previous); CSLDestroy(previous); }
+    }
+};
 inline CPLJSONObject objectValue(const CPLJSONObject& object) {
     CPLJSONObject result; result.Add("value", object); return result;
 }
@@ -108,6 +125,7 @@ inline void convertDatasetPath(GDALDatasetH dataset, const CPLJSONObject& args, 
     options.add(operation == "vector" ? "-f" : "-of"); options.add(args.GetString("driver"));
     GDALDatasetH result = nullptr;
     int usageError = 0;
+    OutputTemporaryDirectory temporary(path, operation == "warp");
     if (operation == "translate") {
         auto opts = GDALTranslateOptionsNew(options.list, nullptr); fileEnsure(opts != nullptr, "Invalid translate options");
         result = GDALTranslate(path.c_str(), dataset, opts, &usageError); GDALTranslateOptionsFree(opts);
@@ -161,4 +179,68 @@ inline CPLJSONObject demProcessing(GDALDatasetH source, const CPLJSONObject& arg
     Directory output;
     demProcessingPath(source, args, output.path + "/" + name);
     return outputFiles(output, name);
+}
+
+inline void rasterizeDatasetPath(GDALDatasetH source, const CPLJSONObject& args, const std::string& path) {
+    require(GDALDatasetGetLayerCount(source) > 0, "Rasterize requires a vector dataset");
+    require(!path.empty() && path.find('\0') == std::string::npos, "Invalid output path");
+    auto driver = args.GetString("driver");
+    require(!driver.empty() && !EQUAL(driver.c_str(), "MEM") && !EQUAL(driver.c_str(), "VRT"), "Rasterize requires a concrete output file format");
+    FileOptions options(args.GetArray("arguments"));
+    options.add("-of"); options.add(driver);
+    auto opts = GDALRasterizeOptionsNew(options.list, nullptr);
+    fileEnsure(opts != nullptr, "Invalid rasterize options");
+    int usageError = 0;
+    auto result = GDALRasterize(path.c_str(), nullptr, source, opts, &usageError);
+    GDALRasterizeOptionsFree(opts);
+    auto closeCode = result ? GDALClose(result) : CE_Failure;
+    fileEnsure(result != nullptr && closeCode == CE_None && !usageError, "GDAL rasterize failed");
+}
+inline CPLJSONObject rasterizeDataset(GDALDatasetH source, const CPLJSONObject& args, bool direct) {
+    if (direct) { rasterizeDatasetPath(source, args, args.GetString("path")); return nullValue(); }
+    auto name = args.GetString("name"); fileBasename(name);
+    Directory output;
+    rasterizeDatasetPath(source, args, output.path + "/" + name);
+    return outputFiles(output, name);
+}
+
+struct RasterSources {
+    std::vector<GDALDatasetH> datasets;
+    std::vector<unsigned long long> ids;
+    RasterSources(Runtime& r,const CPLJSONArray& array) {
+        require(array.Size()>0,"At least one source dataset is required");
+        for(auto source:array) {
+            auto id=std::stoull(source.GetString("handle"));auto p=r.get(id,"Dataset");
+            require(GDALGetRasterCount(p)>0,"Source dataset has no raster bands");
+            datasets.push_back(p);ids.push_back(id);
+        }
+    }
+};
+inline CPLJSONObject buildVirtualDataset(Runtime& r,const CPLJSONObject& a) {
+    RasterSources sources(r,a.GetArray("sources"));auto arguments=a.GetArray("arguments");bool permissive=false;
+    for(auto arg:arguments)if(arg.ToString()=="-non_strict")permissive=true;
+    FileOptions options(arguments);if(!permissive)options.add("-strict");
+    auto opts=GDALBuildVRTOptionsNew(options.list,nullptr);fileEnsure(opts!=nullptr,"Invalid VRT options");
+    int usage=0;auto p=GDALBuildVRT("",static_cast<int>(sources.datasets.size()),sources.datasets.data(),nullptr,opts,&usage);
+    GDALBuildVRTOptionsFree(opts);
+    if(!p||usage){if(p)GDALClose(p);fileEnsure(false,"Cannot build VRT");}
+    auto result=r.result(p,"Dataset",true);auto id=std::stoull(result.GetString("value"));r.retainSources(id,sources.ids);return result;
+}
+inline void warpDatasetPath(Runtime& r,const CPLJSONObject& a,const std::string& path) {
+    RasterSources sources(r,a.GetArray("sources"));
+    require(!path.empty()&&path.find('\0')==std::string::npos,"Invalid output path");
+    auto driver=a.GetString("driver"),target=a.GetString("target");
+    require(!target.empty()&&target.find('\0')==std::string::npos,"Target SRS is required");
+    require(!EQUAL(driver.c_str(),"VRT")&&!EQUAL(driver.c_str(),"MEM"),"Warp file output requires a concrete format, not VRT or MEM");
+    FileOptions options(a.GetArray("arguments"));options.add("-t_srs");options.add(target);options.add("-of");options.add(driver);
+    auto opts=GDALWarpAppOptionsNew(options.list,nullptr);fileEnsure(opts!=nullptr,"Invalid warp options");
+    OutputTemporaryDirectory temporary(path);
+    int usage=0;auto p=GDALWarp(path.c_str(),nullptr,static_cast<int>(sources.datasets.size()),sources.datasets.data(),opts,&usage);
+    GDALWarpAppOptionsFree(opts);auto code=p?GDALClose(p):CE_Failure;
+    fileEnsure(p!=nullptr&&code==CE_None&&!usage,"Cannot warp datasets");
+}
+inline CPLJSONObject warpDatasets(Runtime& r,const CPLJSONObject& a,bool direct) {
+    if(direct){warpDatasetPath(r,a,a.GetString("path"));return nullValue();}
+    Directory output;auto name=a.GetString("name");fileBasename(name);
+    warpDatasetPath(r,a,output.path+"/"+name);return outputFiles(output,name);
 }
