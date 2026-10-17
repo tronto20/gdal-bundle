@@ -11,7 +11,7 @@ from jvm_binaries import JVM_BINARIES
 ROOT = Path(__file__).resolve().parent.parent
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--repo', type=Path, default=ROOT/'verification/build/consumer-maven')
-p.add_argument('--binary', action='append', choices=JVM_BINARIES, help='Check a local subset; CI checks all five')
+p.add_argument('--binary', action='append', choices=JVM_BINARIES, help='Check a local subset; CI checks all four')
 a = p.parse_args()
 base = a.repo.resolve()/'dev/tronto/gdal4k'
 ns = {'m': 'http://maven.apache.org/POM/4.0.0'}

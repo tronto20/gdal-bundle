@@ -10,8 +10,8 @@ kotlin {
     jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
     androidLibrary { namespace = "dev.gdal4k.runtime"; compileSdk = 35; minSdk = 28 }
     js { nodejs(); browser() }; wasmJs { nodejs(); browser() }
-    macosArm64(); macosX64(); linuxX64(); linuxArm64(); mingwX64()
-    iosArm64(); iosSimulatorArm64(); iosX64()
+    macosArm64(); linuxX64(); linuxArm64(); mingwX64()
+    iosArm64(); iosSimulatorArm64()
     sourceSets.commonMain.dependencies { api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") }
 }
 

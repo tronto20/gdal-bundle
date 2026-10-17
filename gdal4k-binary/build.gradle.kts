@@ -30,16 +30,16 @@ fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.spl
         else if (!target.startsWith("ios")) outputs.file(layout.buildDirectory.file("jvm-resources/gdal4k/$target/${if (target.startsWith("windows")) "gdal4k.dll" else if (target.startsWith("macos")) "libgdal4k.dylib" else "libgdal4k.so"}"))
     }
 }
-val engineTargets = listOf("macos-arm64", "macos-amd64", "linux-amd64", "linux-arm64", "windows-amd64", "ios-arm64", "ios-simulator-arm64", "ios-simulator-amd64", "android-arm64-v8a", "web")
+val engineTargets = listOf("macos-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "ios-arm64", "ios-simulator-arm64", "android-arm64-v8a", "web")
 val engineTasks = engineTargets.associateWith(::engineTask)
-val nativeTargets = mapOf("macosArm64" to "macos-arm64", "macosX64" to "macos-amd64", "linuxX64" to "linux-amd64", "linuxArm64" to "linux-arm64", "mingwX64" to "windows-amd64", "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64", "iosX64" to "ios-simulator-amd64")
+val nativeTargets = mapOf("macosArm64" to "macos-arm64", "linuxX64" to "linux-amd64", "linuxArm64" to "linux-arm64", "mingwX64" to "windows-amd64", "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64")
 kotlin {
     jvmToolchain(21)
     jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
     androidLibrary { namespace = "dev.gdal4k.binary"; compileSdk = 35; minSdk = 28 }
     js { nodejs(); browser() }; wasmJs { nodejs(); browser() }
-    macosArm64(); macosX64(); linuxX64(); linuxArm64(); mingwX64()
-    iosArm64(); iosSimulatorArm64(); iosX64()
+    macosArm64(); linuxX64(); linuxArm64(); mingwX64()
+    iosArm64(); iosSimulatorArm64()
     applyDefaultHierarchyTemplate {
         common {
             group("jni") { withCompilations { it.target.name in listOf("jvm", "android") } }

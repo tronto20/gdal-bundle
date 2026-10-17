@@ -15,9 +15,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT/'gdal4k-binary/build'
 REPO = ROOT/'verification/build/consumer-maven'
 GRADLE = ROOT/('gradlew.bat' if os.name == 'nt' else 'gradlew')
-PLATFORMS = {'macosArm64':'macos-arm64','macosX64':'macos-amd64','linuxX64':'linux-amd64',
+PLATFORMS = {'macosArm64':'macos-arm64','linuxX64':'linux-amd64',
  'linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64',
- 'iosSimulatorArm64':'ios-simulator-arm64','iosX64':'ios-simulator-amd64'}
+ 'iosSimulatorArm64':'ios-simulator-arm64'}
 
 def run(*args):
     subprocess.run([str(x) for x in args], cwd=ROOT, check=True)
@@ -71,7 +71,7 @@ def main():
         cross=target in ['iosArm64','linuxArm64']
         options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
         tasks=[f':gdal4k:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k:{target}Test']
-        if target in ['macosArm64','macosX64','linuxX64','mingwX64']:tasks+=[':gdal4k:jvmTest']
+        if target in ['macosArm64','linuxX64','mingwX64']:tasks+=[':gdal4k:jvmTest']
         gradle(*tasks,options=options)
         run(sys.executable, ROOT/'verification/audit-engine.py', PLATFORMS[target])
         publish(target)
@@ -90,7 +90,7 @@ def main():
         run(sys.executable,ROOT/'verification/audit-engine.py',target)
         stage(target,[target])
     elif target=='aggregate':
-        # All five JVM JNI libraries and Android ARM64 are mandatory before publication.
+        # All four JVM JNI libraries and Android ARM64 are mandatory before publication.
         engines=[*PLATFORMS.values(),'web','android-arm64-v8a']
         fingerprints=set()
         for platform in engines:

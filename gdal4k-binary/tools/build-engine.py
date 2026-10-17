@@ -7,10 +7,10 @@ ROOT=Path(__file__).resolve().parents[2]
 BINARY=ROOT/'gdal4k-binary'
 VCPKG_REV='3cd21e48a75f67acfef289da52893ce79144aaa1'
 TARGETS={
- 'macos-arm64':'arm64-osx','macos-amd64':'x64-osx',
+ 'macos-arm64':'arm64-osx',
  'linux-amd64':'x64-linux','linux-arm64':'arm64-linux',
  'windows-amd64':'x64-mingw-static',
- 'ios-arm64':'arm64-ios','ios-simulator-arm64':'arm64-ios-simulator','ios-simulator-amd64':'x64-ios',
+ 'ios-arm64':'arm64-ios','ios-simulator-arm64':'arm64-ios-simulator',
  'android-arm64-v8a':'arm64-android',
  'web':'wasm32-emscripten',
 }
@@ -89,8 +89,8 @@ def main():
  if target.startswith('android'):
   ndk=Path(os.environ.get('ANDROID_NDK_HOME',ROOT/'verification/tools/android-ndk-r28c'))
   cmd += ['-DCMAKE_SYSTEM_NAME=Android',f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={ndk/"build/cmake/android.toolchain.cmake"}',f'-DCMAKE_ANDROID_NDK={ndk}','-DANDROID_PLATFORM=android-28','-DANDROID_STL=c++_static',f'-DANDROID_ABI={target[8:]}']
- if target.startswith('ios'):cmd+=['-DCMAKE_SYSTEM_NAME=iOS',f'-DCMAKE_OSX_SYSROOT={"iphonesimulator" if "simulator" in target else "iphoneos"}',f'-DCMAKE_OSX_ARCHITECTURES={"x86_64" if "amd64" in target else "arm64"}','-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0']
- if target.startswith('macos'):cmd += [f'-DCMAKE_OSX_ARCHITECTURES={"x86_64" if "amd64" in target else "arm64"}','-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0']
+ if target.startswith('ios'):cmd+=['-DCMAKE_SYSTEM_NAME=iOS',f'-DCMAKE_OSX_SYSROOT={"iphonesimulator" if "simulator" in target else "iphoneos"}','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0']
+ if target.startswith('macos'):cmd += ['-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0']
  run(*cmd,env=env);run('cmake','--build',build,'--parallel',a.jobs,env=env)
  if target=='web':
   shutil.copy2(build/'gdal4k.mjs',out/'gdal4k.mjs')

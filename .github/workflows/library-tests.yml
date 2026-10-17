@@ -22,11 +22,9 @@ jobs:
           - { target: linuxX64, os: ubuntu-24.04 }
           - { target: linuxArm64, os: ubuntu-24.04 }
           - { target: macosArm64, os: macos-15 }
-          - { target: macosX64, os: macos-15-intel }
           - { target: mingwX64, os: windows-2025 }
           - { target: iosArm64, os: macos-15 }
           - { target: iosSimulatorArm64, os: macos-15 }
-          - { target: iosX64, os: macos-15-intel }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     steps:
@@ -48,7 +46,7 @@ jobs:
         run: python verification/ci.py '${{ matrix.target }}' --build-engine-only
       - name: Boot iOS simulator
         timeout-minutes: 5
-        if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
+        if: matrix.target == 'iosSimulatorArm64'
         run: |
           device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for g in d["devices"].values() for x in g if x["name"].startswith("iPhone")))')"
           xcrun simctl boot "$device" || xcrun simctl list devices booted | grep "$device"
@@ -257,7 +255,6 @@ jobs:
         include:
           - { os: windows-2025, binary: windows-x64 }
           - { os: macos-15, binary: macos-arm64 }
-          - { os: macos-15-intel, binary: macos-x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:

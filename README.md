@@ -6,6 +6,8 @@ JVM 기본 의존성에는 바이너리가 없습니다. 아래 플랫폼 좌표
 
 Android는 API 28 이상, `arm64-v8a`만 지원합니다. Android x86/x86_64와 32비트 ARM은 지원하지 않습니다.
 
+Apple 타깃은 `macosArm64`, `iosArm64`, `iosSimulatorArm64`입니다. macOS와 iOS 시뮬레이터는 Apple Silicon만 지원합니다. 실제 iPhone·iPad용 `iosArm64`와 시뮬레이터용 `iosSimulatorArm64`는 SDK·플랫폼이 달라 별도 바이너리를 제공하며, Gradle이 소비 앱의 타깃에 맞는 아티팩트를 선택합니다.
+
 ```kotlin
 commonMain.dependencies {
     implementation("dev.tronto.gdal4k:gdal4k:3.12.4-1.0.1-SNAPSHOT")
@@ -25,7 +27,6 @@ dependencies {
 | --- | --- |
 | Linux x64 / glibc (Ubuntu 등) | `gdal4k-binary-linux-x64-gnu` |
 | Linux ARM64 / glibc | `gdal4k-binary-linux-arm64-gnu` |
-| macOS Intel | `gdal4k-binary-macos-x64` |
 | macOS Apple Silicon | `gdal4k-binary-macos-arm64` |
 | Windows x64 | `gdal4k-binary-windows-x64` |
 
@@ -49,7 +50,7 @@ suspend fun describe(bytes: ByteArray): String {
 
 - `gdal4k-runtime`: 기존 `GdalRuntime`, `Dataset`, `Band`, OGR·SRS 인터페이스와 공통 파일 값 타입·편의 함수. GDAL을 호출하는 메서드는 `suspend`입니다.
 - `gdal4k-binary`: 인터페이스의 플랫폼별 구현. JVM에는 코드만, Native·웹에는 해당 타깃 엔진을 포함합니다.
-- `gdal4k-binary-<platform>`: JVM 앱이 선택하는 리소스 전용 JAR 5종. 소스의 `gdal4k-jvm-binaries` 모듈에서 게시합니다.
+- `gdal4k-binary-<platform>`: JVM 앱이 선택하는 리소스 전용 JAR 4종. 소스의 `gdal4k-jvm-binaries` 모듈에서 게시합니다.
 - `gdal4k`: 공통 진입점과 통합 테스트. `gdal4k-binary`를 전이 의존성으로 제공합니다.
 - `gdal4k-android-runtime`: JNI 바이너리를 전달하는 Android AAR.
 

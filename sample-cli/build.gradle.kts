@@ -60,7 +60,6 @@ fun currentGdalPlatformClassifier(): String {
     val arch = System.getProperty("os.arch").lowercase()
 
     return when {
-        osName.contains("mac") && (arch == "x86_64" || arch == "amd64") -> "macos-amd64"
         osName.contains("mac") && (arch == "aarch64" || arch == "arm64") -> "macos-arm64"
         osName.contains("linux") && (arch == "aarch64" || arch == "arm64") -> "linux-arm64"
         osName.contains("linux") && (arch == "x86_64" || arch == "amd64") -> "linux-amd64"
@@ -73,7 +72,7 @@ val currentGdalPlatformClassifier = currentGdalPlatformClassifier()
 
 fun currentInstallerType(classifier: String): String {
     return when (classifier) {
-        "macos-arm64", "macos-amd64" -> "pkg"
+        "macos-arm64" -> "pkg"
         "linux-amd64", "linux-arm64" -> "deb"
         "windows-amd64" -> "msi"
         else -> error("Unsupported platform for installer packaging: $classifier")
@@ -82,7 +81,7 @@ fun currentInstallerType(classifier: String): String {
 
 fun currentJPackageResourceDir(classifier: String): File {
     val resourceDirName = when (classifier) {
-        "macos-arm64", "macos-amd64" -> "macos"
+        "macos-arm64" -> "macos"
         "linux-amd64", "linux-arm64" -> "linux"
         "windows-amd64" -> "windows"
         else -> error("Unsupported platform for installer resources: $classifier")
@@ -109,8 +108,8 @@ fun normalizedJpackageVersion(version: String): String {
 }
 
 val jvmBinary = providers.gradleProperty("gdal4kJvmBinary").orNull
-    ?: error("Select -Pgdal4kJvmBinary=macos-arm64 (or macos-x64, linux-x64-gnu, linux-arm64-gnu, windows-x64)")
-require(jvmBinary in setOf("macos-arm64", "macos-x64", "linux-x64-gnu", "linux-arm64-gnu", "windows-x64")) {
+    ?: error("Select -Pgdal4kJvmBinary=macos-arm64 (or linux-x64-gnu, linux-arm64-gnu, windows-x64)")
+require(jvmBinary in setOf("macos-arm64", "linux-x64-gnu", "linux-arm64-gnu", "windows-x64")) {
     "Unsupported gdal4kJvmBinary: $jvmBinary"
 }
 dependencies {

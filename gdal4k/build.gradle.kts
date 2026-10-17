@@ -17,9 +17,8 @@ kotlin {
     }
     js { nodejs { testTask { useMocha { timeout = "120s" } } }; browser { testTask { useKarma { useChromeHeadless() } } } }
     wasmJs { nodejs { testTask { useMocha { timeout = "240s" } } }; browser { testTask { useKarma { useChromeHeadless() } } } }
-    macosArm64(); macosX64(); linuxX64(); linuxArm64(); mingwX64(); iosArm64()
+    macosArm64(); linuxX64(); linuxArm64(); mingwX64(); iosArm64()
     iosSimulatorArm64 { testRuns["test"].deviceId = providers.gradleProperty("iosDevice").orElse("iPhone 16").get() }
-    iosX64()
     sourceSets {
         commonMain.dependencies { api(project(":gdal4k-binary")) }
         commonTest.dependencies {
@@ -39,7 +38,6 @@ val testHostArm64 = testHostArch in listOf("aarch64", "arm64")
 val testHostX64 = testHostArch in listOf("amd64", "x86_64")
 val testBinary = when {
     testHostOs.contains("mac") && testHostArm64 -> "macosArm64"
-    testHostOs.contains("mac") && testHostX64 -> "macosX64"
     testHostOs.contains("linux") && testHostArm64 -> "linuxArm64Gnu"
     testHostOs.contains("linux") && testHostX64 -> "linuxX64Gnu"
     testHostOs.contains("windows") && testHostX64 -> "windowsX64"

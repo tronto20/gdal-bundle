@@ -15,7 +15,7 @@ p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-mave
 p.add_argument('--destination',type=Path,help='Local verification repository; never contacts a remote server')
 a=p.parse_args()
 base=a.repo.resolve()/'dev/tronto/gdal4k'
-targets=['jvm','android','js','wasm-js','macosarm64','macosx64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64','iosx64']
+targets=['jvm','android','js','wasm-js','macosarm64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64']
 expected={m+s for m in ['gdal4k','gdal4k-runtime','gdal4k-binary'] for s in ['',*['-'+t for t in targets]]}|{'gdal4k-android-runtime'}|{'gdal4k-binary-'+b for b in JVM_BINARIES}
 if {d.name for d in base.iterdir() if d.is_dir()}!=expected:raise SystemExit('Incomplete or unexpected Maven coordinate set')
 items=[]

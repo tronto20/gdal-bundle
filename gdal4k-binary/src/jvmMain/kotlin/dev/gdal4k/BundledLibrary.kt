@@ -19,7 +19,6 @@ private object BundledLibrary {
         val platform = GdalPlatform.current().classifier
         val resource = "/gdal4k/$platform/$name"
         val artifact = when (platform) {
-            "macos-amd64" -> "macos-x64"
             "linux-amd64" -> "linux-x64-gnu"
             "linux-arm64" -> "linux-arm64-gnu"
             "windows-amd64" -> "windows-x64"

@@ -12,7 +12,7 @@ from jvm_binaries import JVM_BINARIES, host_binary
 ROOT=Path(__file__).resolve().parent.parent
 VERSION='3.12.4-1.0.1-SNAPSHOT'
 p=argparse.ArgumentParser()
-p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','macosX64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','iosX64','android'])
+p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','android'])
 p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-maven')
 p.add_argument('--no-publish',action='store_true')
 p.add_argument('--compile-only',action='store_true')
@@ -117,7 +117,7 @@ withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRu
   task='connectedAndroidDeviceTest'
  else:
   declaration=target+'()'
-  if target in ['iosSimulatorArm64','iosX64'] and a.ios_device:
+  if target == 'iosSimulatorArm64' and a.ios_device:
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
  extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
@@ -179,7 +179,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  config=consumer/'karma.config.d/timeout.js';config.parent.mkdir();config.write_text('config.browserNoActivityTimeout=240000; config.client.mocha={...config.client.mocha,timeout:180000};\n')
  if target=='android' and (ROOT/'local.properties').exists():shutil.copy2(ROOT/'local.properties',consumer/'local.properties')
  # The native consumer must link the archive stored inside its published KLIB.
- platform={'macosArm64':'macos-arm64','macosX64':'macos-amd64','linuxX64':'linux-amd64','linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64','iosSimulatorArm64':'ios-simulator-arm64','iosX64':'ios-simulator-amd64'}.get(target)
+ platform={'macosArm64':'macos-arm64','linuxX64':'linux-amd64','linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64','iosSimulatorArm64':'ios-simulator-arm64'}.get(target)
  hidden=[]
  try:
   if platform:

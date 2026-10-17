@@ -52,7 +52,7 @@ python3 verification/consumer.py --target wasmJs
 ## 산출물과 게시
 
 - JVM 코드: `gdal4k-binary-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
-- JVM 리소스: `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-macos-x64`, `gdal4k-binary-macos-arm64`, `gdal4k-binary-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
+- JVM 리소스: `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-macos-arm64`, `gdal4k-binary-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
 - Native: `gdal4k-binary-<target>` KLIB 안에 GDAL과 모든 선택된 종속성의 정적 archive 포함
 - Android: 플랫폼 Kotlin 아티팩트와 `gdal4k-android-runtime` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
 - 웹: `gdal4k-binary-js` / `gdal4k-binary-wasm-js`, 동일한 외부 Worker·ES module·Wasm 자산 포함
@@ -60,9 +60,9 @@ python3 verification/consumer.py --target wasmJs
 
 Kotlin 소비자는 `gdal4k` 루트 좌표를 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. JVM에서는 별도로 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정해야 합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
 
-예를 들어 macOS ARM64 리소스만 로컬 게시하려면 `./gradlew :gdal4k-jvm-binaries:publishMacosArm64PublicationToMavenLocal`을 실행합니다. 다른 publication 이름은 `MacosX64`, `LinuxX64Gnu`, `LinuxArm64Gnu`, `WindowsX64`입니다. 선택한 작업만 해당 엔진을 빌드합니다. `verification/consumer.py --target jvm --jvm-binary macos-arm64`는 선택한 리소스와 코드 게시 후 외부 소비를 검증합니다. 테스트 도구에서 옵션을 생략하면 테스트 호스트를 선택하며 제품 의존성의 기본값으로 사용하지 않습니다.
+예를 들어 macOS ARM64 리소스만 로컬 게시하려면 `./gradlew :gdal4k-jvm-binaries:publishMacosArm64PublicationToMavenLocal`을 실행합니다. 다른 publication 이름은 `LinuxX64Gnu`, `LinuxArm64Gnu`, `WindowsX64`입니다. 선택한 작업만 해당 엔진을 빌드합니다. `verification/consumer.py --target jvm --jvm-binary macos-arm64`는 선택한 리소스와 코드 게시 후 외부 소비를 검증합니다. 테스트 도구에서 옵션을 생략하면 테스트 호스트를 선택하며 제품 의존성의 기본값으로 사용하지 않습니다.
 
-CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. 코드 JAR에 바이너리가 없는지, POM/Gradle metadata에 기본 바이너리 의존성이 없는지, JVM 5종의 각 JAR에 정확히 해당 리소스만 있고 SHA-256이 맞는지 검사합니다. 미선택·잘못된 플랫폼·복수 플랫폼 의존성도 별도 JVM 소비 테스트로 확인합니다. Android AAR에 ARM64 이외의 ABI가 들어가면 실패합니다. 전체 Maven 좌표는 45개입니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
+CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. 코드 JAR에 바이너리가 없는지, POM/Gradle metadata에 기본 바이너리 의존성이 없는지, JVM 4종의 각 JAR에 정확히 해당 리소스만 있고 SHA-256이 맞는지 검사합니다. 미선택·잘못된 플랫폼·복수 플랫폼 의존성도 별도 JVM 소비 테스트로 확인합니다. Android AAR에 ARM64 이외의 ABI가 들어가면 실패합니다. 전체 Maven 좌표는 38개입니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
 
 기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k/README.md)를 참고하세요.
 

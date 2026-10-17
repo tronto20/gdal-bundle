@@ -8,9 +8,6 @@ actual object GdalPlatform {
         val arch = normalizeArch(System.getProperty("os.arch"))
 
         return when {
-            os.contains("mac") && arch == "amd64" ->
-                GdalPlatformInfo("macos-amd64", "macos", "amd64")
-
             os.contains("mac") && arch == "arm64" ->
                 GdalPlatformInfo("macos-arm64", "macos", "arm64")
 
@@ -25,7 +22,7 @@ actual object GdalPlatform {
 
             else -> error(
                 "Unsupported OS/arch: ${System.getProperty("os.name")} / ${System.getProperty("os.arch")}. " +
-                    "Supported classifiers are macos-amd64, macos-arm64, linux-amd64, linux-arm64, windows-amd64.",
+                    "Supported classifiers are macos-arm64, linux-amd64, linux-arm64, windows-amd64.",
             )
         }
     }

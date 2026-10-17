@@ -4,7 +4,6 @@ plugins { base; `maven-publish` }
 data class JvmBinary(val publication: String, val suffix: String, val platform: String, val library: String)
 val binaries = listOf(
     JvmBinary("macosArm64", "macos-arm64", "macos-arm64", "libgdal4k.dylib"),
-    JvmBinary("macosX64", "macos-x64", "macos-amd64", "libgdal4k.dylib"),
     JvmBinary("linuxX64Gnu", "linux-x64-gnu", "linux-amd64", "libgdal4k.so"),
     JvmBinary("linuxArm64Gnu", "linux-arm64-gnu", "linux-arm64", "libgdal4k.so"),
     JvmBinary("windowsX64", "windows-x64", "windows-amd64", "gdal4k.dll"),
