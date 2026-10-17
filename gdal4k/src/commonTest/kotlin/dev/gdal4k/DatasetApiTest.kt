@@ -26,7 +26,9 @@ class DatasetApiTest {
                 copy.use { assertTrue(it.isGeographic()) }
                 assertEquals(1, ds.getAccess())
                 assertEquals(0, ds.addBand(GdalDataType.Byte)); assertEquals(2, ds.getRasterCount())
-                assertEquals(0, ds.createMaskBand(2)); ds.clearStatistics()
+                val band=requireNotNull(ds.getRasterBand(1));val previousMask=requireNotNull(band.getMaskBand())
+                assertEquals(0, ds.createMaskBand(2));assertFails { previousMask.getXSize() };previousMask.close();band.close()
+                ds.clearStatistics()
             }
         }
     }
@@ -104,7 +106,9 @@ class DatasetApiTest {
                 assertFails { ds.executeSQL("SELECT * FROM missing_table") }
                 assertEquals(1,layer.getFeatureCount(true))
                 val clone=requireNotNull(ds.copyLayer(layer,"copy")); assertEquals(1,clone.getFeatureCount(true))
+                val activeResult=requireNotNull(ds.executeSQL("SELECT * FROM copy"))
                 assertEquals(0,ds.deleteLayer(1)); assertFails { clone.getFeatureCount() };clone.close()
+                assertFails { activeResult.getFeatureCount() };activeResult.close()
                 ds.translateVectorTo(output,arguments=listOf("items"))
                 val result=requireNotNull(ds.executeSQL("SELECT * FROM items"));ds.close()
                 assertFails { result.getFeatureCount() };result.close()

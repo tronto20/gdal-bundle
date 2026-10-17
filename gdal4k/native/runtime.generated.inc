@@ -138,7 +138,7 @@
         Strings list(a.GetArray("options"));return r.result(GDALDatasetCopyLayer(h,r.arg(a["source"]),a["name"].ToString().c_str(),list.data()),"Layer",false,id);
     }
     if(type=="Dataset" && method=="deleteLayer_Int") {
-        auto index=a.GetInteger("index");require(index>=0 && index<GDALDatasetGetLayerCount(h),"Layer index is outside dataset");auto layer=GDALDatasetGetLayer(h,index);auto code=GDALDatasetDeleteLayer(h,index);if(code==OGRERR_NONE)r.invalidatePointer(layer);return value(code);
+        auto index=a.GetInteger("index");require(index>=0 && index<GDALDatasetGetLayerCount(h),"Layer index is outside dataset");auto layer=GDALDatasetGetLayer(h,index);r.releaseResultSets(h);auto code=GDALDatasetDeleteLayer(h,index);if(code==OGRERR_NONE)r.invalidatePointer(layer);return value(code);
     }
     if(type=="Dataset" && method=="executeSQL_String_Geometry_String") {
         auto filter=a["spatialFilter"];auto dialect=a["dialect"].ToString();auto layer=GDALDatasetExecuteSQL(h,a["statement"].ToString().c_str(),filter.GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(filter),dialect.empty()?nullptr:dialect.c_str());if(!layer && CPLGetLastErrorType()>=CE_Failure)throw std::runtime_error(CPLGetLastErrorMsg());return r.result(layer,"Layer",true,id);

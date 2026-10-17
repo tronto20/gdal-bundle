@@ -64,6 +64,14 @@ struct Runtime {
         for(auto& item:handles)if(item.second.pointer==pointer)ids.push_back(item.first);
         for(auto id:ids)close(id);
     }
+    void releaseResultSets(void* dataset) {
+        std::vector<unsigned long long> ids;
+        for(auto& item:handles) {
+            auto p=handles.find(item.second.parent);
+            if(item.second.type=="Layer" && item.second.owned && p!=handles.end() && p->second.pointer==dataset)ids.push_back(item.first);
+        }
+        for(auto id:ids)close(id);
+    }
     void invalidateChildren(void* parent,const std::string& type) {
         std::vector<unsigned long long> children;
         for(auto& item:handles) {
@@ -238,7 +246,7 @@ inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     struct InvalidateAfter {
         Runtime& runtime;void* pointer;std::string type;bool overviews;
         ~InvalidateAfter(){if(!type.empty())runtime.invalidateChildren(pointer,type);if(overviews)runtime.invalidateOverviews(pointer);}
-    } invalidate{r,h,invalidated,type=="Dataset" && method.rfind("buildOverviews",0)==0};
+    } invalidate{r,h,invalidated,type=="Dataset" && (method.rfind("buildOverviews",0)==0 || method.rfind("createMaskBand",0)==0)};
 #include "runtime.generated.inc"
     throw std::runtime_error("Unknown GDAL runtime operation: "+type+"."+method);
 }
