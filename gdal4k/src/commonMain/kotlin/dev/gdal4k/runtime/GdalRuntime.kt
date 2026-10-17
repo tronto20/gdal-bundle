@@ -99,6 +99,20 @@ interface GdalRuntime {
  * Shared dataset handle. Platform-specific implementations will wrap the native dataset object.
  */
 interface Dataset {
+    /** Polygonizes a numeric raster band into a new vector file. Default mask excludes NoData.
+     * Integer values use Int64 fields; floating values use Real fields without integer truncation.
+     * UInt64 and complex bands are rejected. Output layer uses the source CRS and geotransform.
+     * Arguments: -8 (diagonal connectivity), -nomask, -dsco KEY=VALUE, -lco KEY=VALUE.
+     * An explicit mask must match raster dimensions; it cannot be combined with -nomask.
+     * Source and mask remain caller-owned. Use polygonizeTo for large results.
+     */
+    suspend fun polygonize(driver: String = "GPKG", name: String = "polygons.gpkg", band: Int = 1, mask: Band? = null, layerName: String = "polygons", fieldName: String = "value", arguments: List<String>): GdalFiles
+
+    /** Writes a new vector file directly to an OS/Node or browser opfs:/ path.
+     * Existing outputs are rejected; partial outputs/sidecars after failure belong to the caller.
+     */
+    suspend fun polygonizeTo(path: String, driver: String = "GPKG", band: Int = 1, mask: Band? = null, layerName: String = "polygons", fieldName: String = "value", arguments: List<String>)
+
     /**
      * Compute terrain derivatives with GDAL DEMProcessing. [processing] is hillshade,
      * slope, aspect, TRI, TPI or roughness (case insensitive). [arguments] are gdaldem

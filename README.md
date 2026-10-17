@@ -179,6 +179,39 @@ runtime.openDataset("areas.gpkg").use { dataset ->
 필터를 적용하지 않는 임의 접근입니다. 필터 좌표는 레이어 CRS 단위여야 하며 알려진 CRS
 혼용을 거부합니다. 사각 범위는 유한한 값과 min≤max를 요구합니다.
 
+### 분류 래스터를 폴리곤으로 변환 (Polygonize)
+
+```kotlin
+import dev.gdal4k.runtime.*
+
+runtime.openDataset("classes.tif").use { source ->
+    val files = source.polygonize("-8", driver = "GeoJSON", name = "classes.geojson")
+    source.polygonizeTo("classes.gpkg", "-lco", "FID=polygon_id", layerName = "classes")
+}
+```
+
+`polygonize`는 독립적인 `GdalFiles`, `polygonizeTo`는 OS/Node 파일 또는 브라우저
+`opfs:/` 경로에 직접 기록합니다. 기본값은 첫 번째 밴드, GPKG 출력, `polygons` 레이어,
+`value` 속성입니다. `band`, `mask`, `layerName`, `fieldName`, `driver`, `name`은 named
+argument로 지정합니다. 동적 옵션은 `arguments = listOf(...)`로도 전달할 수 있습니다.
+
+기본 연결은 상하좌우 4방향이며 `-8`은 대각선을 포함합니다. 기본 GDAL 마스크는 NoData와
+유효성 마스크를 반영합니다. `-nomask`는 이를 무시하며, `mask = maskBand`는 명시적 마스크로
+대체합니다(0은 제외, 나머지는 포함). 명시적 마스크의 크기는 입력 밴드와 같아야 합니다.
+출력에는 입력 GeoTransform과 CRS를 사용합니다. 정수는 Int64 속성, 실수는 Real 속성으로
+기록하여 실수를 정수로 자르지 않습니다. UInt64와 복소수는 지원하지 않습니다.
+실수의 영역 판정은 GDALFPolygonize의 Float32 버퍼와 근접값 비교 규칙을 따르므로,
+Float64의 모든 유효 숫자나 서로 매우 가까운 값의 분리는 보장하지 않습니다.
+Int64 값은 GDAL의 내부 double 변환을 우회해 원본 값을 기록합니다. GeoJSON에는 정확한
+정수 텍스트를 쓰지만 JSON 소비자나 드라이버의 실수형 추론으로 재조회 시 정밀도가 달라질
+수 있으므로, 64비트 정수의 정확한 왕복에는 GPKG를 사용합니다.
+
+지원 문자열 옵션은 `-8`, `-nomask`, `-dsco KEY=VALUE`, `-lco KEY=VALUE`입니다.
+GDAL Python `gdal_polygonize` CLI의 모든 옵션을 파싱하는 API는 아닙니다. 입력 핸들은
+호출자가 소유하고, 기존 출력 파일은 거부합니다. 실패·취소 후 부분 출력과 sidecar는 호출자가
+관리합니다. 연속적인 사진 픽셀보다 분류·마스크 래스터에 적합하며, 복잡한 경계는 많은
+폴리곤과 작업 메모리를 요구할 수 있습니다.
+
 ### Terrain derivatives (DEM processing)
 
 `Dataset.demProcessing(processing, driver, name, arguments)` calls GDALDEMProcessing
