@@ -80,6 +80,12 @@
     if(type=="GdalRuntime" && method=="datasetInfo_Dataset_DatasetInfoOptions") {
         return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));
     }
+    if(type=="Dataset" && method=="contour_Double_Double_Int_String_String_String_List_String") {
+        return contourDataset(h,a,false);
+    }
+    if(type=="Dataset" && method=="contourTo_String_Double_Double_Int_String_String_List_String") {
+        return contourDataset(h,a,true);
+    }
     if(type=="Dataset" && method=="polygonize_String_String_Int_Band_String_String_List_String") {
         return polygonizeDataset(r,h,a,false);
     }
@@ -367,6 +373,15 @@
     }
     if(type=="Driver" && method=="deregister") {
         apply(GDALDeregisterDriver, Arg(r,h)); return nullValue();
+    }
+    if(type=="Band" && method=="sieveTo_Band_Int_Int_Band_Boolean") {
+        return bandAnalysis(r,h,a,"sieveTo");
+    }
+    if(type=="Band" && method=="proximityTo_Band_List_String") {
+        return bandAnalysis(r,h,a,"proximityTo");
+    }
+    if(type=="Band" && method=="fillNoData_Double_Int_Band_List_String") {
+        return bandAnalysis(r,h,a,"fillNoData");
     }
     if(type=="Band" && method=="getColorTable") {
         auto p=GDALGetRasterColorTable(h);return r.result(p?GDALCloneColorTable(p):nullptr,"ColorTable",true);
