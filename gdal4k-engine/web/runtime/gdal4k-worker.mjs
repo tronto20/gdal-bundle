@@ -70,7 +70,7 @@ async function dispatch({id, operation, payload, file, controlled}) {
             if (args?.type === 'GdalRuntime' && args.method === 'openDataset_String_DatasetOpenOptions') {
                 let source = args.parameters.source;
                 const policy = args.parameters.options?.httpInputPolicy;
-                if (policy && (file || !/^https?:\/\//i.test(source))) throw new Error('HTTP input policy requires a direct HTTP(S) URL');
+                if (policy && ((file && file.kind !== 'urls') || !/^https?:\/\//i.test(source))) throw new Error('HTTP input policy requires a direct HTTP(S) URL');
                 if (source.startsWith('opfs:/')) { source = outputs.path(source); args.parameters.source = source; }
                 const virtual = source.startsWith('/vsigdal4k-output/') || /^\/vsi[a-z0-9_]+\//i.test(source);
                 if (file || /^https?:\/\//i.test(source) || (node && !virtual)) {
