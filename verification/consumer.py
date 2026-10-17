@@ -123,7 +123,7 @@ withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRu
   if target == 'iosSimulatorArm64' and a.ios_device:
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
- extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
+ extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }\n' if target=='android' else ''
  if target=='android':extra+='getByName("androidMain").dependencies { implementation("dev.tronto.gdal4k:gdal4k-android-runtime:'+VERSION+'") }'
  elif target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:extra+='getByName("'+target+'Main").dependencies { implementation("dev.tronto.gdal4k:gdal4k-engine:'+VERSION+'") }'
  build='''plugins { kotlin("multiplatform") version "2.4.21"; '''+android+''' }
