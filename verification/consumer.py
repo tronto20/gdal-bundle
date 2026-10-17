@@ -166,7 +166,8 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
   expanded_path.write_text(expanded)
   test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
   platform_path = ROOT/f'gdal4k/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
-  actual_path = consumer/f'src/{test_set}/kotlin/consumer/DatasetOutputPath.kt'
+  actual_set = test_set if target in ['android','jvm','js','wasmJs'] else target+'Test'
+  actual_path = consumer/f'src/{actual_set}/kotlin/consumer/DatasetOutputPath.kt'
   actual_path.parent.mkdir(parents=True,exist_ok=True)
   actual_path.write_text(platform_path.read_text().replace('package dev.gdal4k','package consumer'))
 

@@ -40,7 +40,7 @@ async function dispatch({id, operation, payload, file}) {
             if (args?.type === 'GdalRuntime' && args.method === 'openDataset_String_DatasetOpenOptions') {
                 let source = args.parameters.source;
                 if (source.startsWith('opfs:/')) { source = outputs.path(source); args.parameters.source = source; }
-                const virtual = /^\/vsi[a-z0-9_]+\//i.test(source);
+                const virtual = source.startsWith('/vsigdal4k-output/') || /^\/vsi[a-z0-9_]+\//i.test(source);
                 if (file || /^https?:\/\//i.test(source) || (node && !virtual)) {
                     if (args.parameters.options?.update) throw new Error('Direct web inputs are read-only');
                     mounted = await inputs.mount(source, file);

@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
+internal val datasetOutputPrefix = "gdal4k-" + kotlin.random.Random.nextLong().toULong().toString(16)
 internal expect fun datasetOutputPath(name: String): String
 
 class DatasetApiTest {
@@ -63,20 +64,21 @@ class DatasetApiTest {
         }
     }
     @Test fun directPathOutputs() = runTest(timeout = 120.seconds) {
-        val r=Gdal4k.runtime(); val path=datasetOutputPath("dataset-api.tif"); val warped=datasetOutputPath("dataset-warp.tif")
+        val r=Gdal4k.runtime(); val path=datasetOutputPath("dataset-api.tif"); val warped=datasetOutputPath("dataset-warp.tif"); val cog=datasetOutputPath("dataset-cog.tif")
         requireNotNull(r.getDriver("GTiff")).use { tiff ->
             try {
                 requireNotNull(r.getDriver("MEM")).use { driver ->
                     requireNotNull(driver.create("",2,2,1,GdalDataType.Byte)).use { ds ->
                         ds.writeRaster(byteArrayOf(1,2,3,-1)); ds.setGeoTransform(doubleArrayOf(0.0,1.0,0.0,2.0,0.0,-1.0))
                         runtimeCrs(r,ds); ds.translateTo(path, "GTiff", listOf("-co","COMPRESS=JXL","-co","JXL_LOSSLESS=YES"))
+                        ds.translateTo(cog, "COG", listOf("-co","COMPRESS=JXL","-co","JXL_LOSSLESS=YES"))
                         ds.warpTo(warped,"EPSG:4326",arguments=listOf("-ts","2","2","-r","near"))
                     }
                 }
-                for (p in listOf(path,warped)) r.openDataset(p).use { ds ->
+                for (p in listOf(path,warped,cog)) r.openDataset(p).use { ds ->
                     val pixels=ByteArray(4); assertEquals(0,ds.readRaster(pixels)); assertContentEquals(byteArrayOf(1,2,3,-1),pixels)
                 }
-            } finally { tiff.delete(path); tiff.delete(warped) }
+            } finally { tiff.delete(path); tiff.delete(warped); tiff.delete(cog) }
         }
     }
     private suspend fun runtimeCrs(r: GdalRuntime, ds: Dataset) {
@@ -129,6 +131,26 @@ class DatasetApiTest {
                 val reopened=requireNotNull(group.openArray("values"));assertEquals("values",reopened.getName());reopened.close()
                 ds.close(); assertFails { array.getName() };assertFails { x.getSize() };root.close();array.close()
             }
+        }
+    }
+    @Test fun persistedRelationships() = runTest(timeout = 120.seconds) {
+        val r=Gdal4k.runtime(); val path="/vsimem/dataset-relations.gpkg"
+        requireNotNull(r.getDriver("GPKG")).use { driver ->
+            try { requireNotNull(driver.createVector(path)).use { ds ->
+                requireNotNull(ds.createLayer("left",geometryType=1)).close()
+                requireNotNull(ds.createLayer("right",geometryType=1)).close()
+                assertEquals(0,ds.flushCache())
+                r.createRelationship("link","left","right",3).use { relation ->
+                    relation.setLeftTableFields(listOf("fid"));relation.setRightTableFields(listOf("fid"))
+                    ds.addRelationship(relation)
+                }
+                val name=ds.getRelationshipNames().single()
+                val copy=requireNotNull(ds.getRelationship(name))
+                assertEquals("left",copy.getLeftTableName());assertEquals("right",copy.getRightTableName())
+                ds.updateRelationship(copy);ds.deleteRelationship(name)
+                assertTrue(ds.getRelationshipNames().isEmpty())
+                copy.use { assertEquals(name,it.getName()) }
+            } } finally { driver.delete(path) }
         }
     }
     @Test fun domainsAndRelationships() = runTest(timeout = 120.seconds) {
