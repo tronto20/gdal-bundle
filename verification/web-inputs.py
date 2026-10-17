@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     assets=ROOT/'gdal4k-binary/build/generated/web/assets'
     if a.repo:
         suffix='js' if a.target=='js' else 'wasm-js'
-        klibs=list((a.repo.resolve()/f'dev/tronto/gdal4k/gdal4k-binary-{suffix}').glob('*/*.klib'))
+        klibs=list((a.repo.resolve()/f'dev/tronto/gdal4k/gdal4k-engine-{suffix}').glob('*/*.klib'))
         if len(klibs)!=1:raise RuntimeError('Expected one published web KLIB')
         assets=work/'assets';assets.mkdir()
         with zipfile.ZipFile(klibs[0]) as z:

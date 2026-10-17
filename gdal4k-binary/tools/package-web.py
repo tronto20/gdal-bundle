@@ -5,6 +5,7 @@ import shutil
 import sys
 from pathlib import Path
 from gdal_resources import resource_files
+from versions import configured_binary_version
 ROOT = Path(__file__).resolve().parents[2]
 def leb(value):
     result = bytearray()
@@ -39,6 +40,6 @@ def package_web(engine):
     (assets/'gdal4k-resources.mjs').write_text('export const resources = '+json.dumps(entries,separators=(',',':'))+';\n'
         'export const resourceBytes = '+str(len(header)+len(data))+';\n'
         "export const resourceUrl = new URL('./gdal4k-data.wasm', import.meta.url);\n")
-    (assets/'package.json').write_text(json.dumps({'name':'@gdal4k/web-engine','version':'3.12.4-1.0.1-SNAPSHOT','type':'module','main':'index.mjs'},indent=2)+'\n')
+    (assets/'package.json').write_text(json.dumps({'name':'@gdal4k/web-engine','version':configured_binary_version(),'type':'module','main':'index.mjs'},indent=2)+'\n')
     print(json.dumps({f.name:f.stat().st_size for f in assets.iterdir()}))
 if __name__ == '__main__': package_web(Path(sys.argv[1]))

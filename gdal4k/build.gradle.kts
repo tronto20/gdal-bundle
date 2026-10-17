@@ -25,7 +25,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
         }
-        getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }
+        getByName("androidDeviceTest").dependencies {
+            implementation("androidx.test:runner:1.6.2")
+            implementation(project(":gdal4k-android-runtime"))
+        }
+        for (sourceSet in listOf("macosArm64Test", "linuxX64Test", "linuxArm64Test", "mingwX64Test", "iosArm64Test", "iosSimulatorArm64Test", "jsTest", "wasmJsTest")) {
+            getByName(sourceSet).dependencies { implementation(project(":gdal4k-engine")) }
+        }
     }
 }
 

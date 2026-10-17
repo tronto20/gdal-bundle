@@ -10,6 +10,7 @@ import sys
 import tarfile
 from pathlib import Path
 from jvm_binaries import JVM_BINARIES, host_binary
+from publication_versions import ENGINE_TARGETS
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT/'gdal4k-binary/build'
@@ -27,7 +28,9 @@ def gradle(*tasks, options=()):
 
 def publish(target):
     title=target[0].upper()+target[1:]
-    gradle(*(f':{m}:publish{p}PublicationToMavenLocal' for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for p in ['KotlinMultiplatform',title]))
+    modules=['gdal4k-runtime','gdal4k-binary','gdal4k']
+    if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
+    gradle(*(f':{m}:publish{p}PublicationToMavenLocal' for m in modules for p in ['KotlinMultiplatform',title]))
 
 def consumer(target, *options):
     run(sys.executable, ROOT/'verification/consumer.py', '--target', target, '--no-publish', '--repo', REPO, *options)
@@ -42,7 +45,8 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
         files.update(BUILD/f for f in data['artifacts'])
     suffixes={'wasmJs':'wasm-js'}
     coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for t in targets]
-    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-android-runtime']
+    coordinates+=['gdal4k-engine-'+suffixes.get(t,t.lower()) for t in targets if suffixes.get(t,t.lower()) in ENGINE_TARGETS]
+    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-engine','gdal4k-android-runtime']
     if include_jvm_binaries:coordinates += ['gdal4k-binary-'+b for b in JVM_BINARIES]
     for coordinate in coordinates:
         directory=REPO/'dev/tronto/gdal4k'/coordinate
@@ -119,6 +123,8 @@ def main():
         wrong_binary = next(b for b in JVM_BINARIES if b != host_binary())
         consumer('jvm', '--jvm-binary', wrong_binary, '--expect-missing-jvm-binary')
         consumer('jvm', '--jvm-binary', host_binary(), '--jvm-binary', wrong_binary)
+        gradle(':gdal4k-engine:publishKotlinMultiplatformPublicationToMavenLocal')
+        run(sys.executable, ROOT/'verification/check-optional-binaries.py', '--repo', REPO)
         # Exercise the release publisher against a local repository, including snapshot metadata.
         published=ROOT/'verification/build/publish-roundtrip'
         run(sys.executable, ROOT/'verification/publish.py','--repo',REPO,'--destination',published)

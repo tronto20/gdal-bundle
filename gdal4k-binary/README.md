@@ -53,16 +53,17 @@ python3 verification/consumer.py --target wasmJs
 
 - JVM 코드: `gdal4k-binary-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
 - JVM 리소스: `gdal4k-binary-linux-x64-gnu`, `gdal4k-binary-linux-arm64-gnu`, `gdal4k-binary-macos-arm64`, `gdal4k-binary-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
-- Native: `gdal4k-binary-<target>` KLIB 안에 GDAL과 모든 선택된 종속성의 정적 archive 포함
-- Android: 플랫폼 Kotlin 아티팩트와 `gdal4k-android-runtime` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
-- 웹: `gdal4k-binary-js` / `gdal4k-binary-wasm-js`, 동일한 외부 Worker·ES module·Wasm 자산 포함
-- `gdal4k`와 `gdal4k-runtime`도 동일한 버전 `3.12.4-1.0.1-SNAPSHOT`으로 게시
+- Native: 구현체 `gdal4k-binary-<target>`에는 C 바인딩만 포함. 명시적으로 선택하는 `gdal4k-engine-<target>` KLIB에 GDAL과 선택된 종속성의 정적 archive 포함
+- Android: 플랫폼 Kotlin 구현체에는 JNI를 포함하지 않음. 별도 `gdal4k-android-runtime` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
+- 웹: 구현체 `gdal4k-binary-js` / `gdal4k-binary-wasm-js`에는 엔진 자산을 포함하지 않음. 별도 `gdal4k-engine-js` / `gdal4k-engine-wasm-js`가 같은 Worker·ES module·Wasm 자산 제공
+- `gdal4k`, `gdal4k-runtime`, Kotlin 구현체 `gdal4k-binary`: `0.1.0-SNAPSHOT`
+- `gdal4k-engine`, JVM 리소스 JAR, Android JNI AAR: `0.1.0-SNAPSHOT`
 
-Kotlin 소비자는 `gdal4k` 루트 좌표를 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. JVM에서는 별도로 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정해야 합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
+Kotlin 소비자는 `gdal4k` 루트 좌표를 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. 모든 플랫폼에서 엔진을 명시적으로 선택해야 합니다. JVM에서는 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
 
 예를 들어 macOS ARM64 리소스만 로컬 게시하려면 `./gradlew :gdal4k-jvm-binaries:publishMacosArm64PublicationToMavenLocal`을 실행합니다. 다른 publication 이름은 `LinuxX64Gnu`, `LinuxArm64Gnu`, `WindowsX64`입니다. 선택한 작업만 해당 엔진을 빌드합니다. `verification/consumer.py --target jvm --jvm-binary macos-arm64`는 선택한 리소스와 코드 게시 후 외부 소비를 검증합니다. 테스트 도구에서 옵션을 생략하면 테스트 호스트를 선택하며 제품 의존성의 기본값으로 사용하지 않습니다.
 
-CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. 코드 JAR에 바이너리가 없는지, POM/Gradle metadata에 기본 바이너리 의존성이 없는지, JVM 4종의 각 JAR에 정확히 해당 리소스만 있고 SHA-256이 맞는지 검사합니다. 미선택·잘못된 플랫폼·복수 플랫폼 의존성도 별도 JVM 소비 테스트로 확인합니다. Android AAR에 ARM64 이외의 ABI가 들어가면 실패합니다. 전체 Maven 좌표는 38개입니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
+CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. 코드 JAR에 바이너리가 없는지, POM/Gradle metadata에 기본 바이너리 의존성이 없는지, JVM 4종의 각 JAR에 정확히 해당 리소스만 있고 SHA-256이 맞는지 검사합니다. 미선택·잘못된 플랫폼·복수 플랫폼 의존성도 별도 JVM 소비 테스트로 확인합니다. Android AAR에 ARM64 이외의 ABI가 들어가면 실패합니다. 전체 Maven 좌표는 47개입니다. 모든 플랫폼의 라이브러리 POM/Gradle metadata에 엔진 의존성이 없고, JAR/KLIB/AAR에 엔진 파일이 없는지도 검사합니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
 
 기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k/README.md)를 참고하세요.
 
@@ -89,7 +90,7 @@ python3 verification/web-inputs.py --memory-only --window-only --profile-label w
 
 ## CI 게시 대상
 
-main push의 전체 검증이 성공하면 검증한 Maven 파일을 기본적으로 Maven Central에 게시합니다. 현재 `3.12.4-1.0.1-SNAPSHOT`은 `https://central.sonatype.com/repository/maven-snapshots/`로 전송합니다. 수동 workflow도 `mavenCentral`이 기본이며 `githubPackages`는 명시적으로 선택할 수 있습니다. PR에서는 원격 게시하지 않습니다.
+main push의 전체 검증이 성공하면 검증한 Maven 파일을 기본적으로 Maven Central에 게시합니다. 현재 모든 아티팩트의 버전 `0.1.0-SNAPSHOT`은 `https://central.sonatype.com/repository/maven-snapshots/`로 전송합니다. 수동 workflow도 `mavenCentral`이 기본이며 `githubPackages`는 명시적으로 선택할 수 있습니다. PR에서는 원격 게시하지 않습니다.
 
 GitHub Actions의 `mavenCentral` Environment에 PostGIS 저장소와 같은 Secrets를 등록합니다. 기존 이름도 계속 사용할 수 있으며 둘 다 있으면 기존 GDAL 이름을 우선합니다.
 
@@ -104,6 +105,6 @@ GitHub Actions의 `mavenCentral` Environment에 PostGIS 저장소와 같은 Secr
 
 Snapshot은 PGP 서명 없이 Snapshot 저장소에 직접 게시하며 해당 namespace의 Snapshot 게시가 활성화되어 있어야 합니다. 정식 버전(`-SNAPSHOT`이 없는 버전)은 전체 검증 후 CI에서 PGP 서명 → 검증한 파일 업로드 → 같은 runner에서 Portal에 `publishing_type=automatic` 전달 → 해당 deployment가 `PUBLISHED`가 될 때까지 확인합니다. 실패·시간 초과는 CI 실패로 처리하며 Portal 전달 요청을 자동으로 재시도하지 않습니다. Portal에서 수동 Publish를 누를 필요는 없습니다. 이 흐름은 [Sonatype OSSRH 호환 API](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/)와 [deployment 상태 API](https://central.sonatype.org/publish/publish-portal-api/)를 사용합니다.
 
-현재 버전은 Snapshot이므로 이 변경만으로 정식 버전이 공개되지는 않습니다. 정식 릴리스를 만들 때는 소스의 `gdal4kVersion`을 정식 버전으로 변경하여 전체 CI에서 동일한 버전을 검증·게시합니다. PR에서는 원격 게시하지 않으며 로컬 `--destination` 게시 검증 및 GitHub Packages 게시에서는 Portal API를 호출하지 않습니다. 루트 Gradle의 개별 publication 게시 명령은 업로드만 수행합니다. 전체 검증 파일을 모은 `verification/publish.py`가 CI의 최종 공개 경로입니다.
+현재 버전은 Snapshot이므로 이 변경만으로 정식 버전이 공개되지는 않습니다. 정식 릴리스를 만들 때는 소스의 `gdal4kVersion`을 정식 버전으로 변경하여 전체 CI에서 같은 라이브러리 버전의 구현체와 엔진을 함께 검증·게시합니다. PR에서는 원격 게시하지 않으며 로컬 `--destination` 게시 검증 및 GitHub Packages 게시에서는 Portal API를 호출하지 않습니다. 루트 Gradle의 개별 publication 게시 명령은 업로드만 수행합니다. 전체 검증 파일을 모은 `verification/publish.py`가 CI의 최종 공개 경로입니다.
 
 `python3 -m unittest discover -s verification -p test_publish.py`는 공개 성공·실패·시간 초과, 현재 deployment 식별, Snapshot/로컬/GitHub Packages의 분기와 업로드 실패 시 미공개를 원격 요청 없이 검사합니다. 실제 원격 게시 성공은 CI 검증 및 설정 검증과 별도로 확인해야 합니다.

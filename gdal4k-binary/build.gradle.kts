@@ -16,6 +16,7 @@ fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.spl
     doNotTrackState("The engine producer fingerprints sources and verifies every artifact hash")
     workingDir(rootDir)
     commandLine(pythonCommand, "gdal4k-binary/tools/build-engine.py", target)
+    environment("GDAL4K_BINARY_VERSION", rootProject.version.toString())
     inputs.files(fileTree("ports") { exclude("**/__pycache__/**") })
     inputs.dir("engine")
     inputs.files(fileTree("tools") { include("*.py") })
@@ -31,8 +32,8 @@ fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.spl
     }
 }
 val engineTargets = listOf("macos-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "ios-arm64", "ios-simulator-arm64", "android-arm64-v8a", "web")
-val engineTasks = engineTargets.associateWith(::engineTask)
-val nativeTargets = mapOf("macosArm64" to "macos-arm64", "linuxX64" to "linux-amd64", "linuxArm64" to "linux-arm64", "mingwX64" to "windows-amd64", "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64")
+engineTargets.forEach(::engineTask)
+
 kotlin {
     jvmToolchain(21)
     jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_17) }
@@ -53,7 +54,6 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
         androidMain.dependencies {
-            api(project(":gdal4k-android-runtime"))
             implementation("androidx.startup:startup-runtime:1.2.0")
             implementation("androidx.annotation:annotation:1.9.1")
         }
@@ -61,76 +61,23 @@ kotlin {
     }
     targets.withType<KotlinNativeTarget>().configureEach {
         val targetName = name
-        val platform = nativeTargets.getValue(targetName)
         compilations["main"].defaultSourceSet.kotlin.srcDir("src/nativeInteropMain/kotlin")
         val prepareDefinition = tasks.register("prepare${name.replaceFirstChar(Char::uppercaseChar)}Definition") {
-            dependsOn(engineTasks.getValue(platform))
             val destination = layout.buildDirectory.file("cinterop/$targetName/gdal4k.def")
             outputs.file(destination)
-            inputs.file(layout.buildDirectory.file("engine/$platform/native-linker-options.json"))
             doLast {
-                val linkedOptions = groovy.json.JsonSlurper().parse(layout.buildDirectory.file("engine/$platform/native-linker-options.json").get().asFile) as List<*>
-                // K/N's MinGW driver already supplies static libstdc++; an explicit
-                // -lstdc++ would select its DLL import library before that runtime.
-                val cxxRuntime = when {
-                    platform.startsWith("windows") -> emptyList()
-                    platform.startsWith("macos") || platform.startsWith("ios") -> listOf("-lc++")
-                    else -> listOf("-lstdc++")
-                }
-                val systemOptions = (cxxRuntime + linkedOptions.map { it.toString() }).distinct().joinToString(" ")
                 destination.get().asFile.apply {
                     parentFile.mkdirs()
-                    writeText("headers = gdal4k.h\ncompilerOpts = -DGDAL4K_STATIC\npackage = dev.gdal4k.cinterop\nstaticLibraries = libgdal4k.a\nlibraryPaths = ${layout.buildDirectory.dir("engine/$platform").get().asFile.absolutePath.replace('\\','/')}\nlinkerOpts = $systemOptions\n")
+                    writeText("headers = gdal4k.h\ncompilerOpts = -DGDAL4K_STATIC\npackage = dev.gdal4k.cinterop\n")
                 }
             }
         }
         compilations["main"].cinterops.create("gdal4k") {
             definitionFile.set(layout.buildDirectory.file("cinterop/$targetName/gdal4k.def"))
             includeDirs(rootProject.file("gdal4k/native"))
-            tasks.named(interopProcessingTaskName).configure {
-                dependsOn(prepareDefinition)
-                inputs.file(layout.buildDirectory.file("engine/$platform/libgdal4k.a"))
-            }
+            tasks.named(interopProcessingTaskName).configure { dependsOn(prepareDefinition) }
         }
     }
 }
-afterEvaluate {
-    // Register after KGP's cinterop actions: the archive is inside the KLIB, and
-    // the producer-only absolute library search path must not escape into Maven.
-    nativeTargets.keys.forEach { targetName ->
-        tasks.named("cinteropGdal4k${targetName.replaceFirstChar(Char::uppercaseChar)}").configure {
-            doLast {
-                outputs.files.files.filter { it.isDirectory }.forEach { directory ->
-                    val manifest = directory.resolve("default/manifest")
-                    if (manifest.isFile) manifest.writeText(manifest.readLines().filterNot { it.startsWith("libraryPaths=") }.joinToString("\n", postfix = "\n"))
-                }
-            }
-        }
-    }
-}
-// Android's compatibility AAR carries JNI payloads; data is embedded in GDAL and PROJ themselves.
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
-
-// Carry the actual JS/Wasm files in Maven, rather than Kotlin string constants.
-// KGP extracts package.json + .mjs/.wasm files as a local npm package for consumers.
-for (target in listOf("js", "wasmJs")) {
-    tasks.named<Jar>("${target}Jar") {
-        dependsOn(engineTasks.getValue("web"))
-        from(layout.buildDirectory.dir("generated/web/assets"))
-    }
-}
-for (target in listOf("js", "wasmJs")) {
-    tasks.named("${target}PackageJson") {
-        dependsOn(engineTasks.getValue("web"))
-        inputs.dir(layout.buildDirectory.dir("generated/web/assets"))
-        doLast {
-            val jsonFile = outputs.files.singleFile
-            val json = groovy.json.JsonSlurper().parse(jsonFile) as MutableMap<String, Any?>
-            json["name"] = "@gdal4k/web-engine"
-            json["main"] = "index.mjs"
-            jsonFile.writeText(groovy.json.JsonOutput.toJson(json))
-            copy { from(layout.buildDirectory.dir("generated/web/assets")) { exclude("package.json") }; into(jsonFile.parentFile) }
-        }
-    }
-}
