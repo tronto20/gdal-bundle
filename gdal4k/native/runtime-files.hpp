@@ -150,6 +150,37 @@ inline CPLJSONObject convertDataset(GDALDatasetH dataset,const CPLJSONObject& ar
     return outputFiles(output,name);
 }
 
+inline void demProcessingPath(GDALDatasetH source, const CPLJSONObject& args, const std::string& path) {
+    require(GDALGetRasterCount(source) > 0, "DEM processing requires a raster dataset");
+    require(!path.empty() && path.find('\0') == std::string::npos, "Invalid output path");
+    auto processing = args.GetString("processing");
+    const char* mode = nullptr;
+    for (const char* candidate : {"hillshade", "slope", "aspect", "TRI", "TPI", "roughness"})
+        if (EQUAL(processing.c_str(), candidate)) mode = candidate;
+    require(mode != nullptr && processing.find('\0') == std::string::npos, "Unsupported DEM processing mode");
+    auto driver = args.GetString("driver");
+    require(!driver.empty() && !EQUAL(driver.c_str(), "MEM") && !EQUAL(driver.c_str(), "VRT") && !EQUAL(driver.c_str(), "stream"), "DEM processing requires a concrete output file format");
+    FileOptions options(CPLJSONArray{});
+    // Parsing with the actual mode rejects options meant for a different algorithm.
+    options.add(mode);
+    for (const auto& option : args.GetArray("arguments")) options.add(option.ToString());
+    options.add("-of"); options.add(driver);
+    auto opts = GDALDEMProcessingOptionsNew(options.list, nullptr);
+    fileEnsure(opts != nullptr, "Invalid DEM processing options");
+    int usageError = 0;
+    auto result = GDALDEMProcessing(path.c_str(), source, mode, nullptr, opts, &usageError);
+    GDALDEMProcessingOptionsFree(opts);
+    auto closeCode = result ? GDALClose(result) : CE_Failure;
+    fileEnsure(result != nullptr && closeCode == CE_None && !usageError, "GDAL DEM processing failed");
+}
+inline CPLJSONObject demProcessing(GDALDatasetH source, const CPLJSONObject& args, bool direct) {
+    if (direct) { demProcessingPath(source, args, args.GetString("path")); return nullValue(); }
+    auto name = args.GetString("name"); fileBasename(name);
+    Directory output;
+    demProcessingPath(source, args, output.path + "/" + name);
+    return outputFiles(output, name);
+}
+
 inline void rasterizeDatasetPath(GDALDatasetH source, const CPLJSONObject& args, const std::string& path) {
     require(GDALDatasetGetLayerCount(source) > 0, "Rasterize requires a vector dataset");
     require(!path.empty() && path.find('\0') == std::string::npos, "Invalid output path");

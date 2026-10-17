@@ -136,3 +136,26 @@ Band와 수명이 분리된 복사본을 반환하므로 변경을 반영하려�
 읽을 때 유효 영역 밖 패딩은 0으로 채웁니다. 큰 버퍼의 나머지는 보존합니다.
 타입 변환이나 리샘플링에는 기존 `readRaster`/`writeRaster`를 사용합니다. 직접 블록 접근
 전에 대기 중인 RasterIO 쓰기를 flush하며, 직접 쓰기는 기존 블록 캐시도 비웁니다.
+
+### Terrain derivatives (DEM processing)
+
+`Dataset.demProcessing(processing, driver, name, arguments)` calls GDALDEMProcessing
+and returns an independent `GdalFiles` result. `demProcessingTo(path, processing,
+driver, arguments)` writes directly to an OS/Node file or a browser `opfs:/` path.
+Supported modes are `hillshade`, `slope`, `aspect`, `TRI`, `TPI` and `roughness`
+(case insensitive). Both APIs require a concrete output format; MEM/VRT/stream,
+color-relief palette input and progress callbacks are not exposed in this API.
+
+```kotlin
+val files = dem.demProcessing("slope", arguments = listOf("-s", "1"))
+dem.demProcessingTo("opfs:/terrain/slope.tif", "slope", arguments = listOf("-p", "-compute_edges"))
+```
+
+Arguments are the selected gdaldem mode's options, including band selection,
+algorithm, scaling, edge handling and creation options. GDAL determines NoData,
+CRS/band-unit scaling and each algorithm's output values; this wrapper does not
+apply band scale/offset. Use explicit `-s` or `-xscale`/`-yscale` when source units
+are ambiguous. Terrain analysis in a geographic CRS may require reprojection.
+The source stays caller-owned. Direct outputs and sidecars, including partial
+outputs after failure/cancellation, belong to the caller. Direct output avoids
+copying the resulting file into a `GdalFiles` buffer.
