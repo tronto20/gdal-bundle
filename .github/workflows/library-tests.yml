@@ -252,7 +252,9 @@ jobs:
         if: always()
         with:
           name: evidence-jvm-payload-selection
-          path: verification/results/published-consumer-jvm*/
+          path: |
+            verification/results/published-consumer-jvm*/
+            verification/results/common-engine-selection/
           if-no-files-found: warn
 
   jvm-consumers:

@@ -1,6 +1,5 @@
 """Coordinate policy for independently selected GDAL engine publications."""
 import xml.etree.ElementTree as ET
-from jvm_binaries import JVM_BINARIES
 
 LIBRARY_TARGETS = ['jvm','android','js','wasm-js','macosarm64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64']
 ENGINE_COORDINATES = {
@@ -15,7 +14,6 @@ ENGINE_COORDINATES = {
 }
 ENGINE_TARGETS = list(ENGINE_COORDINATES)
 ANDROID_ENGINE = 'gdal4k-engine-android-arm64'
-JVM_PAYLOADS = {'gdal4k-engine-jvm-'+b for b in JVM_BINARIES}
 
 
 def is_binary_module(module):
@@ -23,7 +21,7 @@ def is_binary_module(module):
 
 
 def expected_coordinates():
-    return {m+s for m in ['gdal4k','gdal4k-runtime'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine', ANDROID_ENGINE} | set(ENGINE_COORDINATES.values()) | JVM_PAYLOADS
+    return {m+s for m in ['gdal4k','gdal4k-runtime'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine', ANDROID_ENGINE} | set(ENGINE_COORDINATES.values())
 
 
 def library_version_from_repo(repo):

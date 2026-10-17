@@ -100,3 +100,21 @@ for (target in listOf("js", "wasmJs")) {
         }
     }
 }
+
+apply(from = rootProject.file("gradle/engine-variants.gradle.kts"))
+
+// CI attaches every classifier after all verified platform engines have arrived.
+// A developer can select a subset without building unrelated OS binaries.
+val requestedJvmClassifiers = providers.gradleProperty("gdal4kJvmClassifiers").orElse("").get()
+    .split(',').map(String::trim).filter(String::isNotEmpty).toSet()
+val jvmClassifierTasks = mapOf("macos-arm64" to "macosArm64Jar", "linux-x64-gnu" to "linuxX64GnuJar", "linux-arm64-gnu" to "linuxArm64GnuJar", "windows-x64" to "windowsX64Jar")
+require(requestedJvmClassifiers.all { it in jvmClassifierTasks }) { "Unknown gdal4kJvmClassifiers: $requestedJvmClassifiers" }
+gradle.projectsEvaluated {
+    publishing.publications.named<MavenPublication>("kotlinMultiplatform") {
+        requestedJvmClassifiers.forEach { selected ->
+            artifact(project(":gdal4k-jvm-binaries").tasks.named(jvmClassifierTasks.getValue(selected))) {
+                classifier = selected
+            }
+        }
+    }
+}

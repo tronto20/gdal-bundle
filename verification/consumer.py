@@ -30,10 +30,11 @@ def run(args,**kwargs):subprocess.run([str(x) for x in args],check=True,**kwargs
 if not a.no_publish:
  tasks=[]
  modules=['gdal4k','gdal4k-runtime']
- if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
  for module in modules:
   tasks += [f':{module}:publishKotlinMultiplatformPublicationToMavenLocal',f':{module}:publish{title}PublicationToMavenLocal']
- if target=='jvm':tasks += [f':gdal4k-jvm-binaries:publish{JVM_BINARIES[b][0]}PublicationToMavenLocal' for b in binaries]
+ tasks += [':gdal4k-engine:publishKotlinMultiplatformPublicationToMavenLocal']
+ if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:tasks += [f':gdal4k-engine:publish{title}PublicationToMavenLocal']
+ if target=='jvm' and binaries:tasks += ['-Pgdal4kJvmClassifiers='+','.join(binaries)]
  if target=='android':tasks+=[':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal']
  run([gradle,'--console=plain',f'-Dmaven.repo.local={repo}',*tasks],cwd=ROOT)
 VERSION=library_version_from_repo(repo)
@@ -99,7 +100,7 @@ class PublishedConsumerTest {
     @Test fun missingBinaryIsActionable() = runTest {
         repeat(2) {
             val failure = assertFailsWith<IllegalStateException> { Gdal4k.runtime() }
-            assertTrue(failure.message.orEmpty().contains("dev.tronto.gdal4k:gdal4k-engine-jvm-EXPECTED_BINARY:"), failure.message)
+            assertTrue(failure.message.orEmpty().contains("dev.tronto.gdal4k:gdal4k-engine:<gdal4k-version>:EXPECTED_BINARY"), failure.message)
             assertTrue(failure.message.orEmpty().contains("No JVM binary is included by default"), failure.message)
         }
         Gdal4k.close()
@@ -124,8 +125,6 @@ withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRu
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
  extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
- if target=='android':extra+='getByName("androidMain").dependencies { implementation("dev.tronto.gdal4k:gdal4k-engine-android-arm64:'+VERSION+'") }'
- elif target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:extra+='getByName("'+target+'Main").dependencies { implementation("dev.tronto.gdal4k:gdal4k-engine:'+VERSION+'") }'
  build='''plugins { kotlin("multiplatform") version "2.4.21"; '''+android+''' }
 repositories {
     exclusiveContent { forRepository { maven { url=uri('''+json.dumps(repo.as_uri())+''') } }; filter { includeGroup("dev.tronto.gdal4k") } }
@@ -135,14 +134,14 @@ kotlin {
     jvmToolchain(21)
     '''+declaration+'''
     sourceSets {
-        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k-runtime:'''+VERSION+'''") }
+        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k-runtime:'''+VERSION+'''"); implementation("dev.tronto.gdal4k:gdal4k-engine:'''+VERSION+'''") }
         commonTest.dependencies { implementation(kotlin("test")); implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2") }
         '''+extra+'''
     }
 }
 '''
  if target=='jvm':
-  build += '\nkotlin.sourceSets.named("jvmMain") { dependencies {\n' + ''.join('    runtimeOnly("dev.tronto.gdal4k:gdal4k-engine-jvm-'+b+':'+VERSION+'")\n' for b in binaries) + '} }\n'
+  build += '\nkotlin.sourceSets.named("jvmMain") { dependencies {\n' + ''.join('    runtimeOnly("dev.tronto.gdal4k:gdal4k-engine:'+VERSION+':'+b+'")\n' for b in binaries) + '} }\n'
   build += '''
 val recordJvmRuntime = tasks.register("recordJvmRuntime") {
     val runtimeFiles = configurations.named("jvmTestRuntimeClasspath")
@@ -199,12 +198,11 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
   if target=='jvm':
    runtime_files = (consumer/'build/jvm-runtime-files.txt').read_text().splitlines()
    runtime_coordinates = (consumer/'build/jvm-runtime-coordinates.txt').read_text().splitlines()
-   # File names become timestamped after Maven snapshot deployment. Compare resolved
-   # component identities so the detached publisher roundtrip is checked correctly.
-   available_payloads = {'gdal4k-engine-jvm-'+b for b in JVM_BINARIES}
-   expected_payloads = {'gdal4k-engine-jvm-'+b for b in binaries}
-   actual_payloads = {coordinate.split(':')[1] for coordinate in runtime_coordinates if coordinate.startswith('dev.tronto.gdal4k:')} & available_payloads
-   if actual_payloads != expected_payloads: raise RuntimeError(f'Unexpected JVM payload dependencies: {actual_payloads}; expected {expected_payloads}')
+   # Snapshot filenames may be timestamped; classifiers are stable suffixes.
+   engine_files = [name for name in runtime_files if name.startswith('gdal4k-engine-') and name.endswith('.jar')]
+   actual_payloads = {b for b in JVM_BINARIES if any(name.endswith('-'+b+'.jar') for name in engine_files)}
+   if actual_payloads != set(binaries) or len(engine_files) != len(binaries):
+    raise RuntimeError(f'Unexpected JVM classifier files: {engine_files}; expected {binaries}')
   case = '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else '')+case)
   destination.mkdir(parents=True,exist_ok=True)

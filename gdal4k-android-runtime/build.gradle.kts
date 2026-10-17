@@ -26,3 +26,5 @@ afterEvaluate {
         from(components["release"])
     }
 }
+
+apply(from = rootProject.file("gradle/engine-variants.gradle.kts"))
