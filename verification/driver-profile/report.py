@@ -59,6 +59,12 @@ for name in ['jvm', 'macosArm64' if target.startswith('macos') else 'linuxX64']:
         assert result['producer_paths_hidden']
 audit = json.loads((snapshot / f'verification/results/engine-audit-{target}.json').read_text())
 assert audit['result'] == 'passed'
+ipc = None
+if profile == 'parquet':
+    ipc = json.loads((snapshot / 'verification/results/arrow-ipc-regression.json').read_text())
+    assert ipc['result'] == 'passed' and ipc['target'] == target
+    assert ipc['archiveSha256'] == sha(snapshot / f'gdal4k-engine/build/engine/{target}/libgdal4k.a')
+    assert ipc['sourceSha256'] == sha(snapshot / 'verification/driver-profile/arrow-ipc-check.cpp')
 repo = snapshot / 'verification/build/consumer-maven'
 versions = {p.parent.name for p in repo.rglob('*.pom')}
 assert versions == {version}, versions
@@ -66,7 +72,7 @@ archive = output / f'gdal4k-{profile}-{target}-maven.tar.gz'
 with tarfile.open(archive, 'w:gz') as tar:
     tar.add(repo, arcname='maven')
 report = {'profile': profile, 'target': target, 'version': version, 'sourceInputs': identity,
-          'measured': measurements, 'tests': proof, 'dependencyAudit': audit,
+          'measured': measurements, 'tests': proof, 'dependencyAudit': audit, 'arrowIpcRegression': ipc,
           'archive': archive.name, 'archiveSha256': sha(archive),
           'publication': 'isolated local Maven archive only; no remote upload or default coordinate replacement'}
 (output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

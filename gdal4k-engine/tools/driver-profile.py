@@ -125,6 +125,8 @@ def main():
     run(gradle, '--console=plain', ':gdal4k:compileKotlin' + native,
         ':gdal4k-runtime:jvmTest', ':gdal4k-runtime:' + native[0].lower() + native[1:] + 'Test')
     run(sys.executable, snapshot / 'verification/audit-engine.py', args.target)
+    if args.profile == 'parquet':
+        run(sys.executable, snapshot / 'verification/driver-profile/arrow-ipc-check.py', snapshot, args.target)
     run(sys.executable, snapshot / 'verification/consumer.py', '--target', 'jvm', '--jvm-binary', classifier)
     run(sys.executable, snapshot / 'verification/consumer.py', '--target', native[0].lower() + native[1:])
     run(sys.executable, ROOT / 'verification/driver-profile/report.py', snapshot, args.profile, args.target)
