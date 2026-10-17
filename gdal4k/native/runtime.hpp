@@ -109,6 +109,8 @@ struct Runtime {
             auto parent=handles.find(e.parent);
             if(parent!=handles.end())GDALDatasetReleaseResultSet(parent->second.pointer,e.pointer);
         }
+        else if(e.type=="ColorTable")GDALDestroyColorTable(e.pointer);
+        else if(e.type=="RasterAttributeTable")GDALDestroyRasterAttributeTable(e.pointer);
         else if(e.type=="Group")GDALGroupRelease(static_cast<GDALGroupH>(e.pointer));
         else if(e.type=="MDArray")GDALMDArrayRelease(static_cast<GDALMDArrayH>(e.pointer));
         else if(e.type=="Attribute")GDALAttributeRelease(static_cast<GDALAttributeH>(e.pointer));
@@ -252,6 +254,7 @@ inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) 
 }
 #include "runtime-md.hpp"
 #include "runtime-band.hpp"
+#include "runtime-band-structures.hpp"
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));
