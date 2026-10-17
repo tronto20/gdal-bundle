@@ -239,3 +239,38 @@ requireNotNull(runtime.getDriver("MEM")).use { driver ->
 `CodedFieldValue(code, label)`은 nullable label을 지원하며 중복 코드는 거부합니다. `FieldDomain.getCodedValues()`는 coded 도메인에서만 목록을 반환합니다. `FieldDomainBound(value, inclusive)`로 숫자 텍스트 또는 DateTime을 지정하고, `null`은 해당 방향에 한계가 없다는 뜻입니다. range 도메인은 GDAL이 지원하는 Integer(0), Real(2), DateTime(11), Integer64(12)를 사용하며 `getMinimum` / `getMaximum`으로 경계를 조회합니다. DateTime은 ISO 8601로 읽어 옵니다. 다른 종류의 도메인을 조회한 경우 상세 값은 `null`입니다.
 
 독립 도메인과 배열의 Int64 값은 정확히 전달합니다. 다만 GDAL 3.12.4의 GeoPackage 드라이버는 range 경계를 REAL로 저장합니다. 이때 정밀도를 잃는 Integer64 경계값은 `addFieldDomain` / `updateFieldDomain`에서 저장 전에 명확히 거부합니다. 다른 드라이버·파일 형식의 저장 제약도 별도로 확인해야 합니다. 이 API 확장은 GDAL 전체 API의 완전한 노출을 의미하지 않습니다.
+
+
+### Band analysis and resampled windows
+
+`Band` exposes description/domain metadata, explicit scale/offset, cached extrema,
+exact Int64/UInt64 NoData (`Long`/`ULong`), `fill`, statistics and 64-bit histogram
+counts through common suspend methods. `getStatistics()` and `getDefaultHistogram()`
+only request cached/cheap results and return null when unavailable. Choose `force=true`
+or `computeStatistics()` explicitly when a scan is acceptable. `computeStatistics()`
+always recomputes; driver support determines cache persistence and invalidation after edits. Cached histogram
+results can remain stale after pixel/NoData changes, following the driver's GDAL policy. Statistics and RasterIO
+use raw samples: they do not apply scale/offset, and statistics/histograms exclude NoData.
+Approximate requests permit GDAL sampling/overviews; no approximation is requested by default.
+
+`BandRasterIOOptions` adds source windows, independent buffer dimensions and read
+resampling to all six primitive buffer overloads. Zero sizes mean the remaining source
+extent or the source window's dimensions. Oversized read buffers keep their tail.
+Writes require Nearest; GDAL can resize a buffer into the destination window. These
+operations allocate only the requested buffer/window, not a full-band staging copy.
+
+```kotlin
+runtime.openDataset(path).use { dataset ->
+    requireNotNull(dataset.getRasterBand(1)).use { band ->
+        val stats = band.getStatistics() // null rather than scanning implicitly
+        val preview = FloatArray(256 * 256)
+        band.readRaster(BandRasterIOOptions(bufferWidth = 256, bufferHeight = 256,
+            resampling = RasterResampling.Average), preview)
+    }
+}
+```
+
+Histogram snapshots are detached; setters validate bounds and reject negative counts.
+Exact integer NoData APIs require the corresponding Int64/UInt64 band and retain every
+bit across the web bridge. Color tables, raster attribute tables, native block I/O,
+virtual-memory/cache pointers and progress callbacks are still unexposed.

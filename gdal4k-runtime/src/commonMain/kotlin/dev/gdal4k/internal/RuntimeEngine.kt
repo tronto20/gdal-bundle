@@ -74,6 +74,13 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         is MDValue -> encodeMDValue(value)
         is CodedFieldValue -> buildJsonObject { put("code", encode(value.code)); put("label", encode(value.label)) }
         is FieldDomainBound -> buildJsonObject { put("value", encode(value.value)); put("inclusive", value.inclusive) }
+        is ULong -> JsonPrimitive(value.toString())
+        is BandRasterIOOptions -> buildJsonObject {
+            put("xOffset", value.xOffset); put("yOffset", value.yOffset)
+            put("xSize", value.xSize); put("ySize", value.ySize)
+            put("bufferWidth", value.bufferWidth); put("bufferHeight", value.bufferHeight)
+            put("resampling", value.resampling.code)
+        }
         is RasterIOOptions -> buildJsonObject {
             put("xOffset", value.xOffset); put("yOffset", value.yOffset)
             put("xSize", value.xSize); put("ySize", value.ySize)
