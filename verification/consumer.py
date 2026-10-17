@@ -158,6 +158,18 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  (consumer/'build.gradle.kts').write_text(build)
  (consumer/'gradle.properties').write_text('org.gradle.jvmargs=-Xmx2g\nandroid.useAndroidX=true\n')
  path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source)
+ if not a.expect_missing_jvm_binary:
+  # Exercise the expanded API from published coordinates, not producer project dependencies.
+  expanded = (ROOT/'gdal4k/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text()
+  expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
+  expanded_path = consumer/'src/commonTest/kotlin/consumer/DatasetApiTest.kt'
+  expanded_path.write_text(expanded)
+  test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
+  platform_path = ROOT/f'gdal4k/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
+  actual_path = consumer/f'src/{test_set}/kotlin/consumer/DatasetOutputPath.kt'
+  actual_path.parent.mkdir(parents=True,exist_ok=True)
+  actual_path.write_text(platform_path.read_text().replace('package dev.gdal4k','package consumer'))
+
  if a.browser and target in ['js','wasmJs']:
   browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text()
   browser_source = browser_source.replace('package dev.gdal4k\n', 'package consumer\nimport dev.gdal4k.Gdal4k\n')

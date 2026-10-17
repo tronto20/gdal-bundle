@@ -6,6 +6,10 @@ import dev.gdal4k.*
 import kotlinx.serialization.json.*
 
 internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine, "0", null), GdalRuntime {
+    override suspend fun createFeature(definition: FeatureDefn): Feature { val result = invoke("GdalRuntime", "createFeature_FeatureDefn", mapOf("definition" to handle(definition))); return requireNotNull(engine.wrapFeature(result, null)) }
+    override suspend fun createFieldDefn(name: String, type: Int): FieldDefn { val result = invoke("GdalRuntime", "createFieldDefn_String_Int", mapOf("name" to encode(name), "type" to encode(type))); return requireNotNull(engine.wrapFieldDefn(result, null)) }
+    override suspend fun createGlobFieldDomain(name: String, description: String, fieldType: Int, glob: String, fieldSubType: Int): FieldDomain { val result = invoke("GdalRuntime", "createGlobFieldDomain_String_String_Int_String_Int", mapOf("name" to encode(name), "description" to encode(description), "fieldType" to encode(fieldType), "glob" to encode(glob), "fieldSubType" to encode(fieldSubType))); return requireNotNull(engine.wrapFieldDomain(result, null)) }
+    override suspend fun createRelationship(name: String, leftTable: String, rightTable: String, cardinality: Int): Relationship { val result = invoke("GdalRuntime", "createRelationship_String_String_String_Int", mapOf("name" to encode(name), "leftTable" to encode(leftTable), "rightTable" to encode(rightTable), "cardinality" to encode(cardinality))); return requireNotNull(engine.wrapRelationship(result, null)) }
     override suspend fun versionInfo(request: String): String { val result = invoke("GdalRuntime", "versionInfo_String", mapOf("request" to encode(request))); return result.jsonPrimitive.contentOrNull.orEmpty() }
     override suspend fun writeMemoryFile(path: String, bytes: ByteArray): Unit { invoke("GdalRuntime", "writeMemoryFile_String_ByteArray", mapOf("path" to encode(path), "bytes" to encode(bytes))); return Unit }
     override suspend fun readMemoryFile(path: String): ByteArray { val result = invoke("GdalRuntime", "readMemoryFile_String", mapOf("path" to encode(path))); return result.jsonArray.map { it.jsonPrimitive.content.toInt().toByte() }.toByteArray() }
@@ -22,6 +26,52 @@ internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine,
 }
 
 internal class BundledDataset(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Dataset {
+    override suspend fun getRootGroup(): Group? { val result = invoke("Dataset", "getRootGroup", mapOf()); return engine.wrapGroup(result, this) }
+    override suspend fun getFieldDomain(name: String): FieldDomain? { val result = invoke("Dataset", "getFieldDomain_String", mapOf("name" to encode(name))); return engine.wrapFieldDomain(result, null) }
+    override suspend fun getFieldDomainNames(): List<String> { val result = invoke("Dataset", "getFieldDomainNames", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun addFieldDomain(domain: FieldDomain): Unit { invoke("Dataset", "addFieldDomain_FieldDomain", mapOf("domain" to handle(domain))); return Unit }
+    override suspend fun updateFieldDomain(domain: FieldDomain): Unit { invoke("Dataset", "updateFieldDomain_FieldDomain", mapOf("domain" to handle(domain))); return Unit }
+    override suspend fun deleteFieldDomain(name: String): Unit { invoke("Dataset", "deleteFieldDomain_String", mapOf("name" to encode(name))); return Unit }
+    override suspend fun getRelationship(name: String): Relationship? { val result = invoke("Dataset", "getRelationship_String", mapOf("name" to encode(name))); return engine.wrapRelationship(result, null) }
+    override suspend fun getRelationshipNames(): List<String> { val result = invoke("Dataset", "getRelationshipNames", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun addRelationship(relationship: Relationship): Unit { invoke("Dataset", "addRelationship_Relationship", mapOf("relationship" to handle(relationship))); return Unit }
+    override suspend fun updateRelationship(relationship: Relationship): Unit { invoke("Dataset", "updateRelationship_Relationship", mapOf("relationship" to handle(relationship))); return Unit }
+    override suspend fun deleteRelationship(name: String): Unit { invoke("Dataset", "deleteRelationship_String", mapOf("name" to encode(name))); return Unit }
+    override suspend fun getDescription(): String { val result = invoke("Dataset", "getDescription", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun setDescription(description: String): Unit { invoke("Dataset", "setDescription_String", mapOf("description" to encode(description))); return Unit }
+    override suspend fun getMetadataDomainList(): List<String> { val result = invoke("Dataset", "getMetadataDomainList", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun getMetadata(domain: String): List<String> { val result = invoke("Dataset", "getMetadata_String", mapOf("domain" to encode(domain))); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun setMetadata(metadata: List<String>, domain: String): Int { val result = invoke("Dataset", "setMetadata_List_String_String", mapOf("metadata" to encode(metadata), "domain" to encode(domain))); return result.jsonPrimitive.int }
+    override suspend fun getMetadataItem(name: String, domain: String): String? { val result = invoke("Dataset", "getMetadataItem_String_String", mapOf("name" to encode(name), "domain" to encode(domain))); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonPrimitive.contentOrNull.orEmpty() } }
+    override suspend fun setMetadataItem(name: String, value: String?, domain: String): Int { val result = invoke("Dataset", "setMetadataItem_String_String_String", mapOf("name" to encode(name), "value" to encode(value), "domain" to encode(domain))); return result.jsonPrimitive.int }
+    override suspend fun getSpatialRef(): SpatialReference? { val result = invoke("Dataset", "getSpatialRef", mapOf()); return engine.wrapSpatialReference(result, null) }
+    override suspend fun setSpatialRef(spatialReference: SpatialReference?): Int { val result = invoke("Dataset", "setSpatialRef_SpatialReference", mapOf("spatialReference" to handle(spatialReference))); return result.jsonPrimitive.int }
+    override suspend fun getAccess(): Int { val result = invoke("Dataset", "getAccess", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun addBand(dataType: Int, options: List<String>): Int { val result = invoke("Dataset", "addBand_Int_List_String", mapOf("dataType" to encode(dataType), "options" to encode(options))); return result.jsonPrimitive.int }
+    override suspend fun createMaskBand(flags: Int): Int { val result = invoke("Dataset", "createMaskBand_Int", mapOf("flags" to encode(flags))); return result.jsonPrimitive.int }
+    override suspend fun clearStatistics(): Unit { invoke("Dataset", "clearStatistics", mapOf()); return Unit }
+    override suspend fun translateTo(path: String, driver: String, arguments: List<String>): Unit { invoke("Dataset", "translateTo_String_String_List_String", mapOf("path" to encode(path), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
+    override suspend fun warpTo(path: String, target: String, driver: String, arguments: List<String>): Unit { invoke("Dataset", "warpTo_String_String_String_List_String", mapOf("path" to encode(path), "target" to encode(target), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
+    override suspend fun translateVectorTo(path: String, driver: String, arguments: List<String>): Unit { invoke("Dataset", "translateVectorTo_String_String_List_String", mapOf("path" to encode(path), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
+    override suspend fun createLayer(name: String, spatialReference: SpatialReference?, geometryType: Int, options: List<String>): Layer? { val result = invoke("Dataset", "createLayer_String_SpatialReference_Int_List_String", mapOf("name" to encode(name), "spatialReference" to handle(spatialReference), "geometryType" to encode(geometryType), "options" to encode(options))); return engine.wrapLayer(result, this) }
+    override suspend fun copyLayer(source: Layer, name: String, options: List<String>): Layer? { val result = invoke("Dataset", "copyLayer_Layer_String_List_String", mapOf("source" to handle(source), "name" to encode(name), "options" to encode(options))); return engine.wrapLayer(result, this) }
+    override suspend fun deleteLayer(index: Int): Int { val result = invoke("Dataset", "deleteLayer_Int", mapOf("index" to encode(index))); return result.jsonPrimitive.int }
+    override suspend fun executeSQL(statement: String, spatialFilter: Geometry?, dialect: String): Layer? { val result = invoke("Dataset", "executeSQL_String_Geometry_String", mapOf("statement" to encode(statement), "spatialFilter" to handle(spatialFilter), "dialect" to encode(dialect))); return engine.wrapLayer(result, this) }
+    override suspend fun startTransaction(force: Boolean): Int { val result = invoke("Dataset", "startTransaction_Boolean", mapOf("force" to encode(force))); return result.jsonPrimitive.int }
+    override suspend fun commitTransaction(): Int { val result = invoke("Dataset", "commitTransaction", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun rollbackTransaction(): Int { val result = invoke("Dataset", "rollbackTransaction", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: ByteArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_ByteArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: ShortArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_ShortArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toShort() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: IntArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_IntArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: LongArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_LongArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toLong() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: FloatArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_FloatArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toFloat() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: DoubleArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "readRaster_DoubleArray_RasterIOOptions", mapOf("bufferSize" to encode(buffer.size), "options" to encode(options))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toDouble() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: ByteArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_ByteArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: ShortArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_ShortArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: IntArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_IntArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: LongArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_LongArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: FloatArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_FloatArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun writeRaster(buffer: DoubleArray, options: RasterIOOptions): Int { val result = invoke("Dataset", "writeRaster_DoubleArray_RasterIOOptions", mapOf("buffer" to encode(buffer), "options" to encode(options))).jsonObject; return result["code"]!!.jsonPrimitive.int }
     override suspend fun close() = closeHandle()
     override suspend fun info(arguments: List<String>): String { val result = invoke("Dataset", "info_List_String", mapOf("arguments" to encode(arguments))); return result.jsonPrimitive.contentOrNull.orEmpty() }
     override suspend fun translate(driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("Dataset", "translate_String_String_List_String", mapOf("driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
@@ -47,7 +97,7 @@ internal class BundledDataset(engine: RuntimeEngine, id: String, parent: Runtime
     override suspend fun getGCPCount(): Int { val result = invoke("Dataset", "getGCPCount", mapOf()); return result.jsonPrimitive.int }
     override suspend fun getGCPProjection(): String { val result = invoke("Dataset", "getGCPProjection", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
     override suspend fun getGCPSpatialRef(): SpatialReference? { val result = invoke("Dataset", "getGCPSpatialRef", mapOf()); return engine.wrapSpatialReference(result, this) }
-    override suspend fun getGCPs(): List<GCP> { val result = invoke("Dataset", "getGCPs", mapOf()); return result.jsonArray.map { requireNotNull(engine.wrapGCP(it, null)) } }
+    override suspend fun getGCPs(): List<GCP> { val result = invoke("Dataset", "getGCPs", mapOf()); return result.jsonArray.map { requireNotNull(engine.wrapGCP(it, this)) } }
     override suspend fun setGCPs(gcps: List<GCP>, projection: String): Int { val result = invoke("Dataset", "setGCPs_List_GCP_String", mapOf("gcps" to encode(gcps), "projection" to encode(projection))); return result.jsonPrimitive.int }
     override suspend fun setGCPs(gcps: List<GCP>, spatialReference: SpatialReference): Int { val result = invoke("Dataset", "setGCPs_List_GCP_SpatialReference", mapOf("gcps" to encode(gcps), "spatialReference" to handle(spatialReference))); return result.jsonPrimitive.int }
     override suspend fun getFileList(): List<String> { val result = invoke("Dataset", "getFileList", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
@@ -57,6 +107,7 @@ internal class BundledDataset(engine: RuntimeEngine, id: String, parent: Runtime
 }
 
 internal class BundledDriver(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Driver {
+    override suspend fun createMultidimensional(name: String, rootOptions: List<String>, options: List<String>): Dataset? { val result = invoke("Driver", "createMultidimensional_String_List_String_List_String", mapOf("name" to encode(name), "rootOptions" to encode(rootOptions), "options" to encode(options))); return engine.wrapDataset(result, null) }
     override suspend fun close() = closeHandle()
     override suspend fun getShortName(): String { val result = invoke("Driver", "getShortName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
     override suspend fun getLongName(): String { val result = invoke("Driver", "getLongName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
@@ -96,18 +147,18 @@ internal class BundledBand(engine: RuntimeEngine, id: String, parent: RuntimeHan
     override suspend fun createMaskBand(flags: Int): Int { val result = invoke("Band", "createMaskBand_Int", mapOf("flags" to encode(flags))); return result.jsonPrimitive.int }
     override suspend fun isMaskBand(): Boolean { val result = invoke("Band", "isMaskBand", mapOf()); return result.jsonPrimitive.boolean }
     override suspend fun flushCache(): Unit { invoke("Band", "flushCache", mapOf()); return Unit }
-    override suspend fun readRaster(buffer: ByteArray): Int { val result = invoke("Band", "readRaster_ByteArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(buffer: ShortArray): Int { val result = invoke("Band", "readRaster_ShortArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toShort() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(buffer: IntArray): Int { val result = invoke("Band", "readRaster_IntArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(buffer: LongArray): Int { val result = invoke("Band", "readRaster_LongArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toLong() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(buffer: FloatArray): Int { val result = invoke("Band", "readRaster_FloatArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toFloat() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(buffer: DoubleArray): Int { val result = invoke("Band", "readRaster_DoubleArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toDouble() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: ByteArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_ByteArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: ShortArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_ShortArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toShort() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: IntArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_IntArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: LongArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_LongArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toLong() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: FloatArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_FloatArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toFloat() }; return result["code"]!!.jsonPrimitive.int }
-    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: DoubleArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_DoubleArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toDouble() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: ByteArray): Int { val result = invoke("Band", "readRaster_ByteArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: ShortArray): Int { val result = invoke("Band", "readRaster_ShortArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toShort() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: IntArray): Int { val result = invoke("Band", "readRaster_IntArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: LongArray): Int { val result = invoke("Band", "readRaster_LongArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toLong() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: FloatArray): Int { val result = invoke("Band", "readRaster_FloatArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toFloat() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(buffer: DoubleArray): Int { val result = invoke("Band", "readRaster_DoubleArray", mapOf("bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toDouble() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: ByteArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_ByteArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toByte() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: ShortArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_ShortArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt().toShort() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: IntArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_IntArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toInt() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: LongArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_LongArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toLong() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: FloatArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_FloatArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toFloat() }; return result["code"]!!.jsonPrimitive.int }
+    override suspend fun readRaster(xOffset: Int, yOffset: Int, xSize: Int, ySize: Int, buffer: DoubleArray): Int { val result = invoke("Band", "readRaster_Int_Int_Int_Int_DoubleArray", mapOf("xOffset" to encode(xOffset), "yOffset" to encode(yOffset), "xSize" to encode(xSize), "ySize" to encode(ySize), "bufferSize" to encode(buffer.size))).jsonObject; if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.toDouble() }; return result["code"]!!.jsonPrimitive.int }
     override suspend fun writeRaster(buffer: ByteArray): Int { val result = invoke("Band", "writeRaster_ByteArray", mapOf("buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
     override suspend fun writeRaster(buffer: ShortArray): Int { val result = invoke("Band", "writeRaster_ShortArray", mapOf("buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
     override suspend fun writeRaster(buffer: IntArray): Int { val result = invoke("Band", "writeRaster_IntArray", mapOf("buffer" to encode(buffer))).jsonObject; return result["code"]!!.jsonPrimitive.int }
@@ -213,6 +264,7 @@ internal class BundledGCP(engine: RuntimeEngine, id: String, parent: RuntimeHand
 }
 
 internal class BundledLayer(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Layer {
+    override suspend fun createField(field: FieldDefn, approximate: Boolean): Int { val result = invoke("Layer", "createField_FieldDefn_Boolean", mapOf("field" to handle(field), "approximate" to encode(approximate))); return result.jsonPrimitive.int }
     override suspend fun close() = closeHandle()
     override suspend fun getDataset(): Dataset? { val result = invoke("Layer", "getDataset", mapOf()); return engine.wrapDataset(result, this) }
     override suspend fun getLayerDefn(): FeatureDefn? { val result = invoke("Layer", "getLayerDefn", mapOf()); return engine.wrapFeatureDefn(result, this) }
@@ -460,6 +512,68 @@ internal class BundledGeometry(engine: RuntimeEngine, id: String, parent: Runtim
     override suspend fun getCurveGeometry(): Geometry? { val result = invoke("Geometry", "getCurveGeometry", mapOf()); return engine.wrapGeometry(result, null) }
 }
 
+internal class BundledGroup(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Group {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("Group", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getFullName(): String { val result = invoke("Group", "getFullName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getGroupNames(options: List<String>): List<String> { val result = invoke("Group", "getGroupNames_List_String", mapOf("options" to encode(options))); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun getArrayNames(options: List<String>): List<String> { val result = invoke("Group", "getArrayNames_List_String", mapOf("options" to encode(options))); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun openGroup(name: String, options: List<String>): Group? { val result = invoke("Group", "openGroup_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return engine.wrapGroup(result, this) }
+    override suspend fun openArray(name: String, options: List<String>): MDArray? { val result = invoke("Group", "openArray_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return engine.wrapMDArray(result, this) }
+    override suspend fun createGroup(name: String, options: List<String>): Group? { val result = invoke("Group", "createGroup_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return engine.wrapGroup(result, this) }
+    override suspend fun createDimension(name: String, size: Long, type: String, direction: String, options: List<String>): Dimension? { val result = invoke("Group", "createDimension_String_Long_String_String_List_String", mapOf("name" to encode(name), "size" to encode(size), "type" to encode(type), "direction" to encode(direction), "options" to encode(options))); return engine.wrapDimension(result, this) }
+    override suspend fun createArray(name: String, dimensions: List<Dimension>, dataType: Int, options: List<String>): MDArray? { val result = invoke("Group", "createArray_String_List_Dimension_Int_List_String", mapOf("name" to encode(name), "dimensions" to encode(dimensions), "dataType" to encode(dataType), "options" to encode(options))); return engine.wrapMDArray(result, this) }
+}
+
+internal class BundledMDArray(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), MDArray {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("MDArray", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getFullName(): String { val result = invoke("MDArray", "getFullName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getDimensions(): List<Dimension> { val result = invoke("MDArray", "getDimensions", mapOf()); return result.jsonArray.map { requireNotNull(engine.wrapDimension(it, this)) } }
+    override suspend fun getDataType(): Int { val result = invoke("MDArray", "getDataType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun read(start: LongArray, count: LongArray): DoubleArray { val result = invoke("MDArray", "read_LongArray_LongArray", mapOf("start" to encode(start), "count" to encode(count))); return result.jsonArray.map { it.jsonPrimitive.content.toDouble() }.toDoubleArray() }
+    override suspend fun write(start: LongArray, count: LongArray, values: DoubleArray): Boolean { val result = invoke("MDArray", "write_LongArray_LongArray_DoubleArray", mapOf("start" to encode(start), "count" to encode(count), "values" to encode(values))); return result.jsonPrimitive.boolean }
+}
+
+internal class BundledDimension(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Dimension {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("Dimension", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getFullName(): String { val result = invoke("Dimension", "getFullName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getType(): String { val result = invoke("Dimension", "getType", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getDirection(): String { val result = invoke("Dimension", "getDirection", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getSize(): Long { val result = invoke("Dimension", "getSize", mapOf()); return result.jsonPrimitive.content.toLong() }
+}
+
+internal class BundledFieldDomain(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), FieldDomain {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("FieldDomain", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getDescription(): String { val result = invoke("FieldDomain", "getDescription", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getDomainType(): Int { val result = invoke("FieldDomain", "getDomainType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getFieldType(): Int { val result = invoke("FieldDomain", "getFieldType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getFieldSubType(): Int { val result = invoke("FieldDomain", "getFieldSubType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getGlob(): String? { val result = invoke("FieldDomain", "getGlob", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonPrimitive.contentOrNull.orEmpty() } }
+    override suspend fun getSplitPolicy(): Int { val result = invoke("FieldDomain", "getSplitPolicy", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun setSplitPolicy(policy: Int): Unit { invoke("FieldDomain", "setSplitPolicy_Int", mapOf("policy" to encode(policy))); return Unit }
+    override suspend fun getMergePolicy(): Int { val result = invoke("FieldDomain", "getMergePolicy", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun setMergePolicy(policy: Int): Unit { invoke("FieldDomain", "setMergePolicy_Int", mapOf("policy" to encode(policy))); return Unit }
+}
+
+internal class BundledRelationship(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Relationship {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("Relationship", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getCardinality(): Int { val result = invoke("Relationship", "getCardinality", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getLeftTableName(): String { val result = invoke("Relationship", "getLeftTableName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getRightTableName(): String { val result = invoke("Relationship", "getRightTableName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getMappingTableName(): String { val result = invoke("Relationship", "getMappingTableName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun setMappingTableName(name: String): Unit { invoke("Relationship", "setMappingTableName_String", mapOf("name" to encode(name))); return Unit }
+    override suspend fun getLeftTableFields(): List<String> { val result = invoke("Relationship", "getLeftTableFields", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun setLeftTableFields(fields: List<String>): Unit { invoke("Relationship", "setLeftTableFields_List_String", mapOf("fields" to encode(fields))); return Unit }
+    override suspend fun getRightTableFields(): List<String> { val result = invoke("Relationship", "getRightTableFields", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content } }
+    override suspend fun setRightTableFields(fields: List<String>): Unit { invoke("Relationship", "setRightTableFields_List_String", mapOf("fields" to encode(fields))); return Unit }
+    override suspend fun getType(): Int { val result = invoke("Relationship", "getType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun setType(type: Int): Unit { invoke("Relationship", "setType_Int", mapOf("type" to encode(type))); return Unit }
+}
+
 internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: RuntimeHandle?): RuntimeHandle? {
     if (value is JsonNull) return null
     val id = value.jsonPrimitive.content
@@ -476,6 +590,11 @@ internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: Runtim
         "FieldDefn" -> BundledFieldDefn(this, id, parent)
         "GeomFieldDefn" -> BundledGeomFieldDefn(this, id, parent)
         "Geometry" -> BundledGeometry(this, id, parent)
+        "Group" -> BundledGroup(this, id, parent)
+        "MDArray" -> BundledMDArray(this, id, parent)
+        "Dimension" -> BundledDimension(this, id, parent)
+        "FieldDomain" -> BundledFieldDomain(this, id, parent)
+        "Relationship" -> BundledRelationship(this, id, parent)
         else -> error("Unknown GDAL handle type: $type")
     }
 }
@@ -491,3 +610,8 @@ internal fun RuntimeEngine.wrapFeatureDefn(value: JsonElement, parent: RuntimeHa
 internal fun RuntimeEngine.wrapFieldDefn(value: JsonElement, parent: RuntimeHandle?): FieldDefn? = wrap("FieldDefn", value, parent) as FieldDefn?
 internal fun RuntimeEngine.wrapGeomFieldDefn(value: JsonElement, parent: RuntimeHandle?): GeomFieldDefn? = wrap("GeomFieldDefn", value, parent) as GeomFieldDefn?
 internal fun RuntimeEngine.wrapGeometry(value: JsonElement, parent: RuntimeHandle?): Geometry? = wrap("Geometry", value, parent) as Geometry?
+internal fun RuntimeEngine.wrapGroup(value: JsonElement, parent: RuntimeHandle?): Group? = wrap("Group", value, parent) as Group?
+internal fun RuntimeEngine.wrapMDArray(value: JsonElement, parent: RuntimeHandle?): MDArray? = wrap("MDArray", value, parent) as MDArray?
+internal fun RuntimeEngine.wrapDimension(value: JsonElement, parent: RuntimeHandle?): Dimension? = wrap("Dimension", value, parent) as Dimension?
+internal fun RuntimeEngine.wrapFieldDomain(value: JsonElement, parent: RuntimeHandle?): FieldDomain? = wrap("FieldDomain", value, parent) as FieldDomain?
+internal fun RuntimeEngine.wrapRelationship(value: JsonElement, parent: RuntimeHandle?): Relationship? = wrap("Relationship", value, parent) as Relationship?

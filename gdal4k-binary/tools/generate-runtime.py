@@ -8,7 +8,7 @@ engine target, so an API/version mismatch cannot become a published stub.
 from pathlib import Path
 import re
 ROOT = Path(__file__).resolve().parents[2]
-TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry']
+TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry','Group','MDArray','Dimension','FieldDomain','Relationship']
 
 def methods(cls):
     text = '\n'.join(p.read_text() for p in (ROOT/'gdal4k-runtime/src/commonMain/kotlin/dev/gdal4k/runtime').glob('*.kt'))
@@ -47,7 +47,7 @@ def kt_result(typ,expr,parent):
     elif t=='List<DoubleArray>':out=f'{expr}.jsonArray.map {{ p -> p.jsonArray.map {{ it.jsonPrimitive.content.toDouble() }}.toDoubleArray() }}'
     elif t=='GdalFiles':out=f'decodeFiles({expr})'
     elif t=='List<GdalDriver>':out=f'{expr}.jsonArray.map {{ it.jsonObject.let {{ d -> GdalDriver(d.getValue("name").jsonPrimitive.content, d.getValue("longName").jsonPrimitive.content, d.getValue("raster").jsonPrimitive.boolean, d.getValue("vector").jsonPrimitive.boolean) }} }}'
-    elif t=='List<GCP>':out=f'{expr}.jsonArray.map {{ requireNotNull(engine.wrapGCP(it, null)) }}'
+    elif t.startswith('List<') and t[5:-1] in TYPES:out=f'{expr}.jsonArray.map {{ requireNotNull(engine.wrap{t[5:-1]}(it, {parent})) }}'
     elif t=='Unit':out=f'{expr}.let {{ Unit }}'
     else:raise ValueError(('Return',typ))
     return f'{expr}.takeUnless {{ it is JsonNull }}?.let {{ v -> '+out.replace(expr,'v')+' }' if nullable else out
@@ -86,6 +86,63 @@ special('GdalRuntime','createGCP','auto p=static_cast<GDAL_GCP*>(CPLCalloc(1,siz
 special('GdalRuntime','openDataset','if(a["files"].IsValid())return openMemoryDataset(r,a);auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);')
 special('GdalRuntime','datasetInfo','return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));')
 special('GdalRuntime','drivers','return driverList();')
+PARENT_OWNED={('Dataset','getRootGroup'),('Group','openGroup'),('Group','openArray'),('Group','createGroup'),('Group','createDimension'),('Group','createArray')}
+OWNED.update({('Driver','createMultidimensional'),('GdalRuntime','createGlobFieldDomain'),('GdalRuntime','createRelationship'),('Dataset','getFieldDomain'),('Dataset','getRelationship')})
+PREFIX.update({'Group':'GDALGroup','Dimension':'GDALDimension','MDArray':'GDALMDArray','FieldDomain':'OGR_FldDomain_','Relationship':'GDALRelationship'})
+special('Driver','createMultidimensional','Strings root(a.GetArray("rootOptions")),opts(a.GetArray("options"));return r.result(GDALCreateMultiDimensional(h,a["name"].ToString().c_str(),root.data(),opts.data()),"Dataset",true);')
+special('Dataset','getRootGroup','return r.result(GDALDatasetGetRootGroup(h),"Group",true,id);')
+for method,typ in [('getFieldDomain','FieldDomain'),('getRelationship','Relationship')]:
+    cast='OGRFieldDomain' if typ=='FieldDomain' else 'GDALRelationship'
+    clone='reinterpret_cast<OGRFieldDomain*>(p)->Clone()' if typ=='FieldDomain' else 'new GDALRelationship(*reinterpret_cast<GDALRelationship*>(p))'
+    special('Dataset',method,f'auto p=GDALDatasetGet{typ}(h,a["name"].ToString().c_str());return r.result(p?{clone}:nullptr,"{typ}",true);')
+for typ,arg in [('FieldDomain','domain'),('Relationship','relationship')]:
+    special('Dataset','get'+typ+'Names',f'auto p=GDALDatasetGet{typ}Names(h,nullptr);auto out=strings(p);CSLDestroy(p);return out;')
+    for op in ['add','update','delete']:
+        operand='a["name"].ToString().c_str()' if op=='delete' else f'static_cast<OGRFieldDomainH>(r.arg(a["{arg}"]))' if typ=='FieldDomain' else f'r.arg(a["{arg}"])'
+        special('Dataset',op+typ,f'char* reason=nullptr;auto ok=GDALDataset{op.capitalize()}{typ}(h,{operand},&reason);std::string message=reason?reason:"GDAL {op} {typ} failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();')
+special('GdalRuntime','createGlobFieldDomain','return r.result(OGR_GlobFldDomain_Create(a["name"].ToString().c_str(),a["description"].ToString().c_str(),static_cast<OGRFieldType>(a.GetInteger("fieldType")),static_cast<OGRFieldSubType>(a.GetInteger("fieldSubType")),a["glob"].ToString().c_str()),"FieldDomain",true);')
+special('GdalRuntime','createRelationship','auto c=a.GetInteger("cardinality");require(c>=0&&c<=3,"Invalid relationship cardinality");return r.result(GDALRelationshipCreate(a["name"].ToString().c_str(),a["leftTable"].ToString().c_str(),a["rightTable"].ToString().c_str(),static_cast<GDALRelationshipCardinality>(c)),"Relationship",true);')
+special('FieldDomain','getGlob','return value(OGR_FldDomain_GetDomainType(h)==OFDT_GLOB?OGR_GlobFldDomain_GetGlob(h):nullptr);')
+for method in ['getLeftTableFields','getRightTableFields']:
+    special('Relationship',method,'auto p=GDALRelationship'+method[0].upper()+method[1:]+'(h);auto out=strings(p);CSLDestroy(p);return out;')
+for method,fn in [('getGroupNames','GDALGroupGetGroupNames'),('getArrayNames','GDALGroupGetMDArrayNames')]:
+    special('Group',method,f'Strings opts(a.GetArray("options"));auto p={fn}(h,opts.data());auto out=strings(p);CSLDestroy(p);return out;')
+for method,fn,typ in [('openGroup','GDALGroupOpenGroup','Group'),('openArray','GDALGroupOpenMDArray','MDArray'),('createGroup','GDALGroupCreateGroup','Group')]:
+    special('Group',method,f'Strings opts(a.GetArray("options"));return r.result({fn}(h,a["name"].ToString().c_str(),opts.data()),"{typ}",true,id);')
+special('Group','createDimension','auto size=a.GetLong("size");require(size>0,"Dimension size must be positive");Strings opts(a.GetArray("options"));return r.result(GDALGroupCreateDimension(h,a["name"].ToString().c_str(),a["type"].ToString().c_str(),a["direction"].ToString().c_str(),size,opts.data()),"Dimension",true,id);')
+special('Group','createArray','std::vector<GDALDimensionH> dims;for(auto d:a.GetArray("dimensions"))dims.push_back(static_cast<GDALDimensionH>(r.arg(d)));auto type=static_cast<GDALDataType>(a.GetInteger("dataType"));require(type>GDT_Unknown&&type<GDT_TypeCount,"Invalid numeric data type");auto edt=GDALExtendedDataTypeCreate(type);Strings opts(a.GetArray("options"));auto array=GDALGroupCreateMDArray(h,a["name"].ToString().c_str(),dims.size(),dims.data(),edt,opts.data());GDALExtendedDataTypeRelease(edt);return r.result(array,"MDArray",true,id);')
+special('Dimension','getSize','auto size=GDALDimensionGetSize(h);require(size<=INT64_MAX,"Dimension size exceeds Kotlin Long");return value(std::to_string(size));')
+special('MDArray','getDimensions','size_t n=0;auto dims=GDALMDArrayGetDimensions(h,&n);CPLJSONArray out;for(size_t i=0;i<n;++i)out.Add(r.result(dims[i],"Dimension",true,id)["value"]);CPLFree(dims);return value(out);')
+special('MDArray','getDataType','auto type=GDALMDArrayGetDataType(h);auto numeric=GDALExtendedDataTypeGetClass(type)==GEDTC_NUMERIC?GDALExtendedDataTypeGetNumericDataType(type):GDT_Unknown;GDALExtendedDataTypeRelease(type);return value(numeric);')
+special('MDArray','read','return mdRaster(h,a,false);')
+special('MDArray','write','return mdRaster(h,a,true);')
+
+OWNED.update({('GdalRuntime','createFeature'),('GdalRuntime','createFieldDefn')})
+special('GdalRuntime','createFeature','return r.result(OGR_F_Create(r.arg(a["definition"])),"Feature",true);')
+special('GdalRuntime','createFieldDefn','return r.result(OGR_Fld_Create(a["name"].ToString().c_str(),static_cast<OGRFieldType>(a.GetInteger("type"))),"FieldDefn",true);')
+# Dataset additions use the same checked transport on every target.
+for method,fn in [('getDescription','GDALGetDescription'),('setDescription','GDALSetDescription'),('getAccess','GDALGetAccess'),('createMaskBand','GDALCreateDatasetMaskBand'),('clearStatistics','GDALDatasetClearStatistics'),('startTransaction','GDALDatasetStartTransaction'),('commitTransaction','GDALDatasetCommitTransaction'),('rollbackTransaction','GDALDatasetRollbackTransaction')]:
+    ALIASES['Dataset'][method]=fn
+for method,fn in [('getMetadata','GDALGetMetadata'),('getMetadataDomainList','GDALGetMetadataDomainList')]:
+    extra=',a["domain"].ToString().c_str()' if method=='getMetadata' else ''
+    cleanup='CSLDestroy(p);' if method=='getMetadataDomainList' else ''
+    special('Dataset',method,f'auto p={fn}(h{extra});auto out=strings(p);{cleanup}return out;')
+special('Dataset','setMetadata','Strings list(a.GetArray("metadata"));return value(GDALSetMetadata(h,list.data(),a["domain"].ToString().c_str()));')
+special('Dataset','getMetadataItem','return value(GDALGetMetadataItem(h,a["name"].ToString().c_str(),a["domain"].ToString().c_str()));')
+special('Dataset','setMetadataItem','auto text=a["value"].ToString();return value(GDALSetMetadataItem(h,a["name"].ToString().c_str(),a["value"].GetType()==CPLJSONObject::Type::Null?nullptr:text.c_str(),a["domain"].ToString().c_str()));')
+special('Dataset','getSpatialRef','auto s=GDALGetSpatialRef(h);return r.result(s?OSRClone(s):nullptr,"SpatialReference",true);')
+OWNED.add(('Dataset','getSpatialRef'))
+special('Dataset','setSpatialRef','return value(GDALSetSpatialRef(h,a["spatialReference"].GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(a["spatialReference"])));')
+special('Dataset','addBand','Strings list(a.GetArray("options"));return value(GDALAddBand(h,static_cast<GDALDataType>(a.GetInteger("dataType")),list.data()));')
+for method,operation in [('translateTo','translate'),('warpTo','warp'),('translateVectorTo','vector')]:
+    special('Dataset',method,f'convertDatasetTo(h,a,"{operation}");return nullValue();')
+for method in ['readRaster','writeRaster']:
+    special('Dataset',method,'return datasetRaster(h,a,method.rfind("writeRaster",0)==0,method);')
+special('Dataset','createLayer','Strings list(a.GetArray("options"));auto s=a["spatialReference"];return r.result(GDALDatasetCreateLayer(h,a["name"].ToString().c_str(),s.GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(s),static_cast<OGRwkbGeometryType>(a.GetInteger("geometryType")),list.data()),"Layer",false,id);')
+special('Dataset','copyLayer','Strings list(a.GetArray("options"));return r.result(GDALDatasetCopyLayer(h,r.arg(a["source"]),a["name"].ToString().c_str(),list.data()),"Layer",false,id);')
+special('Dataset','deleteLayer','auto index=a.GetInteger("index");require(index>=0 && index<GDALDatasetGetLayerCount(h),"Layer index is outside dataset");auto layer=GDALDatasetGetLayer(h,index);auto code=GDALDatasetDeleteLayer(h,index);if(code==OGRERR_NONE)r.invalidatePointer(layer);return value(code);')
+special('Dataset','executeSQL','auto filter=a["spatialFilter"];auto dialect=a["dialect"].ToString();auto layer=GDALDatasetExecuteSQL(h,a["statement"].ToString().c_str(),filter.GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(filter),dialect.empty()?nullptr:dialect.c_str());if(!layer && CPLGetLastErrorType()>=CE_Failure)throw std::runtime_error(CPLGetLastErrorMsg());return r.result(layer,"Layer",true,id);')
+
 special('Dataset','info','return value(datasetInfo(h,a.GetArray("arguments"),true));')
 special('Dataset','translate','return convertDataset(h,a,"translate");')
 special('Dataset','warp','return convertDataset(h,a,"warp");')
@@ -164,12 +221,12 @@ for cls in TYPES:
     for name,params,ret in methods(cls):
         sig=key(name,params);argstr=', '.join(f'{n}: {t}' for n,t in params)
         if name=='close':kt.append('    override suspend fun close() = closeHandle()');continue
-        payload=', '.join('"bufferSize" to encode(buffer.size)' if cls=='Band' and name=='readRaster' and n=='buffer'
+        payload=', '.join('"bufferSize" to encode(buffer.size)' if cls in ['Band','Dataset'] and name=='readRaster' and n=='buffer'
                          else '"'+n+'" to '+kt_arg(n,t) for n,t in params)
         call=f'invoke("{cls}", "{sig}", mapOf({payload}))'
-        if cls=='Band' and name in ['readRaster','writeRaster']:
+        if cls in ['Band','Dataset'] and name in ['readRaster','writeRaster']:
             typ=dict(params)['buffer'];cv={'ByteArray':'toInt().toByte','ShortArray':'toInt().toShort','IntArray':'toInt','LongArray':'toLong','FloatArray':'toFloat','DoubleArray':'toDouble'}[typ]
-            body=f'val result = {call}.jsonObject; '+('result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.'+cv+'() }; ' if name=='readRaster' else '')+'return result["code"]!!.jsonPrimitive.int'
+            body=f'val result = {call}.jsonObject; '+('if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.'+cv+'() }; ' if name=='readRaster' else '')+'return result["code"]!!.jsonPrimitive.int'
         elif cls=='CoordinateTransformation' and name=='transformPoints':
             body=f'val result = {call}.jsonArray; result.forEachIndexed {{ i, p -> p.jsonArray.forEachIndexed {{ j, v -> points[i][j] = v.jsonPrimitive.content.toDouble() }} }}'
         elif cls=='CoordinateTransformation' and name=='transformBounds':
@@ -177,12 +234,15 @@ for cls in TYPES:
         elif ret=='Unit':
             body=call+'; return Unit'
         else:
-            parent='null' if (cls,name) in OWNED else ('null' if cls=='GdalRuntime' else 'this')
+            parent='this' if (cls,name) in PARENT_OWNED else 'null' if (cls,name) in OWNED else ('null' if cls=='GdalRuntime' else 'this')
             body='val result = '+call+'; return '+kt_result(ret,'result',parent)
         kt.append(f'    override suspend fun {name}({argstr}): {ret} {{ {body} }}')
         cpp.append(f'    if(type=="{cls}" && method=="{sig}") {{')
         custom=SPECIAL.get((cls,name))
-        if custom:cpp.append('        '+custom)
+        if custom:
+            cast={'Group':'GDALGroupH','MDArray':'GDALMDArrayH','Dimension':'GDALDimensionH','FieldDomain':'OGRFieldDomainH'}.get(cls)
+            if cast:custom=re.sub(r'\bh\b',f'static_cast<{cast}>(h)',custom)
+            cpp.append('        '+custom)
         else:
             fn=ALIASES.get(cls,{}).get(sig,ALIASES.get(cls,{}).get(name,PREFIX[cls]+name[0].upper()+name[1:]))
             callargs=[] if cls=='GdalRuntime' else ['Arg(r,h)']

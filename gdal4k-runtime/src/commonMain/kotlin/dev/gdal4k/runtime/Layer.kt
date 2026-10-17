@@ -6,6 +6,8 @@ package dev.gdal4k.runtime
  * The first pass keeps the surface focused on layer metadata, filtering, and iteration state.
  */
 interface Layer {
+    suspend fun createField(field: FieldDefn, approximate: Boolean = true): Int
+
     suspend fun close()
 
     suspend fun getDataset(): Dataset?

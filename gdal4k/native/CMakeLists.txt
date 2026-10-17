@@ -39,7 +39,7 @@ else()
     file(WRITE "${GDAL4K_RESOURCE_CPP}" "void gdal4k_install_resources() {}\nconst char* gdal4k_data_directory() { return \"\"; }\nconst char* gdal4k_license_notices() { return \"Developer runtime\"; }\n")
 endif()
 if(EMSCRIPTEN)
-    add_executable(gdal4k gdal4k.cpp web-inputs.cpp "${GDAL4K_RESOURCE_CPP}")
+    add_executable(gdal4k gdal4k.cpp web-inputs.cpp web-outputs.cpp "${GDAL4K_RESOURCE_CPP}")
     set_target_properties(gdal4k PROPERTIES SUFFIX ".mjs")
     target_compile_options(gdal4k PRIVATE -fexceptions)
     target_link_options(gdal4k PRIVATE
