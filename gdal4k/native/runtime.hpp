@@ -1,6 +1,7 @@
 #pragma once
 #include <gdal_priv.h>
 #include <gdal_alg.h>
+#include <ogrsf_frmts.h>
 #include <gdal_utils.h>
 #include <cpl_vsi.h>
 #include <ogr_api.h>
