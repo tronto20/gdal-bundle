@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tarfile
 from pathlib import Path
+from jvm_binaries import JVM_BINARIES, host_binary
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT/'gdal4k-binary/build'
@@ -31,7 +32,7 @@ def publish(target):
 def consumer(target, *options):
     run(sys.executable, ROOT/'verification/consumer.py', '--target', target, '--no-publish', '--repo', REPO, *options)
 
-def stage(name, platforms=(), targets=(), include_root=False, include_tests=False):
+def stage(name, platforms=(), targets=(), include_root=False, include_tests=False, include_jvm_binaries=False):
     """Only portable outputs; no producer installations, SDKs or build caches."""
     files=set()
     for platform in platforms:
@@ -42,6 +43,7 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
     suffixes={'wasmJs':'wasm-js'}
     coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for t in targets]
     if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-android-runtime']
+    if include_jvm_binaries:coordinates += ['gdal4k-binary-'+b for b in JVM_BINARIES]
     for coordinate in coordinates:
         directory=REPO/'dev/tronto/gdal4k'/coordinate
         if not directory.exists():raise RuntimeError('Missing publication '+coordinate)
@@ -98,14 +100,11 @@ def main():
                 if hashlib.sha256((BUILD/name).read_bytes()).hexdigest()!=digest:
                     raise RuntimeError('Staged engine payload does not match its manifest: '+name)
         if len(fingerprints)!=1:raise RuntimeError('Staged engines were built from different sources')
-        gradle(':gdal4k:jvmTest',options=['-Pgdal4kUniversalJvm=true'])
+        gradle(':gdal4k:jvmTest')
         publish('jvm')
-        # jvmJar may already be up-to-date; explicitly verify its payload below.
+        gradle(*(f':gdal4k-jvm-binaries:publish{publication}PublicationToMavenLocal' for publication, _, _ in JVM_BINARIES.values()))
+        run(sys.executable, ROOT/'verification/check-jvm-publications.py', '--repo', REPO)
         import zipfile
-        jar=next((REPO/'dev/tronto/gdal4k/gdal4k-binary-jvm').glob('*/*-SNAPSHOT.jar'))
-        with zipfile.ZipFile(jar) as z:
-            for file in ['macos-arm64/libgdal4k.dylib','macos-amd64/libgdal4k.dylib','linux-amd64/libgdal4k.so','linux-arm64/libgdal4k.so','windows-amd64/gdal4k.dll']:
-                if 'gdal4k/'+file not in z.namelist():raise RuntimeError('Incomplete JVM artifact: '+file)
         publish('android')
         gradle(':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal')
         aar=next((REPO/'dev/tronto/gdal4k/gdal4k-android-runtime').glob('*/*.aar'))
@@ -114,12 +113,16 @@ def main():
             actual={name for name in z.namelist() if name.startswith('jni/') and name.endswith('.so')}
             if actual!=expected:raise RuntimeError(f'Unexpected Android AAR libraries: {sorted(actual)}; expected {sorted(expected)}')
         consumer('jvm')
+        consumer('jvm', '--expect-missing-jvm-binary')
+        wrong_binary = next(b for b in JVM_BINARIES if b != host_binary())
+        consumer('jvm', '--jvm-binary', wrong_binary, '--expect-missing-jvm-binary')
+        consumer('jvm', '--jvm-binary', host_binary(), '--jvm-binary', wrong_binary)
         # Exercise the release publisher against a local repository, including snapshot metadata.
         published=ROOT/'verification/build/publish-roundtrip'
         run(sys.executable, ROOT/'verification/publish.py','--repo',REPO,'--destination',published)
         run(sys.executable, ROOT/'verification/consumer.py','--target','jvm','--no-publish','--repo',published)
-        stage('complete-maven',targets=[*PLATFORMS,'js','wasmJs','jvm','android'],include_root=True)
-        stage('jvm-maven',targets=['jvm'],include_root=True)
+        stage('complete-maven',targets=[*PLATFORMS,'js','wasmJs','jvm','android'],include_root=True,include_jvm_binaries=True)
+        stage('jvm-maven',targets=['jvm'],include_root=True,include_jvm_binaries=True)
     elif target=='linuxArm64-run':
         # Kotlin/Native has no Linux ARM64 compiler host. Execute the cross-linked tests here.
         native=ROOT/'gdal4k/build/bin/linuxArm64/debugTest/test.kexe'

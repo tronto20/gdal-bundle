@@ -9,9 +9,6 @@ plugins {
 }
 repositories { google(); mavenCentral() }
 val pythonCommand = if (System.getProperty("os.name").startsWith("Windows")) "python" else "python3"
-val hostOs = System.getProperty("os.name").lowercase()
-val hostArch = if (System.getProperty("os.arch") in listOf("aarch64", "arm64")) "arm64" else "amd64"
-val hostPlatform = when { hostOs.contains("mac") -> "macos-$hostArch"; hostOs.contains("win") -> "windows-$hostArch"; else -> "linux-$hostArch" }
 fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }) {
     group = "GDAL runtime"
     // These outputs can arrive from verified CI artifacts. Gradle's first-run
@@ -55,7 +52,6 @@ kotlin {
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
-        jvmMain { resources.srcDir(layout.buildDirectory.dir("jvm-resources")) }
         androidMain.dependencies { api(project(":gdal4k-android-runtime")) }
         for (target in listOf("js", "wasmJs")) {
             getByName("${target}Main").kotlin.srcDir(engineTasks.getValue("web").map { layout.buildDirectory.dir("generated/web/kotlin") })
@@ -106,17 +102,6 @@ afterEvaluate {
                     val manifest = directory.resolve("default/manifest")
                     if (manifest.isFile) manifest.writeText(manifest.readLines().filterNot { it.startsWith("libraryPaths=") }.joinToString("\n", postfix = "\n"))
                 }
-            }
-        }
-    }
-}
-// A release JVM artifact contains every supported host resource. Local tests build the current host.
-tasks.named("jvmProcessResources") { dependsOn(engineTasks.getValue(hostPlatform)) }
-tasks.named("jvmJar") {
-    doFirst {
-        if (providers.gradleProperty("gdal4kUniversalJvm").orNull == "true") {
-            listOf("macos-arm64/libgdal4k.dylib", "macos-amd64/libgdal4k.dylib", "linux-amd64/libgdal4k.so", "linux-arm64/libgdal4k.so", "windows-amd64/gdal4k.dll").forEach {
-                require(layout.buildDirectory.file("jvm-resources/gdal4k/$it").get().asFile.isFile) { "Missing bundled JVM platform: $it" }
             }
         }
     }

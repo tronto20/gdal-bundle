@@ -31,3 +31,20 @@ kotlin {
 }
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
+
+// The library has no JVM payload dependency. Its tests explicitly select the host.
+val testHostOs = System.getProperty("os.name").lowercase()
+val testHostArch = System.getProperty("os.arch").lowercase()
+val testHostArm64 = testHostArch in listOf("aarch64", "arm64")
+val testHostX64 = testHostArch in listOf("amd64", "x86_64")
+val testBinary = when {
+    testHostOs.contains("mac") && testHostArm64 -> "macosArm64"
+    testHostOs.contains("mac") && testHostX64 -> "macosX64"
+    testHostOs.contains("linux") && testHostArm64 -> "linuxArm64Gnu"
+    testHostOs.contains("linux") && testHostX64 -> "linuxX64Gnu"
+    testHostOs.contains("windows") && testHostX64 -> "windowsX64"
+    else -> error("Unsupported JVM test host: $testHostOs/$testHostArch")
+}
+dependencies {
+    add("jvmTestRuntimeOnly", project(mapOf("path" to ":gdal4k-jvm-binaries", "configuration" to "${testBinary}RuntimeElements")))
+}

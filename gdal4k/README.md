@@ -73,10 +73,12 @@ suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): B
 
 | 플랫폼 | GDAL 실행 위치 | 내장 방식 |
 | --- | --- | --- |
-| JVM | `Dispatchers.IO` | JAR의 OS/아키텍처별 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
+| JVM | `Dispatchers.IO` | 명시적으로 선택한 플랫폼 리소스 JAR의 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
 | Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
 | JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
+
+JVM은 기본 바이너리가 없으며 `gdal4k-binary-<platform>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
 
 Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않습니다.
 

@@ -226,7 +226,7 @@ jobs:
         with: { pattern: 'engine-*', path: verification/build/downloads, merge-multiple: true }
       - name: Restore verified outputs only
         run: python -c 'import tarfile; from pathlib import Path; [tarfile.open(p).extractall(filter="data") for p in Path("verification/build/downloads").glob("*.tar.gz")]'
-      - name: Assemble complete Maven repository and verify universal JVM and Android AAR
+      - name: Assemble complete Maven repository and verify explicit JVM payloads and Android AAR
         run: python verification/ci.py aggregate
       - uses: actions/upload-artifact@v4
         with:
@@ -239,13 +239,23 @@ jobs:
           path: verification/build/staged/jvm-maven.tar.gz
           if-no-files-found: error
 
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-jvm-payload-selection
+          path: verification/results/published-consumer-jvm*/
+          if-no-files-found: warn
+
   jvm-consumers:
     name: Published JVM on ${{ matrix.os }}
     needs: assemble
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025, macos-15, macos-15-intel]
+        include:
+          - { os: windows-2025, binary: windows-x64 }
+          - { os: macos-15, binary: macos-arm64 }
+          - { os: macos-15-intel, binary: macos-x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -256,15 +266,16 @@ jobs:
         with: { python-version: '3.14' }
       - uses: actions/download-artifact@v4
         with: { name: gdal4k-jvm-maven, path: verification/build/downloads }
-      - name: Consume the assembled universal JVM JAR without producer files
+      - name: Consume an explicitly selected JVM payload without producer files
         run: |
           python -c 'import tarfile; tarfile.open("verification/build/downloads/jvm-maven.tar.gz").extractall(filter="data")'
-          python verification/consumer.py --target jvm --no-publish
+          python verification/consumer.py --target jvm --no-publish --jvm-binary ${{ matrix.binary }}
+          python verification/consumer.py --target jvm --no-publish --expect-missing-jvm-binary
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: evidence-published-jvm-${{ matrix.os }}
-          path: verification/results/published-consumer-jvm/
+          path: verification/results/published-consumer-jvm*/
           if-no-files-found: warn
 
   linux-arm64-runtime:
@@ -287,4 +298,4 @@ jobs:
         if: always()
         with:
           name: evidence-linux-arm64-runtime
-          path: verification/results/published-consumer-jvm/
+          path: verification/results/published-consumer-jvm*/
