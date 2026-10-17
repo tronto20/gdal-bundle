@@ -9,5 +9,5 @@ host={('Darwin','arm64'):'macosArm64',('Linux','x86_64'):'linuxX64',('Windows','
 if not host:raise SystemExit('Use the cross-build CI runtime job for this host')
 def run(*args):subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 gradle=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
-run(gradle,f':gdal4k-runtime:compileKotlin{host[0].upper()+host[1:]}')
-run(gradle,'--console=plain',':gdal4k:jvmTest',f':gdal4k:{host}Test',':gdal4k:jsNodeTest',':gdal4k:wasmJsNodeTest',':gdal4k:jsBrowserTest',':gdal4k:wasmJsBrowserTest')
+run(gradle,f':gdal4k:compileKotlin{host[0].upper()+host[1:]}')
+run(gradle,'--console=plain',':gdal4k-runtime:jvmTest',f':gdal4k-runtime:{host}Test',':gdal4k-runtime:jsNodeTest',':gdal4k-runtime:wasmJsNodeTest',':gdal4k-runtime:jsBrowserTest',':gdal4k-runtime:wasmJsBrowserTest')

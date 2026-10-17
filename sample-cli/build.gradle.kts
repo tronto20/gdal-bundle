@@ -109,7 +109,7 @@ require(jvmBinary in setOf("macos-arm64", "linux-x64-gnu", "linux-arm64-gnu", "w
     "Unsupported gdal4kJvmBinary: $jvmBinary"
 }
 dependencies {
-    implementation("$gdal4kGroup:gdal4k:$gdal4kVersion")
+    implementation("$gdal4kGroup:gdal4k-runtime:$gdal4kVersion")
     runtimeOnly("$gdal4kGroup:gdal4k-engine-jvm-$jvmBinary:$gdal4kVersion")
 }
 

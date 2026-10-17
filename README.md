@@ -10,7 +10,7 @@ Apple 타깃은 `macosArm64`, `iosArm64`, `iosSimulatorArm64`입니다. macOS와
 
 ```kotlin
 commonMain.dependencies {
-    implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
+    implementation("dev.tronto.gdal4k:gdal4k-runtime:0.1.0-SNAPSHOT")
 }
 ```
 
@@ -18,7 +18,7 @@ commonMain.dependencies {
 
 ```kotlin
 dependencies {
-    implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
+    implementation("dev.tronto.gdal4k:gdal4k-runtime:0.1.0-SNAPSHOT")
     runtimeOnly("dev.tronto.gdal4k:gdal4k-engine-jvm-linux-x64-gnu:0.1.0-SNAPSHOT")
 }
 ```
@@ -32,13 +32,13 @@ dependencies {
 
 KMP 앱에서는 같은 `runtimeOnly`를 `jvmMain.dependencies`에 추가합니다. 모든 아티팩트는 같은 라이브러리 버전 `0.1.0-SNAPSHOT`을 사용합니다. GDAL 버전은 빌드 설정과 엔진 manifest에서 별도로 관리합니다. 여러 OS로 배포하는 앱은 필요한 좌표를 여러 개 추가할 수 있고, 런타임은 현재 OS/CPU에 맞는 리소스만 로드합니다. 미선택 또는 다른 플랫폼용만 선택했다면 `runtime()`에서 필요한 좌표를 안내하며 실패합니다. 자동 다운로드나 시스템 GDAL fallback은 없습니다. Alpine/musl은 지원하지 않습니다.
 
-모든 플랫폼에서 `gdal4k`만 의존하면 GDAL 엔진을 포함하지 않습니다. Android, Native, JS, wasmJs도 엔진을 명시적으로 추가합니다.
+모든 플랫폼에서 `gdal4k-runtime`만 의존하면 GDAL 엔진을 포함하지 않습니다. Android, Native, JS, wasmJs도 엔진을 명시적으로 추가합니다.
 
 ```kotlin
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("dev.tronto.gdal4k:gdal4k:0.1.0-SNAPSHOT")
+            implementation("dev.tronto.gdal4k:gdal4k-runtime:0.1.0-SNAPSHOT")
         }
         androidMain.dependencies {
             implementation("dev.tronto.gdal4k:gdal4k-engine-android-arm64:0.1.0-SNAPSHOT")
@@ -83,9 +83,9 @@ suspend fun describe(bytes: ByteArray): String {
 
 `runtime()`은 `suspend` 함수이며 첫 호출에서 초기화하고 이후 같은 런타임을 반환합니다. 별도 `prepare()`는 선택적인 사전 로딩용입니다. 데이터셋은 `use`로 닫아 쓰기를 완료하고 자원을 정리합니다. 전역 `close()`는 앱 실행 중 엔진 컨텍스트·Worker를 명시적으로 반환할 때 선택적으로 호출합니다. 앱 종료 훅으로 반드시 호출할 필요는 없으며, 공유 런타임을 작업마다 닫지 않습니다. 명시적으로 닫은 뒤 다시 `runtime()`을 호출하면 새로 초기화됩니다.
 
-- `gdal4k-runtime`: 기존 `GdalRuntime`, `Dataset`, `Band`, OGR·SRS 인터페이스와 공통 파일 값 타입·편의 함수. GDAL을 호출하는 메서드는 `suspend`입니다.
+- `gdal4k`: `GdalRuntime`, `Dataset`, `Band`, OGR·SRS 인터페이스와 공통 파일 값 타입·편의 함수. 구현·엔진에 의존하지 않습니다.
 - `gdal4k-engine-jvm-<platform>`: JVM 앱이 선택하는 리소스 전용 JAR 4종. 소스의 `gdal4k-jvm-binaries` 모듈에서 게시합니다.
-- `gdal4k`: 공통 진입점, 플랫폼별 Kotlin 구현·로더와 통합 테스트. `gdal4k-runtime` 인터페이스를 제공하며 모든 플랫폼에서 엔진을 포함하지 않습니다.
+- `gdal4k-runtime`: `Gdal4k.runtime()` 진입점, 플랫폼별 Kotlin 구현·로더와 통합 테스트. `gdal4k` 인터페이스를 전이 의존성으로 제공하며 모든 플랫폼에서 엔진을 포함하지 않습니다.
 - `gdal4k-engine`: Native·웹 엔진을 선택하는 KMP 루트 좌표. 타깃별 실제 게시 이름은 [엔진 좌표 표](gdal4k-engine/README.md#산출물과-게시)를 참고하세요.
 - `gdal4k-engine-android-arm64`: JNI 바이너리를 전달하는 Android AAR.
 
@@ -93,4 +93,4 @@ suspend fun describe(bytes: ByteArray): String {
 
 바이트 입력도 `runtime.openDataset("input.tif", bytes)`로 열고 기존 `Dataset`을 사용합니다. `translate`·`warp`·`translateVector`는 이 데이터셋의 메서드입니다.
 
-[API·비동기 실행·지원 범위](gdal4k/README.md), [빌드·게시 산출물](gdal4k-engine/README.md), [별도 JVM 소비 앱](sample-cli/README.md)을 참고하세요. `verification`의 초기 접속성 probe는 과거 진단용이며, 제품 검증은 실제 라이브러리의 `commonTest`와 `verification/consumer.py`를 사용합니다.
+[API·비동기 실행·지원 범위](gdal4k-runtime/README.md), [빌드·게시 산출물](gdal4k-engine/README.md), [별도 JVM 소비 앱](sample-cli/README.md)을 참고하세요. `verification`의 초기 접속성 probe는 과거 진단용이며, 제품 검증은 실제 라이브러리의 `commonTest`와 `verification/consumer.py`를 사용합니다.
