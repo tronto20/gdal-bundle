@@ -79,11 +79,11 @@ subprojects {
         extensions.configure<PublishingExtension> {
             publications.withType<MavenPublication>().configureEach {
                 pom {
-                    url.set("https://github.com/tronto20/gdal-bundle")
+                    url.set("https://github.com/tronto20/gdal4k")
                     scm {
-                        connection.set("scm:git:git://github.com/tronto20/gdal-bundle.git")
-                        developerConnection.set("scm:git:ssh://git@github.com/tronto20/gdal-bundle.git")
-                        url.set("https://github.com/tronto20/gdal-bundle")
+                        connection.set("scm:git:git://github.com/tronto20/gdal4k.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/tronto20/gdal4k.git")
+                        url.set("https://github.com/tronto20/gdal4k")
                     }
                     licenses {
                         license {
