@@ -60,7 +60,7 @@ val signingPassword = providers.gradleProperty("signingPassword").orNull
 val mavenCentralReleasesUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
 val mavenCentralSnapshotsUrl = "https://central.sonatype.com/repository/maven-snapshots/"
 val publishTasksRequested = gradle.startParameter.taskNames.any { taskName ->
-    taskName.startsWith("publish") && !taskName.endsWith("ToMavenLocal")
+    taskName.substringAfterLast(':').startsWith("publish") && !taskName.endsWith("ToMavenLocal")
 }
 
 plugins {
@@ -132,7 +132,7 @@ subprojects {
             }
 
             if (publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT") && publishTasksRequested) {
-                useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+                useInMemoryPgpKeys(signingKeyId?.takeIf { it.isNotBlank() }, signingKey, signingPassword)
                 val publishing = extensions.getByType(PublishingExtension::class.java)
                 sign(publishing.publications)
             }
