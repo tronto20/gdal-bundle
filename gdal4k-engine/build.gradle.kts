@@ -9,7 +9,31 @@ fun registerEngineBuild(target: String) = tasks.register<Exec>("buildEngine" + t
     // stale-output cleanup must not delete them before the producer checks hashes.
     doNotTrackState("The engine producer fingerprints sources and verifies every artifact hash")
     workingDir(rootDir)
-    commandLine(pythonCommand, "gdal4k-engine/tools/build-engine.py", target)
+    val toolsKind = if (target == "web") "web" else "native"
+    dependsOn(if (target == "web") ":prepareWebBuildTools" else ":prepareNativeBuildTools")
+    // The API module has no engine/cinterop dependency. Its Native compilation
+    // lets KGP install the matching compiler and target dependencies first.
+    val bootstrapTarget = when (target) {
+        "linux-amd64" -> "LinuxX64"
+        "linux-arm64" -> "LinuxArm64"
+        "windows-amd64" -> "MingwX64"
+        else -> null
+    }
+    if (bootstrapTarget != null) {
+        dependsOn(":gdal4k:compileKotlin$bootstrapTarget")
+        // Keep the Python producer aligned with KGP's configurable data directory.
+        providers.gradleProperty("konan.data.dir").orNull?.let {
+            environment("KONAN_DATA_DIR", rootProject.file(it).absolutePath)
+            environment("KONAN_HOME", "")
+        }
+        providers.gradleProperty("kotlin.native.home").orNull?.let {
+            if (!providers.gradleProperty("konan.data.dir").isPresent) {
+                environment("KONAN_HOME", rootProject.file(it).absolutePath)
+            }
+        }
+    }
+    commandLine(pythonCommand, "gdal4k-engine/tools/build-engine.py", target,
+        "--build-tools", rootProject.layout.buildDirectory.file("build-tools/$toolsKind.json").get().asFile.absolutePath)
     environment("GDAL4K_BINARY_VERSION", rootProject.version.toString())
     inputs.files(fileTree("ports") { exclude("**/__pycache__/**") })
     inputs.dir("engine")

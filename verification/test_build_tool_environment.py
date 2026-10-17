@@ -1,0 +1,57 @@
+"""Check producer integration without invoking a dependency build or fabricating an engine."""
+import argparse
+import importlib.util
+import os
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+TOOLS = Path(__file__).resolve().parents[1] / 'gdal4k-engine/tools'
+sys.path.insert(0, str(TOOLS))
+SPEC = importlib.util.spec_from_file_location('engine_builder', TOOLS / 'build-engine.py')
+builder = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(builder)
+
+
+class ConfiguredToolsTest(unittest.TestCase):
+    def test_native_and_web_configure_use_explicit_tools(self):
+        class Configured(Exception):
+            pass
+        for target, base in [('macos-arm64', 'arm64-osx'), ('web', 'wasm32-emscripten')]:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                binary = root / 'gdal4k-engine'
+                vcpkg = root / 'shared vcpkg'
+                (vcpkg / '.git').mkdir(parents=True)
+                (vcpkg / 'triplets').mkdir()
+                (vcpkg / 'triplets' / (base + '.cmake')).touch()
+                (vcpkg / ('vcpkg.exe' if os.name == 'nt' else 'vcpkg')).touch()
+                out = binary / 'build/engine' / target
+                out.mkdir(parents=True)
+                cmake, ninja = str(root / 'custom cmake'), str(root / 'custom ninja')
+                commands = []
+                def run(*command, **kwargs):
+                    commands.append(command)
+                    if str(command[0]) == cmake:
+                        raise Configured()
+                args = argparse.Namespace(target=target, jobs=2)
+                with patch.object(builder, 'ROOT', root), patch.object(builder, 'BINARY', binary), \
+                     patch.object(builder, 'run', run), \
+                     patch.object(builder.subprocess, 'check_output', return_value=builder.VCPKG_REV), \
+                     patch.dict(os.environ, {'EMSDK': str(root / 'custom sdk')}):
+                    with self.assertRaises(Configured):
+                        builder.build(args, vcpkg, out, 'source fingerprint', cmake, ninja)
+                configure = commands[-1]
+                self.assertEqual(cmake, configure[0])
+                self.assertIn('-DCMAKE_MAKE_PROGRAM=' + ninja, configure)
+                self.assertIn('-G', configure)
+                self.assertIn('Ninja', configure)
+                if target == 'web':
+                    self.assertIn('-DCMAKE_SYSTEM_NAME=Emscripten', configure)
+                    self.assertIn('-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=' + str(root / 'custom sdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'), configure)
+
+
+if __name__ == '__main__':
+    unittest.main()

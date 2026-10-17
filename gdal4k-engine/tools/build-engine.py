@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build the GDAL runtime from pinned sources. Consumers never run this script."""
 import argparse, hashlib, json, os, platform, re, shlex, shutil, subprocess
+from contextlib import contextmanager
 from pathlib import Path
 from toolchains import native_toolchain
 from versions import configured_binary_version
@@ -40,18 +41,36 @@ def reusable(out,source_hash):
  return all((BINARY/'build'/name).is_file() and hashlib.sha256((BINARY/'build'/name).read_bytes()).hexdigest()==digest for name,digest in data.get('artifacts',{}).items()) and bool(data.get('artifacts'))
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('target',choices=TARGETS);p.add_argument('--jobs',type=int,default=4);p.add_argument('--vcpkg',type=Path);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('target',choices=TARGETS);p.add_argument('--jobs',type=int,default=4);p.add_argument('--vcpkg',type=Path);p.add_argument('--build-tools',type=Path);a=p.parse_args()
  source_hash=fingerprint()
  out=BINARY/'build/engine'/a.target;out.mkdir(parents=True,exist_ok=True)
  if reusable(out,source_hash):
   print('Verified prebuilt GDAL engine: '+a.target);return
+ # Gradle tool preparation writes paths only; it does not alter the parent shell.
+ if a.build_tools:
+  values=json.loads(a.build_tools.read_text(encoding='utf-8'))
+  prefixes=values.pop('PATH_PREFIX','')
+  os.environ.update(values)
+  if values.get('VCPKG_FORCE_SYSTEM_BINARIES'):
+   os.environ.pop('VCPKG_FORCE_DOWNLOADED_BINARIES',None)
+  if prefixes:os.environ['PATH']=prefixes+os.pathsep+os.environ.get('PATH','')
+ cmake=os.environ.get('CMAKE_COMMAND','cmake')
+ ninja=os.environ.get('NINJA_COMMAND','ninja')
  vcpkg=(a.vcpkg or Path(os.environ.get('VCPKG_ROOT',ROOT/'verification/tools/vcpkg'))).resolve()
+ # A configurable store may be shared by independent checkouts. vcpkg's own
+ # install lock does not cover the following CMake configure/link operations.
+ with build_lock(vcpkg/'.gdal4k-build.lock'):
+  build(a,vcpkg,out,source_hash,cmake,ninja)
+
+def build(a,vcpkg,out,source_hash,cmake,ninja):
  if not (vcpkg/'.git').exists():
   vcpkg.parent.mkdir(parents=True,exist_ok=True);run('git','init',vcpkg);run('git','-C',vcpkg,'fetch','--depth','1','https://github.com/microsoft/vcpkg.git',VCPKG_REV);run('git','-C',vcpkg,'checkout','--detach','FETCH_HEAD')
  rev=subprocess.check_output(['git','-C',str(vcpkg),'rev-parse','HEAD'],text=True).strip()
  if rev!=VCPKG_REV:raise SystemExit(f'Expected pinned vcpkg {VCPKG_REV}, found {rev}')
  exe=vcpkg/('vcpkg.exe' if os.name=='nt' else 'vcpkg')
- if not exe.exists():run(vcpkg/('bootstrap-vcpkg.bat' if os.name=='nt' else 'bootstrap-vcpkg.sh'),'-disableMetrics')
+ if not exe.exists():
+  if getattr(a,'build_tools',None):raise SystemExit('Prepared vcpkg executable is missing; rerun prepareVcpkg or select a verified installation')
+  run(vcpkg/('bootstrap-vcpkg.bat' if os.name=='nt' else 'bootstrap-vcpkg.sh'),'-disableMetrics')
  target=a.target;base=TARGETS[target];triplet='gdal4k-'+target.replace('_','-')
  out=BINARY/'build/engine'/target;out.mkdir(parents=True,exist_ok=True)
  triplets=BINARY/'build/triplets';triplets.mkdir(parents=True,exist_ok=True)
@@ -83,7 +102,7 @@ def main():
   notice=installed/triplet/'share/gdal4k-toolchain/copyright';notice.parent.mkdir(parents=True,exist_ok=True)
   notice.write_text('\n\n'.join(f.name+'\n'+f.read_text(errors='replace') for f in sorted(extra.iterdir())))
  build=out/'cmake' 
- cmd=['cmake','--fresh','-S',ROOT/'gdal4k/native','-B',build,'-G','Ninja',f'-DCMAKE_TOOLCHAIN_FILE={vcpkg/"scripts/buildsystems/vcpkg.cmake"}',f'-DVCPKG_INSTALLED_DIR={installed}',f'-DVCPKG_TARGET_TRIPLET={triplet}',f'-DVCPKG_OVERLAY_TRIPLETS={triplets}',f'-DVCPKG_OVERLAY_PORTS={BINARY/"ports"}',f'-DVCPKG_MANIFEST_DIR={BINARY/"engine"}','-DCMAKE_BUILD_TYPE=Release']
+ cmd=[cmake,'--fresh','-S',ROOT/'gdal4k/native','-B',build,'-G','Ninja',f'-DCMAKE_MAKE_PROGRAM={ninja}',f'-DCMAKE_TOOLCHAIN_FILE={vcpkg/"scripts/buildsystems/vcpkg.cmake"}',f'-DVCPKG_INSTALLED_DIR={installed}',f'-DVCPKG_TARGET_TRIPLET={triplet}',f'-DVCPKG_OVERLAY_TRIPLETS={triplets}',f'-DVCPKG_OVERLAY_PORTS={BINARY/"ports"}',f'-DVCPKG_MANIFEST_DIR={BINARY/"engine"}','-DCMAKE_BUILD_TYPE=Release']
  if target.startswith(('linux','windows')):cmd += [f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={chain}']
  if target=='web':
   emsdk=Path(os.environ['EMSDK'])
@@ -93,14 +112,14 @@ def main():
   cmd += ['-DCMAKE_SYSTEM_NAME=Android',f'-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE={ndk/"build/cmake/android.toolchain.cmake"}',f'-DCMAKE_ANDROID_NDK={ndk}','-DANDROID_PLATFORM=android-28','-DANDROID_STL=c++_static',f'-DANDROID_ABI={target[8:]}']
  if target.startswith('ios'):cmd+=['-DCMAKE_SYSTEM_NAME=iOS',f'-DCMAKE_OSX_SYSROOT={"iphonesimulator" if "simulator" in target else "iphoneos"}','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0']
  if target.startswith('macos'):cmd += ['-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0']
- run(*cmd,env=env);run('cmake','--build',build,'--parallel',a.jobs,env=env)
+ run(*cmd,env=env);run(cmake,'--build',build,'--parallel',a.jobs,env=env)
  if target=='web':
   shutil.copy2(build/'gdal4k.mjs',out/'gdal4k.mjs')
   shutil.copy2(build/'gdal4k.wasm',out/'gdal4k.wasm')
   run(os.sys.executable,BINARY/'tools/package-web.py',out/'gdal4k.mjs')
  else:
   # Merge the bridge and its actual static dependency closure into one relocatable archive.
-  commands=subprocess.check_output(['ninja','-C',str(build),'-t','commands','gdal4k'],text=True)
+  commands=subprocess.check_output([ninja,'-C',str(build),'-t','commands','gdal4k'],text=True)
   line=next(line for line in reversed(commands.splitlines()) if (' -o ' in line or '/out:' in line.lower()) and ('gdal4k.dylib' in line or 'gdal4k.so' in line or 'gdal4k.dll' in line))
   arguments=link_arguments(line)
   archives=[build/'libgdal4k-bridge.a']
@@ -148,11 +167,10 @@ def main():
  hashes={f.relative_to(BINARY/'build').as_posix():hashlib.sha256(f.read_bytes()).hexdigest() for f in artifacts}
  if fingerprint()!=source_hash:raise RuntimeError('Engine sources changed during the build; rebuild before publishing')
  (out/'manifest.json').write_text(json.dumps({'target':target,'source_fingerprint':source_hash,'vcpkg':VCPKG_REV,'gdal':'3.12.4','jxl':True,'artifacts':hashes},indent=2)+'\n')
-if __name__=='__main__':
- # Serialize producers sharing one vcpkg checkout, including its extracted sources.
- lock_path=BINARY/'build/.engine-build.lock'
- lock_path.parent.mkdir(parents=True,exist_ok=True)
- with lock_path.open('a+b') as lock:
+@contextmanager
+def build_lock(path):
+ path.parent.mkdir(parents=True,exist_ok=True)
+ with path.open('a+b') as lock:
   if os.name=='nt':
    import msvcrt,time
    lock.seek(0);lock.write(b'0');lock.flush();lock.seek(0)
@@ -162,5 +180,12 @@ if __name__=='__main__':
   else:
    import fcntl
    fcntl.flock(lock,fcntl.LOCK_EX)
-  main()
+  try:yield
+  finally:
+   if os.name=='nt':
+    lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_UNLCK,1)
+   else:fcntl.flock(lock,fcntl.LOCK_UN)
 
+if __name__=='__main__':
+ with build_lock(BINARY/'build/.engine-build.lock'):
+  main()

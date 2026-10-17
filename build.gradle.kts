@@ -1,4 +1,5 @@
 
+import dev.tronto.buildtools.WriteToolEnvironment
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.plugins.signing.SigningExtension
@@ -63,6 +64,10 @@ val publishTasksRequested = gradle.startParameter.taskNames.any { taskName ->
 }
 
 plugins {
+    id("dev.tronto.buildtools.cmake")
+    id("dev.tronto.buildtools.ninja")
+    id("dev.tronto.buildtools.emscripten")
+    id("dev.tronto.buildtools.vcpkg")
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.plugin.serialization) apply false
 }
@@ -137,4 +142,35 @@ subprojects {
             }
         }
     }
+}
+
+// Tool paths are passed to child builds, never installed into the user's system PATH.
+val cmakePath = cmakeTool.executable.map { it.asFile.absolutePath }
+val ninjaPath = ninjaTool.executable.map { it.asFile.absolutePath }
+val vcpkgPath = vcpkgTool.installationDirectory.map { it.asFile.absolutePath }
+val nativeToolPath = cmakeTool.installationDirectory.zip(cmakeTool.binPath) { dir, bin -> dir.dir(bin).asFile.absolutePath }
+    .zip(ninjaTool.installationDirectory) { cmakeBin, ninjaDir -> cmakeBin + java.io.File.pathSeparator + ninjaDir.asFile.absolutePath }
+val prepareNativeBuildTools by tasks.registering(WriteToolEnvironment::class) {
+    group = "build tools"
+    description = "Prepare CMake, Ninja and vcpkg and write their child-process environment"
+    dependsOn("prepareCmake", "prepareNinja", "prepareVcpkg")
+    variables.put("CMAKE_COMMAND", cmakePath)
+    variables.put("NINJA_COMMAND", ninjaPath)
+    variables.put("BUILD_TOOLS_PYTHON", vcpkgTool.pythonExecutable)
+    variables.put("VCPKG_ROOT", vcpkgPath)
+    variables.put("PATH_PREFIX", nativeToolPath)
+    environmentFile.set(layout.buildDirectory.file("build-tools/native.json"))
+}
+tasks.register<WriteToolEnvironment>("prepareWebBuildTools") {
+    group = "build tools"
+    description = "Prepare native build tools plus Emscripten and write their environment"
+    dependsOn(prepareNativeBuildTools, "prepareEmscripten")
+    variables.set(prepareNativeBuildTools.flatMap { it.variables })
+    variables.put("EMSDK", emscriptenTool.installationDirectory.map { it.asFile.absolutePath })
+    variables.put("EM_CONFIG", emscriptenTool.installationDirectory.file(".emscripten").map { it.asFile.absolutePath })
+    variables.put("EM_CACHE", emscriptenTool.installationDirectory.dir("upstream/emscripten/cache").map { it.asFile.absolutePath })
+    variables.put("PATH_PREFIX", nativeToolPath.zip(emscriptenTool.installationDirectory) { path, sdk ->
+        path + java.io.File.pathSeparator + sdk.dir("upstream/emscripten").asFile.absolutePath + java.io.File.pathSeparator + sdk.dir("upstream/bin").asFile.absolutePath
+    })
+    environmentFile.set(layout.buildDirectory.file("build-tools/web.json"))
 }
