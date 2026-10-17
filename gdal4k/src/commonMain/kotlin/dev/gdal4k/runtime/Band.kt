@@ -137,6 +137,9 @@ interface Band {
 
     suspend fun setColorInterpretation(colorInterpretation: Int): Int
 
+    /** Reacquire borrowed masks after a native NoData mutation attempt. Generated masks
+     * are refreshed; explicit mask data is retained. Validation errors leave masks untouched.
+     */
     suspend fun getNoDataValue(): Double?
 
     suspend fun setNoDataValue(value: Double): Int

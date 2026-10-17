@@ -140,6 +140,17 @@ class RasterAnalysisApiTest {
             }
         }
     }
+    @Test fun sieveUsesFreshMasksAfterNoDataChanges() = runTest(timeout = 120.seconds) {
+        raster(DoubleArray(9) { if (it == 4) 9.0 else 2.0 }) { _, source -> raster(DoubleArray(9)) { _, target ->
+            assertEquals(0, source.sieveTo(target, 2)); assertContentEquals(DoubleArray(9) { 2.0 }, values(target))
+            assertEquals(0, source.setNoDataValue(9.0)); val oldMask = requireNotNull(source.getMaskBand())
+            assertEquals(0, source.sieveTo(target, 2)); assertEquals(9.0, values(target)[4])
+            assertEquals(0, source.setNoDataValue(2.0)); assertFails { oldMask.getXSize() }; oldMask.close()
+            requireNotNull(source.getMaskBand()).use { assertContentEquals(DoubleArray(9) { if (it == 4) 255.0 else 0.0 }, values(it)) }
+            assertEquals(0, source.deleteNoDataValue())
+            assertEquals(0, source.sieveTo(target, 2)); assertContentEquals(DoubleArray(9) { 2.0 }, values(target))
+        } }
+    }
     @Test fun invalidArgumentsAndClosedHandlesLeaveInputsUsable() = runTest(timeout = 120.seconds) {
         raster(DoubleArray(9) { 2.0 }) { ds, band -> raster(DoubleArray(9)) { _, target ->
             assertFails { band.sieveTo(target, 0) }; assertFails { band.sieveTo(target, 2, 6) }
