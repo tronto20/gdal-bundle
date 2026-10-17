@@ -7,7 +7,8 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from jvm_binaries import JVM_BINARIES
+from central_release import CentralRelease
+from publication_versions import expected_coordinates, validate_versions
 
 ROOT=Path(__file__).resolve().parent.parent
 p=argparse.ArgumentParser(description=__doc__)
@@ -15,8 +16,7 @@ p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-mave
 p.add_argument('--destination',type=Path,help='Local verification repository; never contacts a remote server')
 a=p.parse_args()
 base=a.repo.resolve()/'dev/tronto/gdal4k'
-targets=['jvm','android','js','wasm-js','macosarm64','macosx64','linuxx64','linuxarm64','mingwx64','iosarm64','iossimulatorarm64','iosx64']
-expected={m+s for m in ['gdal4k','gdal4k-runtime','gdal4k-binary'] for s in ['',*['-'+t for t in targets]]}|{'gdal4k-android-runtime'}|{'gdal4k-binary-'+b for b in JVM_BINARIES}
+expected=expected_coordinates()
 if {d.name for d in base.iterdir() if d.is_dir()}!=expected:raise SystemExit('Incomplete or unexpected Maven coordinate set')
 items=[]
 for directory in sorted(base.iterdir()):
@@ -34,6 +34,15 @@ for directory in sorted(base.iterdir()):
     if not artifacts:raise SystemExit('Missing tested payload '+str(pom))
     items.append({'coordinate':coordinate,'pom':str(pom),'artifacts':artifacts})
 
+version=validate_versions(items)
+target=os.environ.get('PUBLISH_TARGET') or 'mavenCentral'
+if target not in {'mavenCentral','githubPackages'}:raise SystemExit('Unexpected PUBLISH_TARGET')
+release=None
+if not a.destination and target=='mavenCentral' and not version.endswith('SNAPSHOT'):
+    release=CentralRelease.from_environment()
+    if not ('dev.tronto.gdal4k'==release.namespace or 'dev.tronto.gdal4k'.startswith(release.namespace+'.')):
+        raise SystemExit('MAVEN_CENTRAL_NAMESPACE must own dev.tronto.gdal4k')
+
 with tempfile.TemporaryDirectory(prefix='gdal4k-verified-publisher-') as temporary:
     project=Path(temporary)
     (project/'settings.gradle').write_text('rootProject.name="gdal4k-verified-publisher"\n')
@@ -43,8 +52,9 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-verified-publisher-') as tempora
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 plugins { id 'maven-publish'; id 'signing' }
 def localDestination = '''+json.dumps(destination)+'''
-def central = !localDestination && System.getenv('PUBLISH_TARGET') == 'mavenCentral'
+def central = !localDestination && (System.getenv('PUBLISH_TARGET') ?: 'mavenCentral') == 'mavenCentral'
 def items = new JsonSlurper().parse(file('artifacts.json'))
+def snapshot = items.every { it.coordinate[2].endsWith('SNAPSHOT') }
 publishing {
     publications {
         items.eachWithIndex { item, index ->
@@ -59,7 +69,6 @@ publishing {
     repositories {
         maven {
             name='Verified'
-            def snapshot=items[0].coordinate[2].endsWith('SNAPSHOT')
             url=uri(localDestination ?: (central ? (snapshot ? 'https://central.sonatype.com/repository/maven-snapshots/' : 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/') : System.getenv('GITHUB_PACKAGES_URL')))
             if(!localDestination) credentials {
                 username=System.getenv(central ? 'MAVEN_CENTRAL_USERNAME' : 'GITHUB_ACTOR')
@@ -73,12 +82,16 @@ items.eachWithIndex { item, index ->
         doLast { destination.text=file(item.pom).getText('UTF-8') }
     }
 }
-if(central) signing {
+if(central && !snapshot) signing {
     def key=System.getenv('SIGNING_KEY')
     if(key && !key.contains('-----BEGIN PGP')) key=new String(Base64.mimeDecoder.decode(key),'UTF-8')
-    useInMemoryPgpKeys(System.getenv('SIGNING_KEY_ID'),key,System.getenv('SIGNING_PASSWORD') ?: '')
+    useInMemoryPgpKeys(System.getenv('SIGNING_KEY_ID')?.trim() ?: null,key,System.getenv('SIGNING_PASSWORD') ?: '')
     sign publishing.publications
 }
 '''
     (project/'build.gradle').write_text(build)
     subprocess.run([str(ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')),'-p',str(project),'--console=plain','publish'],check=True)
+
+if release:
+    deployment=release.finalize()
+    print('Maven Central publication complete: '+deployment,flush=True)

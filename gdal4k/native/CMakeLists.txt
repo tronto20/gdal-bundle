@@ -32,7 +32,7 @@ if(GDAL4K_DEPENDENCIES)
     if(EMSCRIPTEN)
         set(GDAL4K_RESOURCE_OPTIONS --web)
     endif()
-    execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../gdal4k-binary/tools/embed-data.py"
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../../gdal4k-engine/tools/embed-data.py"
         "${GDAL4K_DEPENDENCIES}" "${GDAL4K_RESOURCE_CPP}" ${GDAL4K_RESOURCE_OPTIONS} COMMAND_ERROR_IS_FATAL ANY)
 else()
     set(GDAL4K_RESOURCE_CPP "${CMAKE_CURRENT_BINARY_DIR}/gdal4k_resources.cpp")

@@ -8,11 +8,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 from jvm_binaries import JVM_BINARIES, host_binary
+from publication_versions import ENGINE_TARGETS, library_version_from_repo
 
 ROOT=Path(__file__).resolve().parent.parent
-VERSION='3.12.4-1.0.1-SNAPSHOT'
 p=argparse.ArgumentParser()
-p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','macosX64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','iosX64','android'])
+p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','android'])
 p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-maven')
 p.add_argument('--no-publish',action='store_true')
 p.add_argument('--compile-only',action='store_true')
@@ -29,11 +29,15 @@ gradle=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
 def run(args,**kwargs):subprocess.run([str(x) for x in args],check=True,**kwargs)
 if not a.no_publish:
  tasks=[]
- for module in ['gdal4k-runtime','gdal4k-binary','gdal4k']:
+ modules=['gdal4k','gdal4k-runtime']
+ for module in modules:
   tasks += [f':{module}:publishKotlinMultiplatformPublicationToMavenLocal',f':{module}:publish{title}PublicationToMavenLocal']
- if target=='jvm':tasks += [f':gdal4k-jvm-binaries:publish{JVM_BINARIES[b][0]}PublicationToMavenLocal' for b in binaries]
+ tasks += [':gdal4k-engine:publishKotlinMultiplatformPublicationToMavenLocal']
+ if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:tasks += [f':gdal4k-engine:publish{title}PublicationToMavenLocal']
+ if target=='jvm' and binaries:tasks += ['-Pgdal4kJvmClassifiers='+','.join(binaries)]
  if target=='android':tasks+=[':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal']
  run([gradle,'--console=plain',f'-Dmaven.repo.local={repo}',*tasks],cwd=ROOT)
+VERSION=library_version_from_repo(repo)
 source='''package consumer
 
 import dev.gdal4k.Gdal4k
@@ -96,7 +100,7 @@ class PublishedConsumerTest {
     @Test fun missingBinaryIsActionable() = runTest {
         repeat(2) {
             val failure = assertFailsWith<IllegalStateException> { Gdal4k.runtime() }
-            assertTrue(failure.message.orEmpty().contains("dev.tronto.gdal4k:gdal4k-binary-EXPECTED_BINARY:"), failure.message)
+            assertTrue(failure.message.orEmpty().contains("dev.tronto.gdal4k:gdal4k-engine:<gdal4k-version>:EXPECTED_BINARY"), failure.message)
             assertTrue(failure.message.orEmpty().contains("No JVM binary is included by default"), failure.message)
         }
         Gdal4k.close()
@@ -117,7 +121,7 @@ withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRu
   task='connectedAndroidDeviceTest'
  else:
   declaration=target+'()'
-  if target in ['iosSimulatorArm64','iosX64'] and a.ios_device:
+  if target == 'iosSimulatorArm64' and a.ios_device:
    declaration=target+' { testRuns["test"].deviceId = '+json.dumps(a.ios_device)+' }'
   task='linkDebugTest'+title if a.compile_only else target+'Test'
  extra='getByName("androidDeviceTest").dependencies { implementation("androidx.test:runner:1.6.2") }' if target=='android' else ''
@@ -130,14 +134,14 @@ kotlin {
     jvmToolchain(21)
     '''+declaration+'''
     sourceSets {
-        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k:'''+VERSION+'''") }
+        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k-runtime:'''+VERSION+'''"); implementation("dev.tronto.gdal4k:gdal4k-engine:'''+VERSION+'''") }
         commonTest.dependencies { implementation(kotlin("test")); implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2") }
         '''+extra+'''
     }
 }
 '''
  if target=='jvm':
-  build += '\nkotlin.sourceSets.named("jvmMain") { dependencies {\n' + ''.join('    runtimeOnly("dev.tronto.gdal4k:gdal4k-binary-'+b+':'+VERSION+'")\n' for b in binaries) + '} }\n'
+  build += '\nkotlin.sourceSets.named("jvmMain") { dependencies {\n' + ''.join('    runtimeOnly("dev.tronto.gdal4k:gdal4k-engine:'+VERSION+':'+b+'")\n' for b in binaries) + '} }\n'
   build += '''
 val recordJvmRuntime = tasks.register("recordJvmRuntime") {
     val runtimeFiles = configurations.named("jvmTestRuntimeClasspath")
@@ -160,30 +164,30 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source, encoding="utf-8")
  if not a.expect_missing_jvm_binary:
   # Exercise the expanded API from published coordinates, not producer project dependencies.
-  expanded = (ROOT/'gdal4k/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text(encoding="utf-8")
+  expanded = (ROOT/'gdal4k-runtime/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text(encoding="utf-8")
   expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
   expanded_path = consumer/'src/commonTest/kotlin/consumer/DatasetApiTest.kt'
   expanded_path.write_text(expanded, encoding="utf-8")
   test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
-  platform_path = ROOT/f'gdal4k/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
+  platform_path = ROOT/f'gdal4k-runtime/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
   actual_set = test_set if target in ['android','jvm','js','wasmJs'] else target+'Test'
   actual_path = consumer/f'src/{actual_set}/kotlin/consumer/DatasetOutputPath.kt'
   actual_path.parent.mkdir(parents=True,exist_ok=True)
   actual_path.write_text(platform_path.read_text(encoding="utf-8").replace('package dev.gdal4k','package consumer'), encoding="utf-8")
 
  if a.browser and target in ['js','wasmJs']:
-  browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text(encoding="utf-8")
+  browser_source = (ROOT/f'gdal4k-runtime/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text(encoding="utf-8")
   browser_source = browser_source.replace('package dev.gdal4k\n', 'package consumer\nimport dev.gdal4k.Gdal4k\n')
   browser_test = consumer/f'src/{target}Test/kotlin/consumer/BrowserFileTest.kt'
   browser_test.parent.mkdir(parents=True,exist_ok=True);browser_test.write_text(browser_source, encoding="utf-8")
  config=consumer/'karma.config.d/timeout.js';config.parent.mkdir();config.write_text('config.browserNoActivityTimeout=240000; config.client.mocha={...config.client.mocha,timeout:180000};\n')
  if target=='android' and (ROOT/'local.properties').exists():shutil.copy2(ROOT/'local.properties',consumer/'local.properties')
  # The native consumer must link the archive stored inside its published KLIB.
- platform={'macosArm64':'macos-arm64','macosX64':'macos-amd64','linuxX64':'linux-amd64','linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64','iosSimulatorArm64':'ios-simulator-arm64','iosX64':'ios-simulator-amd64'}.get(target)
+ platform={'macosArm64':'macos-arm64','linuxX64':'linux-amd64','linuxArm64':'linux-arm64','mingwX64':'windows-amd64','iosArm64':'ios-arm64','iosSimulatorArm64':'ios-simulator-arm64'}.get(target)
  hidden=[]
  try:
   if platform:
-   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-binary/build/classes/kotlin/{target}/main/cinterop']:
+   for original in [ROOT/f'gdal4k-engine/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
     if original.exists():
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))
@@ -194,12 +198,11 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
   if target=='jvm':
    runtime_files = (consumer/'build/jvm-runtime-files.txt').read_text(encoding="utf-8").splitlines()
    runtime_coordinates = (consumer/'build/jvm-runtime-coordinates.txt').read_text(encoding="utf-8").splitlines()
-   # File names become timestamped after Maven snapshot deployment. Compare resolved
-   # component identities so the detached publisher roundtrip is checked correctly.
-   available_payloads = {'gdal4k-binary-'+b for b in JVM_BINARIES}
-   expected_payloads = {'gdal4k-binary-'+b for b in binaries}
-   actual_payloads = {coordinate.split(':')[1] for coordinate in runtime_coordinates if coordinate.startswith('dev.tronto.gdal4k:')} & available_payloads
-   if actual_payloads != expected_payloads: raise RuntimeError(f'Unexpected JVM payload dependencies: {actual_payloads}; expected {expected_payloads}')
+   # Snapshot filenames may be timestamped; classifiers are stable suffixes.
+   engine_files = [name for name in runtime_files if name.startswith('gdal4k-engine-') and name.endswith('.jar')]
+   actual_payloads = {b for b in JVM_BINARIES if any(name.endswith('-'+b+'.jar') for name in engine_files)}
+   if actual_payloads != set(binaries) or len(engine_files) != len(binaries):
+    raise RuntimeError(f'Unexpected JVM classifier files: {engine_files}; expected {binaries}')
   case = '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else '')+case)
   destination.mkdir(parents=True,exist_ok=True)

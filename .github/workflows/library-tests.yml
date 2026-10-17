@@ -13,6 +13,15 @@ env:
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/verification/build/vcpkg-cache,readwrite
 
 jobs:
+  publisher:
+    name: Publication and binary isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - run: python -m unittest discover -s verification -p test_publish.py
   native:
     name: Native ${{ matrix.target }}
     strategy:
@@ -22,11 +31,9 @@ jobs:
           - { target: linuxX64, os: ubuntu-24.04 }
           - { target: linuxArm64, os: ubuntu-24.04 }
           - { target: macosArm64, os: macos-15 }
-          - { target: macosX64, os: macos-15-intel }
           - { target: mingwX64, os: windows-2025 }
           - { target: iosArm64, os: macos-15 }
           - { target: iosSimulatorArm64, os: macos-15 }
-          - { target: iosX64, os: macos-15-intel }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     steps:
@@ -40,9 +47,9 @@ jobs:
         id: native-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
+            engine-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-
             engine-${{ matrix.target }}-
       - name: Build GDAL and codecs
         run: python verification/ci.py '${{ matrix.target }}' --build-engine-only
@@ -50,7 +57,7 @@ jobs:
       # hosted runners exhausted five minutes twice during that preparation.
       - name: Boot iOS simulator
         timeout-minutes: 15
-        if: matrix.target == 'iosSimulatorArm64' || matrix.target == 'iosX64'
+        if: matrix.target == 'iosSimulatorArm64'
         run: |
           device="$(xcrun simctl list devices available --json | python -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for g in d["devices"].values() for x in g if x["name"].startswith("iPhone")))')"
           echo "Selected iOS simulator: $device"
@@ -74,14 +81,14 @@ jobs:
         with:
           name: evidence-${{ matrix.target }}
           path: |
-            gdal4k/build/test-results/
-            gdal4k/build/reports/tests/
+            gdal4k-runtime/build/test-results/
+            gdal4k-runtime/build/reports/tests/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
-            gdal4k-binary/build/engine/*/cmake/build.ninja
-            gdal4k-binary/build/engine/*/cmake/CMakeCache.txt
-            gdal4k-binary/build/engine/*/cmake/gdal4k-static-dependencies.txt
-            gdal4k-binary/build/engine/*/manifest.json
+            gdal4k-engine/build/engine/*/cmake/build.ninja
+            gdal4k-engine/build/engine/*/cmake/CMakeCache.txt
+            gdal4k-engine/build/engine/*/cmake/gdal4k-static-dependencies.txt
+            gdal4k-engine/build/engine/*/manifest.json
           if-no-files-found: warn
 
   web:
@@ -106,9 +113,9 @@ jobs:
         id: web-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-web-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-web-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-
             engine-web-
       - name: Browser test runtime
         run: |
@@ -140,7 +147,7 @@ jobs:
         with:
           name: evidence-web
           path: |
-            gdal4k/build/test-results/
+            gdal4k-runtime/build/test-results/
             verification/results/published-consumer-*/
             verification/results/web-inputs-*/
             verification/results/related-inputs/
@@ -177,9 +184,9 @@ jobs:
         id: android-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-
             engine-android-${{ matrix.abi }}-
       - run: python verification/ci.py 'android-${{ matrix.abi }}'
       - name: Allow emulator acceleration
@@ -196,7 +203,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi arm64-v8a --allow-native-bridge
+          script: python gdal4k-runtime/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi arm64-v8a --allow-native-bridge
       - uses: actions/cache/save@v6
         if: always()
         with:
@@ -212,8 +219,8 @@ jobs:
         with:
           name: evidence-android-${{ matrix.abi }}
           path: |
-            gdal4k/build/outputs/androidTest-results/
-            gdal4k/build/results/
+            gdal4k-runtime/build/outputs/androidTest-results/
+            gdal4k-runtime/build/results/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
 
@@ -248,7 +255,9 @@ jobs:
         if: always()
         with:
           name: evidence-jvm-payload-selection
-          path: verification/results/published-consumer-jvm*/
+          path: |
+            verification/results/published-consumer-jvm*/
+            verification/results/common-engine-selection/
           if-no-files-found: warn
 
   jvm-consumers:
@@ -260,7 +269,6 @@ jobs:
         include:
           - { os: windows-2025, binary: windows-x64 }
           - { os: macos-15, binary: macos-arm64 }
-          - { os: macos-15-intel, binary: macos-x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:

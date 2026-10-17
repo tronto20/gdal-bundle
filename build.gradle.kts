@@ -23,10 +23,9 @@ val gdalVersion = providers.gradleProperty("gdalVersion")
     .orElse("3.12.4")
     .get()
 val gdal4kVersion = providers.gradleProperty("gdal4kVersion")
-    .orElse("1.0.1-SNAPSHOT")
+    .orElse("0.1.0-SNAPSHOT")
     .get()
 require(gdalVersion == "3.12.4") { "The embedded engine is pinned to GDAL 3.12.4; update its source manifest before changing gdalVersion" }
-val gdalPackageVersion = "$gdalVersion-$gdal4kVersion"
 val requestedPublishTarget = providers.gradleProperty("publishTarget").orElse("mavenCentral").get()
 val publishTargetParam = if (requestedPublishTarget == "ossrh") "mavenCentral" else requestedPublishTarget
 val githubPackagesUrl = providers.gradleProperty("githubPackagesUrl").orNull
@@ -60,7 +59,7 @@ val signingPassword = providers.gradleProperty("signingPassword").orNull
 val mavenCentralReleasesUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
 val mavenCentralSnapshotsUrl = "https://central.sonatype.com/repository/maven-snapshots/"
 val publishTasksRequested = gradle.startParameter.taskNames.any { taskName ->
-    taskName.startsWith("publish") && !taskName.endsWith("ToMavenLocal")
+    taskName.substringAfterLast(':').startsWith("publish") && !taskName.endsWith("ToMavenLocal")
 }
 
 plugins {
@@ -70,7 +69,7 @@ plugins {
 
 allprojects {
     group = "dev.tronto.gdal4k"
-    version = gdalPackageVersion
+    version = gdal4kVersion
 }
 
 subprojects {
@@ -80,11 +79,11 @@ subprojects {
         extensions.configure<PublishingExtension> {
             publications.withType<MavenPublication>().configureEach {
                 pom {
-                    url.set("https://github.com/tronto20/gdal-bundle")
+                    url.set("https://github.com/tronto20/gdal4k")
                     scm {
-                        connection.set("scm:git:git://github.com/tronto20/gdal-bundle.git")
-                        developerConnection.set("scm:git:ssh://git@github.com/tronto20/gdal-bundle.git")
-                        url.set("https://github.com/tronto20/gdal-bundle")
+                        connection.set("scm:git:git://github.com/tronto20/gdal4k.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/tronto20/gdal4k.git")
+                        url.set("https://github.com/tronto20/gdal4k")
                     }
                     licenses {
                         license {
@@ -126,13 +125,13 @@ subprojects {
 
         extensions.configure<SigningExtension> {
             setRequired {
-                publishTargetParam == "mavenCentral" && gradle.taskGraph.allTasks.any { task ->
+                publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT") && gradle.taskGraph.allTasks.any { task ->
                     task.name.startsWith("publish") && !task.name.endsWith("ToMavenLocal")
                 }
             }
 
-            if (publishTargetParam == "mavenCentral" && publishTasksRequested) {
-                useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
+            if (publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT") && publishTasksRequested) {
+                useInMemoryPgpKeys(signingKeyId?.takeIf { it.isNotBlank() }, signingKey, signingPassword)
                 val publishing = extensions.getByType(PublishingExtension::class.java)
                 sign(publishing.publications)
             }

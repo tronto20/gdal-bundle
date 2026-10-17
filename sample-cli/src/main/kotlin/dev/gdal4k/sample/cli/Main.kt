@@ -78,7 +78,7 @@ private fun printUsage() {
           sample-cli info ./example.tif --json
           sample-cli smoke
 
-        Select a gdal4k-binary-<platform> runtime dependency when building the application.
+        Select a gdal4k-engine:<version>:<platform> runtime dependency when building the application.
         """.trimIndent(),
     )
 }
