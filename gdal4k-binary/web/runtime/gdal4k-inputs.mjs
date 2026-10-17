@@ -56,9 +56,50 @@ export class Inputs {
         this.cache = new Map();
         this.cachedBytes = 0;
         this.lastError = null;
+        this.closeResources = null;
     }
     key(path) { return path.startsWith('/vsigdal4k/') ? path : '/vsigdal4k/' + path; }
-    size(path) { return this.providers.get(this.key(path))?.size ?? -1; }
+    size(path) {
+        path = this.key(path);
+        const file = this.providers.get(path);
+        if (file) return file.size;
+        const prefix = path.endsWith('/') ? path : path + '/';
+        return [...this.providers.keys()].some(key => key.startsWith(prefix)) ? -2 : -1;
+    }
+    list(path) {
+        path = this.key(path); const prefix = path.endsWith('/') ? path : path + '/';
+        return [...new Set([...this.providers.keys()].filter(key => key.startsWith(prefix)).map(key => key.slice(prefix.length).split('/')[0]))].sort();
+    }
+    registerResources(entries, url, size) {
+        let source, opening;
+        const open = async () => {
+            if (!opening) opening = (async () => {
+                if (nodeRuntime) {
+                    const fd = nodeFs.openSync(url, 'r');
+                    let stat;
+                    try { stat = nodeFs.fstatSync(fd); } catch (error) { nodeFs.closeSync(fd); throw error; }
+                    source = {size: stat.size, read(start, end) {
+                        const bytes = new Uint8Array(end-start+1);
+                        return bytes.subarray(0, nodeFs.readSync(fd, bytes, 0, bytes.length, start));
+                    }, close() { nodeFs.closeSync(fd); }};
+                } else source = await httpSource(url);
+                if (source.size !== size) throw new Error('Bundled GDAL resource asset size mismatch');
+                return source;
+            })().catch(error => { source?.close(); source = null; opening = null; throw error; });
+            return opening;
+        };
+        for (const entry of entries) this.providers.set('/vsigdal4k/resources/' + entry.name, {
+            size: entry.size,
+            async read(start, end) { return (await open()).read(entry.offset + start, entry.offset + end); },
+            close() {},
+        });
+        this.closeResources = () => { source?.close(); source = null; opening = null; };
+    }
+    close() {
+        for (const provider of this.providers.values()) provider.close();
+        this.providers.clear(); this.cache.clear(); this.cachedBytes = 0;
+        this.closeResources?.(); this.closeResources = null;
+    }
     async read(path, position, length) {
         path = this.key(path);
         const provider = this.providers.get(path);

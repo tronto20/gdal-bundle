@@ -12,6 +12,15 @@
 EM_JS(double, web_input_size, (const char* path), {
     return Module.gdal4kInputs.size(UTF8ToString(path));
 });
+EM_JS(int, web_input_list_size, (const char* path, int index), {
+    const names = Module.gdal4kInputs.list(UTF8ToString(path));
+    return index < 0 ? names.length : names[index].length + 1;
+});
+EM_JS(void, web_input_list_name, (const char* path, int index, char* output), {
+    const name = Module.gdal4kInputs.list(UTF8ToString(path))[index];
+    for (let i = 0; i < name.length; i++) HEAPU8[output+i] = name.charCodeAt(i);
+    HEAPU8[output+name.length] = 0;
+});
 EM_ASYNC_JS(int, web_input_read, (const char* path, double offset, char* output, int length), {
     try {
         const bytes = await Module.gdal4kInputs.read(UTF8ToString(path), offset, length);
@@ -31,6 +40,7 @@ void* openInput(void*, const char* path, const char* mode) {
 }
 int statInput(void*, const char* path, VSIStatBufL* stat, int) {
     const double size = web_input_size(path);
+    if (size == -2) {std::memset(stat, 0, sizeof(*stat)); stat->st_mode = S_IFDIR | 0555; return 0;}
     if (size < 0) {errno = ENOENT; return -1;}
     std::memset(stat, 0, sizeof(*stat)); stat->st_mode = S_IFREG | 0444; stat->st_size = static_cast<vsi_l_offset>(size);
     return 0;
@@ -57,6 +67,15 @@ size_t readInput(void* handle, void* buffer, size_t size, size_t count) {
 void gdal4k_install_web_inputs() {
     auto* callbacks = VSIAllocFilesystemPluginCallbacksStruct();
     callbacks->open = openInput; callbacks->stat = statInput;
+    callbacks->read_dir = [](void*, const char* path, int) -> char** {
+        const int count = web_input_list_size(path, -1);
+        auto** names = static_cast<char**>(CPLCalloc(count + 1, sizeof(char*)));
+        for (int i = 0; i < count; ++i) {
+            names[i] = static_cast<char*>(CPLMalloc(web_input_list_size(path, i)));
+            web_input_list_name(path, i, names[i]);
+        }
+        return names;
+    };
     callbacks->tell = [](void* p) {return static_cast<Input*>(p)->position;};
     callbacks->seek = seekInput; callbacks->read = readInput;
     callbacks->eof = [](void* p) {return static_cast<Input*>(p)->eof ? 1 : 0;};

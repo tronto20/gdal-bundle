@@ -18,6 +18,8 @@ p.add_argument('--repo',type=Path,help='Extract only the published KLIB assets, 
 p.add_argument('--target',choices=['js','wasmJs'],default='js')
 p.add_argument('--browser-only',action='store_true')
 p.add_argument('--memory-only',action='store_true',help='Measure external-asset engine initialization instead of input tests')
+p.add_argument('--workload',action='store_true',help='Include full-raster checksum and 1024x1024 JXL work in memory measurements')
+p.add_argument('--profile-label',default='optimized',help='Name the local memory experiment without overwriting its baseline')
 a=p.parse_args()
 with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     work=Path(temporary)
@@ -29,6 +31,7 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
         assets=work/'assets';assets.mkdir()
         with zipfile.ZipFile(klibs[0]) as z:
             expected={'index.mjs','gdal4k.mjs','gdal4k.wasm','gdal4k-worker.mjs','gdal4k-inputs.mjs','package.json'}
+            if not a.memory_only or 'gdal4k-resources.mjs' in z.namelist():expected|={'gdal4k-resources.mjs','gdal4k-data.wasm'}
             if not expected.issubset(z.namelist()):raise RuntimeError('Published KLIB is missing its engine assets')
             for name in expected:(assets/name).write_bytes(z.read(name))
             if z.getinfo('default/ir/strings.knt').file_size > 1024*1024:raise RuntimeError('Web engine is still embedded in Kotlin strings')
@@ -58,11 +61,23 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
             if route.startswith('/assets/'):
                 name=route.removeprefix('/assets/')
                 if name not in {f.name for f in assets.iterdir()}:self.send_error(404);return
-                file=assets/name;self.send_response(200);self.cors()
+                file=assets/name;start=0;end=file.stat().st_size-1
+                header=self.headers.get('Range','')
+                if header:
+                    if not header.startswith('bytes='):self.send_error(400);return
+                    start,end=map(int,header[6:].split('-'))
+                    if not 0<=start<=end<file.stat().st_size:self.send_error(416);return
+                self.send_response(206 if header else 200);self.cors()
+                if header:self.send_header('Content-Range',f'bytes {start}-{end}/{file.stat().st_size}')
+                self.send_header('ETag','"assets-v1"')
                 self.send_header('Content-Type','application/wasm' if name.endswith('.wasm') else 'text/javascript')
-                self.send_header('Content-Length',str(file.stat().st_size));self.end_headers()
+                self.send_header('Content-Length',str(end-start+1));self.end_headers()
                 with file.open('rb') as src:
-                    while chunk:=src.read(65536):self.wfile.write(chunk)
+                    src.seek(start);remaining=end-start+1
+                    while remaining:
+                        chunk=src.read(min(65536,remaining));self.wfile.write(chunk);remaining-=len(chunk)
+                if name=='gdal4k-data.wasm':
+                    with lock:records.append({'route':route,'range':header,'status':206 if header else 200,'bytes_sent':end-start+1})
                 return
             if route=='/':
                 data=b'<!doctype html><input type="file" id="file">'
@@ -92,20 +107,28 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     url=f'http://127.0.0.1:{server.server_port}'
     archive=io.BytesIO()
     with zipfile.ZipFile(archive,'w') as z:z.writestr('small.tif',(ROOT/'verification/fixtures/sample.tif').read_bytes())
-    config={'output':str(work/'memory.json'),'zip':base64.b64encode(archive.getvalue()).decode(),'assets':str(assets),'url':url,'file':str(image),'browserOnly':a.browser_only,'root':str(ROOT)}
+    config={'output':str(work/'memory.json'),'zip':base64.b64encode(archive.getvalue()).decode(),'assets':str(assets),'url':url,'file':str(image),'browserOnly':a.browser_only,'root':str(ROOT),'workload':a.workload,'compactRead':(assets/'gdal4k-resources.mjs').exists()}
     config_file=work/'config.json';config_file.write_text(json.dumps(config))
     try:subprocess.run(['node',str(ROOT/('verification/web-memory.mjs' if a.memory_only else 'verification/web-inputs.mjs')),str(config_file)],check=True,cwd=ROOT)
     finally:server.shutdown();server.server_close()
     if a.memory_only:
-        destination=ROOT/'verification/results/web-engine-memory-optimized'
+        if not a.profile_label.replace('-','').isalnum():raise RuntimeError('Invalid profile label')
+        destination=ROOT/'verification/results'/('web-engine-memory-'+a.profile_label)
         destination.mkdir(parents=True,exist_ok=True)
-        (destination/'profile.json').write_text((work/'memory.json').read_text())
+        import hashlib
+        profile=json.loads((work/'memory.json').read_text())
+        profile['assetSha256']={f.name:hashlib.sha256(f.read_bytes()).hexdigest() for f in assets.iterdir() if f.is_file()}
+        profile['resourceReads']=[r for r in records if r['route'].endswith('gdal4k-data.wasm')]
+        (destination/'profile.json').write_text(json.dumps(profile,indent=2)+'\n')
         print((destination/'profile.json').read_text())
         raise SystemExit(0)
     valid=[r for r in records if r['route']=='/large.tif']
     if not valid or any(r['status']!=206 or r['bytes_sent']>65536 for r in valid):raise RuntimeError('Unbounded HTTP read')
     total_read=sum(r['bytes_sent'] for r in valid)
     if total_read>2*1024*1024:raise RuntimeError('Small windows fetched too much of the large TIFF')
+    resources=[r for r in records if r['route'].endswith('gdal4k-data.wasm')]
+    if not resources or any(r['status']!=206 or not r['range'] for r in resources):raise RuntimeError('GDAL resources were not read by range')
+    if sum(r['bytes_sent'] for r in resources) >= (assets/'gdal4k-data.wasm').stat().st_size:raise RuntimeError('Unused GDAL resources were downloaded')
     destination=ROOT/'verification/results'/('web-inputs-'+a.target);destination.mkdir(parents=True,exist_ok=True)
     (destination/'result.json').write_text(json.dumps({'target':a.target,'published_assets':bool(a.repo),'logical_file_bytes':image.stat().st_size,'http_bytes_sent':total_read,'requests':records,'result':'passed'},indent=2)+'\n')
     print('GDAL4K_WEB_DIRECT_INPUTS_OK',total_read,'bytes fetched from',image.stat().st_size,flush=True)

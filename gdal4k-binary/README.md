@@ -45,6 +45,10 @@ python3 verification/consumer.py --target wasmJs
 
 웹 입력은 GDAL VSI 콜백을 Worker의 비동기 읽기에 연결합니다. Asyncify로 C 호출을 대기·재개하므로 SharedArrayBuffer, COOP/COEP 또는 JSPI를 요구하지 않습니다. Asyncify는 Wasm 코드 크기와 실행 비용을 추가하므로 로딩 방식 변경의 메모리 효과와 함께 측정합니다.
 
+웹의 GDAL 보조 데이터 157개는 엔진의 정적 배열에 넣지 않습니다. `gdal4k-resources.mjs`의 파일명·크기·위치만 등록하고, GDAL이 파일을 읽을 때 해당 구간을 `gdal4k-data.wasm`에서 읽습니다. 이 파일은 KGP가 Maven 아티팩트에서 자동 추출할 수 있는 **Wasm custom section 데이터 컨테이너**이며 실행하거나 인스턴스화하지 않습니다. Node는 디스크의 필요한 구간을, 브라우저는 정적 자산의 HTTP Range를 읽습니다. 호스팅은 이 데이터 자산에도 206/Content-Range 응답을 지원해야 합니다. 입력 파일과 같은 LRU에 읽은 구간만 보관하며 전체 데이터를 `/vsimem`에 복제하지 않습니다. PROJ의 `proj.db`와 실행 코드는 여전히 엔진에 내장합니다.
+
+웹 초기 작업 힙은 1 MiB에서 시작하고 정적 데이터·스택을 합친 초기 Wasm 메모리 크기는 링커가 계산합니다. 필요한 할당에 따라 증가하며, 별도의 GDAL 블록 캐시 상한은 설정하지 않습니다. 늘어난 Wasm 메모리를 실행 중에 다시 축소하는 기능은 없으므로 엔진 전체 반환에는 Worker 종료가 필요합니다. 래스터 읽기는 출력 배열의 길이만 엔진으로 보내고, 출력용 배열의 기존 내용을 JSON으로 복제하지 않습니다. 반환 래스터와 나머지 JSON 브리지 비용은 남아 있습니다.
+
 ## 산출물과 게시
 
 - JVM 코드: `gdal4k-binary-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
@@ -70,8 +74,12 @@ python3 verification/web-inputs.py --repo verification/build/consumer-maven --ta
 python3 verification/web-inputs.py --repo verification/build/consumer-maven --target wasmJs
 # 입력 파일을 제외한 엔진 초기화 메모리 측정(macOS/Linux, Chromium)
 python3 verification/web-inputs.py --memory-only
+# 동일 sparse TIFF 전체 checksum·JXL 변환·window 읽기의 전후 비교
+python3 verification/web-inputs.py --memory-only --workload --profile-label after
 ```
 
 256 MiB sparse TIFF에서 처음·마지막 window의 정확한 픽셀을 HTTP Range, 선택한 브라우저 File, Node 디스크 경로로 검사합니다. Range 미지원·잘못된 Content-Range·파일 변경·CORS 오류 뒤의 복구, 64 KiB 요청과 전체 8 MiB 캐시 상한 및 close 시 캐시 반환도 검사합니다. 입력을 `/vsimem`에 복사하지 않습니다. 브라우저의 파일 선택 권한은 File 객체를 얻기 전에 앱이 처리합니다.
 
 메모리 보고서는 `verification/results/web-engine-memory-optimized/profile.json`에 저장합니다. 엔진만 측정하며 Kotlin 앱과 영상 작업 메모리는 포함하지 않습니다. RSS는 코드·런타임·공유 페이지·미회수 임시 할당을 포함하므로 정확한 엔진 allocator 크기로 해석하지 않습니다.
+
+`--workload`를 사용하면 256 MiB 영상 전체 checksum, 1024×1024 무손실 JXL 변환 3회, 512×512 래스터 읽기를 포함합니다. `--profile-label`별로 보고서를 보존하고, 실행 중 다른 빌드·측정 작업과 겹치지 않게 비교합니다. 테스트는 데이터 자산의 전체 다운로드 없이 내장 NZTM2000 타일 정의를 읽어 COG를 생성하는 경우도 검사합니다.

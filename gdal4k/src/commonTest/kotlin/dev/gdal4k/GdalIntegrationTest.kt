@@ -36,6 +36,14 @@ class GdalIntegrationTest {
                     val raw = ByteArray(6)
                     check(band.readRaster(raw) == 0)
                     check(raw.contentEquals(byteArrayOf(0, 1, 2, 3, 4, -1)))
+                    // Read buffers provide capacity, not input values. Preserve
+                    // an oversized buffer's tail, and reject undersized buffers.
+                    val oversized = ByteArray(8) { 99 }
+                    check(band.readRaster(oversized) == 0)
+                    check(oversized.contentEquals(byteArrayOf(0, 1, 2, 3, 4, -1, 99, 99)))
+                    val undersized = ByteArray(5) { 99 }
+                    expectFailure { band.readRaster(undersized) }
+                    check(undersized.all { it == 99.toByte() })
                 }
                 check(dataset.readRaster(window = RasterWindow(1, 0, 2, 2)).contentEquals(doubleArrayOf(1.0, 2.0, 4.0, 255.0)))
                 for (driver in listOf("GTiff", "COG")) {

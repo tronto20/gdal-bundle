@@ -1,5 +1,6 @@
 import createModule from './gdal4k.mjs';
 import {Inputs} from './gdal4k-inputs.mjs';
+import {resources, resourceUrl, resourceBytes} from './gdal4k-resources.mjs';
 
 const node = typeof process !== 'undefined' && process.versions?.node;
 const port = node ? process.getBuiltinModule('worker_threads').parentPort : globalThis;
@@ -22,9 +23,10 @@ async function dispatch({id, operation, payload, file}) {
             module = await createModule(options);
             delete options.wasmBinary;
             inputs = new Inputs();
+            inputs.registerResources(resources, resourceUrl, resourceBytes);
             module.gdal4kInputs = inputs;
             context = await module.ccall('gdal4k_create', 'number', ['string', 'string'], ['', ''], {async: true});
-            if (!context) throw new Error('Unable to initialize bundled GDAL');
+            if (!context) throw inputs.lastError || new Error('Unable to initialize bundled GDAL');
         } else if (operation === 'call') {
             if (!context) throw new Error('GDAL Worker is closed');
             const request = JSON.parse(payload);
@@ -64,6 +66,7 @@ async function dispatch({id, operation, payload, file}) {
             context = 0;
             for (const input of datasets.values()) input.close();
             datasets.clear();
+            inputs?.close();
         } else throw new Error('Unknown GDAL Worker operation');
         port.postMessage({id, result});
     } catch (error) {

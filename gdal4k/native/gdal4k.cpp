@@ -50,7 +50,11 @@ extern "C" gdal4k_context *gdal4k_create(const char *proj, const char *data) {
 #ifdef __EMSCRIPTEN__
             gdal4k_install_web_inputs();
 #endif
+            // CPL's finder snapshots GDAL_DATA on its first use. Register
+            // drivers with the bundled location already visible to the finder.
+            CPLPushFinderLocation(gdal4k_data_directory());
             GDALAllRegister();
+            CPLPopFinderLocation();
         });
         auto ctx = new gdal4k_context;
         if (proj) ctx->projData = proj;
@@ -71,11 +75,13 @@ extern "C" char *gdal4k_execute(gdal4k_context *ctx, const char *request) {
     char **previous = CPLGetThreadLocalConfigOptions();
     if (!ctx->projData.empty()) CPLSetThreadLocalConfigOption("PROJ_DATA", ctx->projData.c_str());
     if (!ctx->gdalData.empty()) CPLSetThreadLocalConfigOption("GDAL_DATA", ctx->gdalData.c_str());
+    if (!ctx->gdalData.empty()) CPLPushFinderLocation(ctx->gdalData.c_str());
     CPLErrorReset();
     CPLJSONObject response;
     try { response.Add("result", execute(*ctx, parse(request))); }
     catch (const std::exception &e) { response.Add("error", e.what()); }
     catch (...) { response.Add("error", "Unknown GDAL error"); }
+    if (!ctx->gdalData.empty()) CPLPopFinderLocation();
     if (previousPaths) { OSRSetPROJSearchPaths(previousPaths); CSLDestroy(previousPaths); }
     CPLSetThreadLocalConfigOptions(previous);
     CSLDestroy(previous);
