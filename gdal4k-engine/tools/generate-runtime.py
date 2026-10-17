@@ -37,7 +37,7 @@ def kt_result(typ,expr,parent):
     if t in TYPES:
         out=f'engine.wrap{t}({expr}, {parent})'
         return out if nullable else f'requireNotNull({out})'
-    converters={'Int':'int','Long':'content.toLong()','Double':'content.toDouble()','String':'contentOrNull.orEmpty()','Boolean':'boolean'}
+    converters={'Int':'int','Long':'content.toLong()','ULong':'content.toULong()','Double':'content.toDouble()','String':'contentOrNull.orEmpty()','Boolean':'boolean'}
     if t in converters:
         out=f'{expr}.jsonPrimitive.{converters[t]}'
     elif t in ['DoubleArray','IntArray','ByteArray','ShortArray','FloatArray','LongArray']:
@@ -45,6 +45,8 @@ def kt_result(typ,expr,parent):
         out=f'{expr}.jsonArray.map {{ it.jsonPrimitive.content.{cv}() }}.to{t}()'
     elif t=='List<String>':out=f'{expr}.jsonArray.map {{ it.jsonPrimitive.content }}'
     elif t=='List<DoubleArray>':out=f'{expr}.jsonArray.map {{ p -> p.jsonArray.map {{ it.jsonPrimitive.content.toDouble() }}.toDoubleArray() }}'
+    elif t=='RasterStatistics':out=f'{expr}.jsonArray.let {{ RasterStatistics(it[0].jsonPrimitive.content.toDouble(), it[1].jsonPrimitive.content.toDouble(), it[2].jsonPrimitive.content.toDouble(), it[3].jsonPrimitive.content.toDouble()) }}'
+    elif t=='RasterHistogram':out=f'{expr}.jsonObject.let {{ RasterHistogram(it.getValue("minimum").jsonPrimitive.content.toDouble(), it.getValue("maximum").jsonPrimitive.content.toDouble(), it.getValue("counts").jsonArray.map {{ n -> n.jsonPrimitive.content.toLong() }}.toLongArray()) }}'
     elif t=='MDDataType':out=f'decodeMDType({expr})'
     elif t=='FieldDomainBound':out=f'decodeDomainBound({expr})'
     elif t=='List<CodedFieldValue>':out=f'{expr}.jsonArray.map(::decodeCodedValue)'
@@ -187,6 +189,23 @@ special('Driver','createVector','Strings list(a.GetArray("options"));return r.re
 special('Driver','createCopy','Strings list(a.GetArray("options"));return r.result(GDALCreateCopy(h,a["name"].ToString().c_str(),r.arg(a["dataset"]),a.GetInteger("strict"),list.data(),nullptr,nullptr),"Dataset",true);')
 for method,fn in [('rename','GDALRenameDataset'),('copyFiles','GDALCopyDatasetFiles')]:special('Driver',method,f'return value({fn}(h,a["to"].ToString().c_str(),a["from"].ToString().c_str()));')
 special('Driver','hasOpenOption','return value(GDALDriverHasOpenOption(h,a["option"].ToString().c_str())!=0);')
+# Band metadata uses GDALMajorObject operations just like Dataset.
+for method in ['getMetadata', 'getMetadataDomainList', 'setMetadata', 'getMetadataItem', 'setMetadataItem']:
+    SPECIAL['Band',method] = SPECIAL['Dataset',method]
+ALIASES['Band'].update({'getBandNumber':'GDALGetBandNumber','getAccess':'GDALGetRasterAccess','getDescription':'GDALGetDescription','setDescription':'GDALSetDescription','setScale':'GDALSetRasterScale','setOffset':'GDALSetRasterOffset','fill':'GDALFillRaster'})
+for method,fn in [('getScale','GDALGetRasterScale'),('getOffset','GDALGetRasterOffset'),('getMinimum','GDALGetRasterMinimum'),('getMaximum','GDALGetRasterMaximum')]:
+    special('Band',method,f'int ok=0;auto v={fn}(h,&ok);return ok?value(v):nullValue();')
+for name,typ,fn in [('Int64','GDT_Int64','Int64'),('UInt64','GDT_UInt64','UInt64')]:
+    special('Band','getNoDataValueAs'+name,f'require(GDALGetRasterDataType(h)=={typ},"Exact NoData type does not match band");int ok=0;auto v=GDALGetRasterNoDataValueAs{fn}(h,&ok);return ok?value(v):nullValue();')
+    parse='std::stoll' if name=='Int64' else 'std::stoull'
+    special('Band','setNoDataValueAs'+name,f'require(GDALGetRasterDataType(h)=={typ},"Exact NoData type does not match band");return value(GDALSetRasterNoDataValueAs{fn}(h,{parse}(a["value"].ToString())));')
+special('Band','getStatistics','return bandStatistics(h,a,false);')
+special('Band','computeStatistics','return bandStatistics(h,a,true);')
+special('Band','setStatistics','return setBandStatistics(h,a);')
+special('Band','computeRasterMinMax','double v[2];require(GDALComputeRasterMinMax(h,a.GetBool("approximate"),v)==CE_None,"Cannot compute band extrema");return numbers(v,2);')
+special('Band','getHistogram','return bandHistogram(h,a);')
+special('Band','getDefaultHistogram','return defaultBandHistogram(h,a.GetBool("force"));')
+special('Band','setDefaultHistogram','return setBandHistogram(h,a);')
 special('Band','getBlockSize','int x,y;GDALGetBlockSize(h,&x,&y);CPLJSONArray out;out.Add(x);out.Add(y);return value(out);')
 special('Band','checksum','return value(GDALChecksumImage(h,0,0,GDALGetRasterBandXSize(h),GDALGetRasterBandYSize(h)));')
 special('Band','getNoDataValue','int ok;auto v=GDALGetRasterNoDataValue(h,&ok);return ok?value(v):nullValue();')
