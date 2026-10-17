@@ -27,7 +27,7 @@ python3 gdal4k-binary/tools/build-engine.py macos-arm64
 python3 verification/consumer.py --target macosArm64
 ```
 
-호스트에 맞춰 `macosArm64` / `macos-arm64`를 바꿉니다. Linux ARM64는 x64 Linux 또는 macOS에서 교차 빌드하고 ARM64 호스트에서 실행합니다. Windows 바이너리는 Windows에서 Kotlin/Native의 MinGW 도구로 빌드합니다. Android producer는 `ANDROID_NDK_HOME`, Android Gradle은 `ANDROID_HOME`을 사용합니다. Android는 64비트 ABI `arm64-v8a`, `x86_64`만 지원합니다. AAR 기본 빌드는 두 ABI를 모두 포함하며, 로컬 장치 검사만 할 때 `-Pgdal4kAndroidAbis=arm64-v8a`처럼 줄일 수 있습니다. 32비트 ABI를 지정하면 빌드 설정 단계에서 실패합니다.
+호스트에 맞춰 `macosArm64` / `macos-arm64`를 바꿉니다. Linux ARM64는 x64 Linux 또는 macOS에서 교차 빌드하고 ARM64 호스트에서 실행합니다. Windows 바이너리는 Windows에서 Kotlin/Native의 MinGW 도구로 빌드합니다. Android producer는 `ANDROID_NDK_HOME`, Android Gradle은 `ANDROID_HOME`을 사용합니다. Android는 `arm64-v8a`만 지원하며 AAR도 이 ABI만 포함합니다. 다른 ABI를 지정하면 빌드 설정 단계에서 실패합니다.
 
 웹은 `.github/workflows/library-tests.yml`과 같은 SDK를 준비·활성화합니다.
 
@@ -45,12 +45,12 @@ python3 verification/consumer.py --target wasmJs
 
 - JVM: `gdal4k-binary-jvm`에 Linux x64/ARM64, macOS x64/ARM64, Windows x64 JNI 리소스를 모두 포함하는 JAR
 - Native: `gdal4k-binary-<target>` KLIB 안에 GDAL과 모든 선택된 종속성의 정적 archive 포함
-- Android: 플랫폼 Kotlin 아티팩트와 `gdal4k-android-runtime` AAR (`arm64-v8a`, `x86_64`), Android 9 / API 28 이상
+- Android: 플랫폼 Kotlin 아티팩트와 `gdal4k-android-runtime` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
 - 웹: `gdal4k-binary-js` / `gdal4k-binary-wasm-js`, 동일한 엔진 포함
 - `gdal4k`와 `gdal4k-runtime`도 동일한 버전 `3.12.4-1.0.1-SNAPSHOT`으로 게시
 
 Kotlin 소비자는 루트 좌표를 의존하며 Gradle이 타깃 아티팩트를 선택합니다. OS classifier를 직접 붙이지 않습니다. 로컬 호스트만 빌드한 JAR은 전체 배포용이 아닙니다.
 
-CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. `-Pgdal4kUniversalJvm=true`와 ZIP 내용 검사로 JVM 5종과 Android 64비트 2종의 누락을 막고 AAR에 다른 ABI가 들어가면 실패합니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
+CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. `-Pgdal4kUniversalJvm=true`와 ZIP 내용 검사로 JVM 5종과 Android ARM64의 누락을 막고 AAR에 다른 ABI가 들어가면 실패합니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
 
 기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k/README.md)를 참고하세요.

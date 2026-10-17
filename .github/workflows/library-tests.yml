@@ -146,7 +146,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, x86_64]
+        abi: [arm64-v8a]
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
@@ -178,18 +178,20 @@ jobs:
             engine-android-${{ matrix.abi }}-
       - run: python verification/ci.py 'android-${{ matrix.abi }}'
       - name: Allow emulator acceleration
-        if: matrix.abi == 'x86_64'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: reactivecircus/android-emulator-runner@v2
-        if: matrix.abi == 'x86_64'
+      # The app/AAR contains ARM64 only. Google's emulator translates that payload;
+      # x86_64 here is the CI system image, not an Android library support target.
+      - name: Execute ARM64 binaries through the emulator native bridge
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
+          target: google_apis
           arch: x86_64
           disable-animations: true
-          script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi x86_64
+          script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi arm64-v8a --allow-native-bridge
       - uses: actions/cache/save@v6
         if: always()
         with:

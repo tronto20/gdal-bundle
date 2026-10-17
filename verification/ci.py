@@ -57,7 +57,7 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('target', choices=[*PLATFORMS,'web','android-arm64-v8a','android-x86_64','aggregate','linuxArm64-run'])
+    p.add_argument('target', choices=[*PLATFORMS,'web','android-arm64-v8a','aggregate','linuxArm64-run'])
     p.add_argument('--build-engine-only',action='store_true',help='Build the native engine before starting a simulator or running Kotlin tests')
     p.add_argument('--ios-device');a=p.parse_args();target=a.target
     if a.build_engine_only and target not in PLATFORMS:p.error('--build-engine-only requires a Native target')
@@ -86,8 +86,8 @@ def main():
         run(sys.executable,ROOT/'verification/audit-engine.py',target)
         stage(target,[target])
     elif target=='aggregate':
-        # All five JVM JNI libraries and both 64-bit Android ABIs are mandatory before publication.
-        engines=[*PLATFORMS.values(),'web','android-arm64-v8a','android-x86_64']
+        # All five JVM JNI libraries and Android ARM64 are mandatory before publication.
+        engines=[*PLATFORMS.values(),'web','android-arm64-v8a']
         fingerprints=set()
         for platform in engines:
             manifest=json.loads((BUILD/f'engine/{platform}/manifest.json').read_text())
@@ -110,7 +110,7 @@ def main():
         gradle(':gdal4k-android-runtime:publishAndroidRuntimePublicationToMavenLocal')
         aar=next((REPO/'dev/tronto/gdal4k/gdal4k-android-runtime').glob('*/*.aar'))
         with zipfile.ZipFile(aar) as z:
-            expected={f'jni/{abi}/libgdal4k.so' for abi in ['arm64-v8a','x86_64']}
+            expected={'jni/arm64-v8a/libgdal4k.so'}
             actual={name for name in z.namelist() if name.startswith('jni/') and name.endswith('.so')}
             if actual!=expected:raise RuntimeError(f'Unexpected Android AAR libraries: {sorted(actual)}; expected {sorted(expected)}')
         consumer('jvm')

@@ -1,9 +1,9 @@
 plugins { id("com.android.library") version "8.11.2"; `maven-publish` }
 repositories { google(); mavenCentral() }
-val supportedAndroidAbis = setOf("arm64-v8a", "x86_64")
-val androidAbis = providers.gradleProperty("gdal4kAndroidAbis").orElse("arm64-v8a,x86_64").get().split(',').map(String::trim).distinct()
+val supportedAndroidAbis = setOf("arm64-v8a")
+val androidAbis = providers.gradleProperty("gdal4kAndroidAbis").orElse("arm64-v8a").get().split(',').map(String::trim).distinct()
 require(androidAbis.isNotEmpty() && androidAbis.all { it in supportedAndroidAbis }) {
-    "gdal4k supports only 64-bit Android ABIs: arm64-v8a, x86_64"
+    "gdal4k supports only Android ARM64: arm64-v8a"
 }
 android {
     namespace = "dev.gdal4k.android.runtime"

@@ -78,7 +78,7 @@ suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): B
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
 | JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
 
-Android는 API 28 이상에서 64비트 `arm64-v8a`, `x86_64`만 지원합니다. 32비트 ARM/x86은 배포·테스트 대상에서 제외합니다.
+Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않습니다.
 
 한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 
@@ -128,4 +128,4 @@ JSON/Base64 전송 코드는 binary 모듈 내부에만 있습니다. 공개 `Gd
 
 테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
 
-지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 64비트 ABI 2종을 빌드하고 x86_64 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.
+지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 ARM64 바이너리만 빌드하고 Google APIs x86_64 에뮬레이터의 native bridge로 ARM64 코드를 실행합니다. 에뮬레이터가 ARM64 호환을 보고하지 않으면 실패하며 번역 실행 여부를 결과에 기록합니다. 실제 ARM64 실행 검증과 이 CI 번역 실행 검증은 구분합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.

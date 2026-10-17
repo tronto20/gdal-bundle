@@ -11,7 +11,7 @@ TARGETS={
  'linux-amd64':'x64-linux','linux-arm64':'arm64-linux',
  'windows-amd64':'x64-mingw-static',
  'ios-arm64':'arm64-ios','ios-simulator-arm64':'arm64-ios-simulator','ios-simulator-amd64':'x64-ios',
- 'android-arm64-v8a':'arm64-android','android-x86_64':'x64-android',
+ 'android-arm64-v8a':'arm64-android',
  'web':'wasm32-emscripten',
 }
 def run(*args,**kwargs):subprocess.run([str(a) for a in args],check=True,**kwargs)
