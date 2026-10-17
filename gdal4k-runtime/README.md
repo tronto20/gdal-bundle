@@ -357,3 +357,47 @@ val files = withGdalProgress({ progress ->
 JNI·Native는 독립 control의 atomic 취소/진행률을 읽으며 GDAL native 콜백에서 Kotlin을 재진입하지 않습니다. 웹 Worker는 진행률 콜백에서 ordinary single-thread Wasm을 yield하고 취소 메시지를 실행 큐 밖에서 처리합니다. 작업·입력 핸들이 살아 있는 동안 Worker를 종료하거나 native 스레드를 강제 종료하지 않습니다. 취소/관찰자 실패 직전에 만들어진 반환 핸들도 모두 닫은 뒤 예외를 전달합니다. VRT의 입력 lease, URI/Node/OPFS mount와 directory descriptor는 실제 Dataset 해제 시점까지 유지됩니다.
 
 입력은 호출자 소유이며 이미 쓴 출력·cursor·metadata 변경은 rollback하지 않습니다. 직접 출력의 부분 파일도 호출자가 정리합니다. HTTP·파일 mount 단계의 전송 정책은 별개이며, native 진행률 자체가 전송 제한 시간이나 무조건적인 네트워크 중단을 제공하지는 않습니다.
+
+### HTTP deadlines, retries and cancellation
+
+For direct HTTP(S) inputs on JS/wasmJs, select a policy explicitly:
+
+```kotlin
+val options = DatasetOpenOptions(httpInputPolicy = HttpInputPolicy(
+    requestTimeoutMillis = 10_000,
+    maxRetries = 2,
+    retryDelayMillis = 200,
+    maxRetryDelayMillis = 2_000,
+    requireStrongETag = true,
+))
+withTimeout(30_000) {
+    Gdal4k.runtime().openDataset(url, options).use { dataset ->
+        val pixels = ByteArray(256 * 256)
+        dataset.getRasterBand(1)!!.use { band ->
+            check(band.readRaster(0, 0, 256, 256, pixels) == 0)
+        }
+    }
+}
+```
+
+Import `dev.gdal4k.Gdal4k`, `dev.gdal4k.runtime.*` and `kotlinx.coroutines.withTimeout`. The per-attempt deadline covers response headers and the complete range body; coroutine cancellation also interrupts opening, an active fetch and retry backoff. GDAL completion and handle cleanup are awaited. Cancellation leaves caller-owned inputs available for later operations; output writes and GDAL cursor/metadata changes are not rolled back.
+
+Defaults retain 30 seconds per attempt and zero retries. Retry applies only to network failures/timeouts and HTTP 408/425/429/500/502/503/504; exponential delay and Retry-After are capped by maxRetryDelayMillis. Authentication failures, 404, full 200 responses, invalid ranges/lengths/encoding and changed validators are not retried. Ranges require 206 and exposed Content-Range plus identity Content-Encoding. There is no full-file fallback or new arbitrary file-size cap; each requested offset/length must be a safe JavaScript integer. The input range cache stays bounded at 8 MiB with 64 KiB chunks.
+
+A strong ETag is sent with If-Range on later requests. Without requireStrongETag, a valid Last-Modified is the fallback, and servers without either validator provide size checks only. Expose ETag/Last-Modified, Content-Range, Content-Length and Retry-After through CORS as applicable, and allow Range/If-Range. Observed identity changes poison that input: close and reopen the Dataset. GDAL's own block cache may serve already-read pixels without a new HTTP request, so this is consistency checking on actual provider reads, not an always-fresh remote view.
+
+The same options apply to explicitly mapped sidecars, including independently signed URLs:
+
+```kotlin
+Gdal4k.runtime().openDataset(
+    source = shpUrl,
+    relatedFiles = mapOf("roads.shx" to shxUrl, "roads.dbf" to dbfUrl, "roads.prj" to prjUrl),
+    options = options,
+).use { dataset ->
+    // Read layers and features here. Each HTTP sidecar uses the selected policy.
+}
+```
+
+This overload uses `dev.gdal4k.runtime.openDataset` on JS/wasmJs. The main URL must retain its real file name and extension; map sidecars by the file names GDAL expects. Each URL has its own identity validator.
+
+This policy covers direct JS/wasmJs HTTP inputs and related sidecars. Explicit selection is rejected for local/memory/File inputs and default Native/JNI engines, whose optional CURL backend is not supplied. Engine bootstrap and bundled resource loading are separate; no HTTP support is silently claimed for the other targets.

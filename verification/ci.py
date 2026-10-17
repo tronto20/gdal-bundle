@@ -82,11 +82,13 @@ def main():
         stage(target,[PLATFORMS[target]],[target],include_tests=target=='linuxArm64')
     elif target=='web':
         gradle(':gdal4k-runtime:jsNodeTest',':gdal4k-runtime:wasmJsNodeTest',':gdal4k-runtime:jsBrowserTest',':gdal4k-runtime:wasmJsBrowserTest')
-        run('node', ROOT/'verification/related-inputs.mjs')
+        run('node', '--test', ROOT/'verification/http-input-policy.test.mjs')
         run(sys.executable, ROOT/'verification/audit-engine.py', 'web')
         for t in ['js','wasmJs']:
             publish(t);consumer(t);consumer(t,'--browser')
             run(sys.executable, ROOT/'verification/web-inputs.py', '--repo', REPO, '--target', t)
+            run(sys.executable, ROOT/'verification/web-inputs.py', '--repo', REPO, '--target', t, '--http-policy')
+            run(sys.executable, ROOT/'verification/related-inputs.py', '--repo', REPO, '--target', t)
         stage('web',['web'],['js','wasmJs'])
     elif target.startswith('android-'):
         run(sys.executable,ROOT/'gdal4k-engine/tools/build-engine.py',target)
