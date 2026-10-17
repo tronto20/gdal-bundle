@@ -11,6 +11,7 @@
 #include <cpl_string.h>
 #include <functional>
 #include <map>
+#include <set>
 #include <memory>
 #include <limits>
 #include <stdexcept>
