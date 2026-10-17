@@ -48,9 +48,9 @@ class DriverProfileApiTest {
                 }
             }
             "postgresql" -> {
-                // Dedicated disposable CI service, never a user or production database.
+                // Dedicated disposable CI service. PG: is also recognized by PostGISRaster; select vector explicitly.
                 requireNotNull(r.getDriver("PostgreSQL")).use { assertEquals("PostgreSQL", it.getShortName()) }
-                r.openDataset("PG:host=127.0.0.1 port=5432 dbname=gdal4k user=gdal4k password=profile-fixture", DatasetOpenOptions(accessMode = DatasetAccessMode.Update)).use { ds ->
+                r.openDataset("PG:host=127.0.0.1 port=5432 dbname=gdal4k user=gdal4k password=profile-fixture", DatasetOpenOptions(accessMode = DatasetAccessMode.Update, kind = DatasetKind.Vector)).use { ds ->
                     val table = "profile_$datasetOutputPrefix".replace('-', '_')
                     requireNotNull(ds.createLayer(table, geometryType = 1)).use { layer ->
                         r.createFieldDefn("value", 0).use { assertEquals(0, layer.createField(it)) }
