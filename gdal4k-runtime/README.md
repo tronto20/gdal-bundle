@@ -337,3 +337,6 @@ source.rasterizeTo(
 필터링하고 변경 시 읽기를 초기화합니다. 공간/속성 조건은 함께 적용되지만 `getFeature(fid)`는
 필터를 무시합니다. 드라이버의 envelope 후보 판정 가능성을 포함한 정확한 계약과 예시는
 [OGR 사용법](../README.md#ogr-geometry-생성과-공간-조회)을 참고하세요.
+
+`rasterCalculate`, `Band.reclassifyTo`, `zonalStatistics`는 창 단위 연산으로 전체
+래스터를 한 번에 메모리에 올리지 않습니다. [예제와 NoData·정밀도·정렬·취소 정책](../README.md#창-단위-래스터-계산재분류구역-통계)을 참고하세요.
