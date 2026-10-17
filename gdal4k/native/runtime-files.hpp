@@ -150,6 +150,29 @@ inline CPLJSONObject convertDataset(GDALDatasetH dataset,const CPLJSONObject& ar
     return outputFiles(output,name);
 }
 
+inline void rasterizeDatasetPath(GDALDatasetH source, const CPLJSONObject& args, const std::string& path) {
+    require(GDALDatasetGetLayerCount(source) > 0, "Rasterize requires a vector dataset");
+    require(!path.empty() && path.find('\0') == std::string::npos, "Invalid output path");
+    auto driver = args.GetString("driver");
+    require(!driver.empty() && !EQUAL(driver.c_str(), "MEM") && !EQUAL(driver.c_str(), "VRT"), "Rasterize requires a concrete output file format");
+    FileOptions options(args.GetArray("arguments"));
+    options.add("-of"); options.add(driver);
+    auto opts = GDALRasterizeOptionsNew(options.list, nullptr);
+    fileEnsure(opts != nullptr, "Invalid rasterize options");
+    int usageError = 0;
+    auto result = GDALRasterize(path.c_str(), nullptr, source, opts, &usageError);
+    GDALRasterizeOptionsFree(opts);
+    auto closeCode = result ? GDALClose(result) : CE_Failure;
+    fileEnsure(result != nullptr && closeCode == CE_None && !usageError, "GDAL rasterize failed");
+}
+inline CPLJSONObject rasterizeDataset(GDALDatasetH source, const CPLJSONObject& args, bool direct) {
+    if (direct) { rasterizeDatasetPath(source, args, args.GetString("path")); return nullValue(); }
+    auto name = args.GetString("name"); fileBasename(name);
+    Directory output;
+    rasterizeDatasetPath(source, args, output.path + "/" + name);
+    return outputFiles(output, name);
+}
+
 struct RasterSources {
     std::vector<GDALDatasetH> datasets;
     std::vector<unsigned long long> ids;

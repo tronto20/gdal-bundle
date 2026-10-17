@@ -89,6 +89,18 @@ interface GdalRuntime {
  * Shared dataset handle. Platform-specific implementations will wrap the native dataset object.
  */
 interface Dataset {
+    /** Burns vector layers into a new raster using GDAL rasterize arguments (-burn/-a, -te, -ts/-tr, etc.).
+     * Returns generated files in memory; use rasterizeTo for large outputs. Source remains caller-owned.
+     * Requires a concrete file format (not MEM/VRT). Layer selection/filter/cursor behavior follows GDAL.
+     */
+    suspend fun rasterize(driver: String = "GTiff", name: String = "rasterized.tif", arguments: List<String> = emptyList()): GdalFiles
+
+    /** Creates a raster directly at the GDAL/OS path (Node file or browser opfs:/ on web).
+     * Does not copy the complete output through the bridge. Caller owns partial output on failure/cancellation.
+     * This creates output rather than updating an existing Dataset handle; arguments follow gdal_rasterize.
+     */
+    suspend fun rasterizeTo(path: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+
     suspend fun getRootGroup(): Group?
     /** Returns an independent domain/relationship copy, owned by the caller. */
     suspend fun getFieldDomain(name: String): FieldDomain?
