@@ -124,7 +124,10 @@ template<class T> CPLJSONObject rasterTyped(GDALRasterBandH h,const CPLJSONObjec
     require(x>=0&&y>=0&&width>0&&height>0&&x<=GDALGetRasterBandXSize(h)-width&&y<=GDALGetRasterBandYSize(h)-height,"Raster window is outside the band");
     // size_t is 32-bit in Wasm. Validate before narrowing
     // so a huge virtual raster cannot wrap into a small allocation passed to GDAL.
-    uint64_t count=static_cast<uint64_t>(width)*height;require(count<=static_cast<uint64_t>(json.Size()),"Raster buffer is too small");
+    const auto capacity = !write && a["bufferSize"].IsValid() ? a.GetLong("bufferSize") : json.Size();
+    uint64_t count=static_cast<uint64_t>(width)*height;
+    require(capacity>=0 && count<=static_cast<uint64_t>(capacity),"Raster buffer is too small");
+    require(count<=SIZE_MAX/sizeof(T),"Raster buffer exceeds addressable memory");
     std::vector<T> data(count);
     if(write)for(size_t i=0;i<count;i++){
         if constexpr(std::is_floating_point_v<T>)data[i]=static_cast<T>(CPLAtof(json[static_cast<int>(i)].ToString().c_str()));

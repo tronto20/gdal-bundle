@@ -15,23 +15,25 @@ platform=a.platform
 base=ROOT/'gdal4k-binary/build'
 dependencies=[]
 if platform=='web':
-    engine=base/'engine/web/gdal4k.mjs'
-    # Emscripten SINGLE_FILE stores Wasm in a JS byte string. Capture the exact bytes
-    # used by the factory, then validate with GC, atomics, SIMD and EH disabled.
+    wasm=base/'engine/web/gdal4k.wasm'
+    if not wasm.is_file() or wasm.read_bytes()[:4] != b'\0asm':raise RuntimeError('Missing separate WebAssembly asset')
+    opt=Path(os.environ['EMSDK'])/'upstream/bin'/('wasm-opt.exe' if os.name=='nt' else 'wasm-opt')
     with tempfile.TemporaryDirectory(prefix='gdal4k-wasm-audit-') as temp:
-        wasm=Path(temp)/'engine.wasm'
-        script='''import {readFile,writeFile} from 'node:fs/promises';
-const source=await readFile(process.argv[1],'utf8');
-const needle='function findWasmBinary(){return binaryDecode(';
-if(!source.includes(needle)) throw new Error('Unsupported Emscripten single-file layout');
-const instrumented=source.replace(needle,'function findWasmBinary(){return globalThis.__gdal4kAuditWasm=binaryDecode(');
-const factory=(await import('data:text/javascript;base64,'+Buffer.from(instrumented).toString('base64'))).default;
-await factory();
-await writeFile(process.argv[2],globalThis.__gdal4kAuditWasm);
-'''
-        subprocess.run(['node','--input-type=module','-e',script,str(engine),str(wasm)],check=True)
-        opt=Path(os.environ['EMSDK'])/'upstream/bin'/('wasm-opt.exe' if os.name=='nt' else 'wasm-opt')
         subprocess.run([str(opt),str(wasm),'--enable-bulk-memory','--enable-sign-ext','--enable-mutable-globals','--enable-nontrapping-float-to-int','--disable-gc','--disable-threads','--disable-simd','--disable-exception-handling','--print-features','-o',str(Path(temp)/'validated.wasm')],check=True)
+        assets=base/'generated/web/assets'
+        data=assets/'gdal4k-data.wasm'
+        subprocess.run([str(opt),str(data),'--mvp-features','-o',str(Path(temp)/'validated-data.wasm')],check=True)
+        entries=json.loads(re.search(r'export const resources = (.*);', (assets/'gdal4k-resources.mjs').read_text())[1])
+        prefix=base/'engine/web/installed/gdal4k-web/share/gdal'
+        sys_path=ROOT/'gdal4k-binary/tools'
+        import sys
+        sys.path.insert(0,str(sys_path))
+        from gdal_resources import resource_files
+        expected={p.relative_to(prefix).as_posix():p.read_bytes() for p in resource_files(prefix.parent.parent)}
+        if {entry['name'] for entry in entries}!=set(expected):raise RuntimeError('Incomplete web resource asset')
+        payload=data.read_bytes()
+        for entry in entries:
+            if payload[entry['offset']:entry['offset']+entry['size']]!=expected[entry['name']]:raise RuntimeError('Corrupt bundled resource: '+entry['name'])
     dependencies=['ordinary Wasm; GC/threads/SIMD/EH disabled during validation']
 elif platform.startswith(('macos','ios')):
     library=base/f'engine/{platform}/cmake/libgdal4k.dylib'

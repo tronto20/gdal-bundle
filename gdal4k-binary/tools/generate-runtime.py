@@ -164,7 +164,8 @@ for cls in TYPES:
     for name,params,ret in methods(cls):
         sig=key(name,params);argstr=', '.join(f'{n}: {t}' for n,t in params)
         if name=='close':kt.append('    override suspend fun close() = closeHandle()');continue
-        payload=', '.join('"'+n+'" to '+kt_arg(n,t) for n,t in params)
+        payload=', '.join('"bufferSize" to encode(buffer.size)' if cls=='Band' and name=='readRaster' and n=='buffer'
+                         else '"'+n+'" to '+kt_arg(n,t) for n,t in params)
         call=f'invoke("{cls}", "{sig}", mapOf({payload}))'
         if cls=='Band' and name in ['readRaster','writeRaster']:
             typ=dict(params)['buffer'];cv={'ByteArray':'toInt().toByte','ShortArray':'toInt().toShort','IntArray':'toInt','LongArray':'toLong','FloatArray':'toFloat','DoubleArray':'toDouble'}[typ]

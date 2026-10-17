@@ -108,8 +108,14 @@ fun normalizedJpackageVersion(version: String): String {
     }
 }
 
+val jvmBinary = providers.gradleProperty("gdal4kJvmBinary").orNull
+    ?: error("Select -Pgdal4kJvmBinary=macos-arm64 (or macos-x64, linux-x64-gnu, linux-arm64-gnu, windows-x64)")
+require(jvmBinary in setOf("macos-arm64", "macos-x64", "linux-x64-gnu", "linux-arm64-gnu", "windows-x64")) {
+    "Unsupported gdal4kJvmBinary: $jvmBinary"
+}
 dependencies {
-    implementation("$gdal4kGroup:gdal4k-binary:$gdal4kPackageVersion")
+    implementation("$gdal4kGroup:gdal4k:$gdal4kPackageVersion")
+    runtimeOnly("$gdal4kGroup:gdal4k-binary-$jvmBinary:$gdal4kPackageVersion")
 }
 
 kotlin {

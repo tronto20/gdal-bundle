@@ -15,7 +15,7 @@ internal actual suspend fun createTransport(options: GdalOptions): GdalTransport
             return try { result.toKString() } finally { gdal4k_free(result) }
         }
         private fun closeNow() { gdal4k_destroy(handle) }
-        override suspend fun call(request: String): String = withContext(Dispatchers.Default + NonCancellable) { callNow(request) }
+        override suspend fun call(request: String, attachment: Any?): String = withContext(Dispatchers.Default + NonCancellable) { require(attachment == null) { "Browser files require JS/wasmJs" }; callNow(request) }
         override suspend fun close() = withContext(Dispatchers.Default + NonCancellable) { closeNow() }
     }
 }

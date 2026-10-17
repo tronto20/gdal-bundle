@@ -73,12 +73,14 @@ suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): B
 
 | 플랫폼 | GDAL 실행 위치 | 내장 방식 |
 | --- | --- | --- |
-| JVM | `Dispatchers.IO` | JAR의 OS/아키텍처별 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
+| JVM | `Dispatchers.IO` | 명시적으로 선택한 플랫폼 리소스 JAR의 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
 | Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
-| JS / wasmJs | 전용 Worker | 같은 Emscripten GDAL Wasm 모듈을 라이브러리 안에 압축 내장, Worker에서 해제·초기화 |
+| JS / wasmJs | 전용 Worker | 같은 자체 GDAL Wasm을 정적 자산으로 배포하고 Worker에서 로드·초기화 |
 
-Android는 API 28 이상에서 64비트 `arm64-v8a`, `x86_64`만 지원합니다. 32비트 ARM/x86은 배포·테스트 대상에서 제외합니다.
+JVM은 기본 바이너리가 없으며 `gdal4k-binary-<platform>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
+
+Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않습니다.
 
 한 런타임의 GDAL 호출과 종료는 직렬화합니다. 다른 런타임 핸들을 섞으면 실패합니다. 데이터셋을 닫은 뒤 그 밴드·레이어 핸들을 쓰면 실패합니다. `use`의 정리는 취소된 coroutine에서도 실행합니다.
 
@@ -86,13 +88,44 @@ Android는 API 28 이상에서 64비트 `arm64-v8a`, `x86_64`만 지원합니다
 
 대기 중인 호출은 취소할 수 있습니다. 이미 시작한 GDAL C 호출은 중간에 강제 중단하지 않고 완료한 뒤 핸들/결과를 정리합니다. 따라서 coroutine 취소가 오래 걸리는 GDAL 연산을 즉시 멈추지는 않습니다. 웹 Worker를 강제로 종료해서 데이터셋 상태를 손상시키는 동작도 하지 않습니다.
 
-JS와 wasmJs가 사용하는 **GDAL 엔진 자체는 일반 WebAssembly**입니다. JS 경로는 Kotlin/Wasm의 Wasm GC를 지원하지 않는 브라우저에서도 기본 Wasm·Worker·ES module을 지원하면 사용할 수 있습니다. WebAssembly 자체가 없는 환경에서는 동작하지 않습니다. wasmJs로 컴파일한 Kotlin 앱은 Kotlin/Wasm의 브라우저 요구 사항도 충족해야 합니다. Node는 `process.getBuiltinModule`을 제공하는 20.16+ / 22+가 필요합니다. 웹 CSP는 Blob Worker, 모듈과 Wasm 실행을 허용해야 합니다. 엔진은 pthread/SharedArrayBuffer를 요구하지 않습니다.
+JS와 wasmJs가 사용하는 **GDAL 엔진 자체는 일반 WebAssembly**입니다. JS 경로는 Kotlin/Wasm의 Wasm GC를 지원하지 않는 브라우저에서도 기본 Wasm·Worker·ES module을 지원하면 사용할 수 있습니다. WebAssembly 자체가 없는 환경에서는 동작하지 않습니다. wasmJs로 컴파일한 Kotlin 앱은 Kotlin/Wasm의 브라우저 요구 사항도 충족해야 합니다. Node 24에서 검증합니다. Kotlin/JS UMD 소비는 [기본 활성화된 `require(ESM)`](https://nodejs.org/en/blog/release/v20.19.0)을 제공하는 Node 20.19+ / 22.12+ 등이 필요합니다. 웹 CSP는 앱의 정적 Worker·ES module·Wasm 실행과 입력 URL의 연결을 허용해야 합니다. 엔진은 pthread/SharedArrayBuffer를 요구하지 않습니다.
+
+## 웹의 URL·선택한 파일 직접 읽기
+
+JS/wasmJs에서는 URL을 그대로 전달합니다. GDAL이 요청하는 구간을 HTTP Range로 읽고, 다운로드한 파일 전체를 `/vsimem`에 올리지 않습니다. JVM·Native·Android의 일반 경로 입력은 원래 OS 파일을 직접 읽습니다. 이 빌드의 HTTP 어댑터는 JS/wasmJs에 적용합니다.
+
+```kotlin
+val runtime = Gdal4k.runtime()
+runtime.openDataset("https://example.com/image.tif").use { dataset ->
+    requireNotNull(dataset.getRasterBand(1)).use { band ->
+        val pixels = ByteArray(256 * 256)
+        band.readRaster(0, 0, 256, 256, pixels)
+    }
+}
+```
+
+브라우저에서는 파일 선택기 또는 권한을 얻은 FileSystemFileHandle의 `getFile()`로 받은 `org.w3c.files.File`을 전달합니다. 아래 코드는 `jsMain` / `wasmJsMain`에서 사용할 수 있습니다.
+
+```kotlin
+import dev.gdal4k.runtime.*
+
+suspend fun describeSelected(file: org.w3c.files.File): String =
+    Gdal4k.runtime().openDataset(file).use { dataset -> dataset.info() }
+```
+
+Worker는 File의 필요한 `slice`만 읽습니다. 임의의 로컬 경로 문자열은 브라우저 파일 접근 권한을 제공하지 않습니다. Node는 `openDataset("/data/image.tif")`로 프로세스 권한에 따라 디스크를 직접 읽습니다.
+
+직접 입력은 읽기 전용 단일 파일이며, 별도 sidecar 파일을 자동으로 탐색하거나 권한을 확장하지 않습니다. 다중 파일 바이트 입력은 기존 `GdalFiles`를 계속 사용할 수 있습니다. 직접 입력의 구간 캐시는 런타임 전체 8 MiB, 개별 요청은 최대 64 KiB입니다. 데이터셋을 닫으면 해당 파일의 캐시·파일 참조·Node descriptor를 반환합니다. GDAL 블록 캐시와 디코딩·출력·사용자가 요청한 래스터 배열 메모리는 별도로 필요합니다.
+
+웹의 GDAL 보조 데이터도 별도 자산에서 사용하는 구간만 읽고 같은 구간 캐시를 공유합니다. 정적 자산 `gdal4k-data.wasm`에도 HTTP Range 지원이 필요합니다. GDAL 블록 캐시에 별도의 고정 상한을 추가하지 않으며, 초기 Wasm 작업 힙은 작게 시작해 실제 필요에 따라 증가합니다. 래스터 읽기는 출력 배열의 길이만 전달하므로, 읽기 전에 빈 출력 배열 전체를 엔진에 복사하지 않습니다. PROJ 데이터베이스·실행 코드와 디코딩/결과 메모리는 여전히 필요합니다.
+
+HTTP 서버는 `206 Partial Content`와 정확한 `Content-Range`를 제공해야 합니다. 다른 origin이면 CORS 접근을 허용하고 `Content-Range`·`ETag`를 노출하며, 필요 시 `Range`·`If-Range` 요청 헤더를 허용해야 합니다. 강한 ETag가 있으면 읽는 중 파일 변경을 검사합니다. 버전이 바뀌면 데이터셋을 다시 엽니다. 인증은 서명된 URL 또는 같은 origin의 쿠키를 사용할 수 있습니다. Range 미지원·오류·CORS 차단 시 전체 다운로드로 fallback하지 않습니다. COG처럼 부분 읽기에 적합한 레이아웃에서 효과가 크며, 파일 포맷이나 요청한 연산 자체가 전체 데이터를 필요로 할 수도 있습니다.
 
 ## 데이터와 드라이버
 
 GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브러리의 라이선스 고지를 바이너리에 포함합니다. 외부 설치나 `GDAL_DATA` / `PROJ_DATA` 지정이 필요하지 않습니다. 선택적 지역 변환 grid 파일은 포함하지 않습니다.
 
-공통 빌드 프로필은 GDAL 기본 드라이버와 GEOS, JPEG, PNG, SQLite, WebP, Zstd, Expat, OpenJPEG, JPEG XL입니다. JPEGXL 드라이버와 GTiff/COG의 `COMPRESS=JXL`을 검증합니다. **모든 GDAL 선택 드라이버를 포함한다는 뜻은 아닙니다.** HDF5/netCDF/Parquet/PostgreSQL 등의 추가 SDK와 CURL 기반 원격 VFS는 이 프로필에 포함하지 않습니다. 웹에서는 앱이 HTTP로 받은 바이트를 `writeMemoryFile`로 전달할 수 있습니다. 원래 Conda 배포와 드라이버 목록이 같다고 가정하지 마세요.
+공통 빌드 프로필은 GDAL 기본 드라이버와 GEOS, JPEG, PNG, SQLite, WebP, Zstd, Expat, OpenJPEG, JPEG XL입니다. JPEGXL 드라이버와 GTiff/COG의 `COMPRESS=JXL`을 검증합니다. **모든 GDAL 선택 드라이버를 포함한다는 뜻은 아닙니다.** HDF5/netCDF/Parquet/PostgreSQL 등의 추가 SDK와 CURL 기반 원격 VFS는 이 프로필에 포함하지 않습니다. JS/wasmJs의 HTTP 입력은 자체 VSI 읽기 어댑터로 지원합니다. 원래 Conda 배포와 드라이버 목록이 같다고 가정하지 마세요.
 
 `runtime.versionInfo("THIRD_PARTY_LICENSES")`로 실제 포함된 고지를 조회합니다. 기능 감지는 `getDriver(name)`의 결과로 수행합니다.
 
@@ -128,4 +161,4 @@ JSON/Base64 전송 코드는 binary 모듈 내부에만 있습니다. 공개 `Gd
 
 테스트는 `gdal4k/src/commonTest`에 있습니다. 원래 객체 API smoke, 래스터·벡터·좌표변환, JXL 왕복, 오류·핸들 수명, 취소·재초기화, 호출 스레드/웹 이벤트 루프 응답성을 검사합니다. `verification/consumer.py`는 별도 Gradle 프로젝트에서 게시 Maven 아티팩트만 받아 실행합니다. Native 소비 테스트는 원래 producer 디렉터리를 숨기고 링크합니다.
 
-지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 64비트 ABI 2종을 빌드하고 x86_64 에뮬레이터에서 동작을 검사합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.
+지원 타깃 선언과 실행 검증은 다릅니다. 최신 실행 결과는 PR의 플랫폼별 CI와 JUnit 보고서를 확인합니다. iOS 디바이스 타깃은 서명된 실제 기기가 없어 링크까지, iOS 시뮬레이터는 실제 실행까지 검사합니다. Android CI는 ARM64 바이너리만 빌드하고 Google APIs x86_64 에뮬레이터의 native bridge로 ARM64 코드를 실행합니다. 에뮬레이터가 ARM64 호환을 보고하지 않으면 실패하며 번역 실행 여부를 결과에 기록합니다. 실제 ARM64 실행 검증과 이 CI 번역 실행 검증은 구분합니다. WASI는 타깃이나 테스트에 포함하지 않습니다.

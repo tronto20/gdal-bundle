@@ -17,7 +17,7 @@ internal class RuntimeEngine(private val transport: GdalTransport) {
     suspend fun close() = withContext(NonCancellable) { mutex.withLock {
         if (!closed) { transport.close(); closed = true }
     } }
-    suspend fun invoke(type: String, handle: String, method: String, parameters: Map<String, JsonElement>): JsonElement {
+    suspend fun invoke(type: String, handle: String, method: String, parameters: Map<String, JsonElement>, attachment: Any? = null): JsonElement {
         if (method != "close") currentCoroutineContext().ensureActive()
         return mutex.withLock { withContext(NonCancellable) {
         if (closed) {
@@ -31,7 +31,7 @@ internal class RuntimeEngine(private val transport: GdalTransport) {
                 put("parameters", JsonObject(parameters))
             }
         }
-        val response = Json.parseToJsonElement(transport.call(request.toString())).jsonObject
+        val response = Json.parseToJsonElement(transport.call(request.toString(), attachment)).jsonObject
         response["error"]?.let { throw GdalException(it.jsonPrimitive.content) }
         response.getValue("result").jsonObject.getValue("value")
     } }

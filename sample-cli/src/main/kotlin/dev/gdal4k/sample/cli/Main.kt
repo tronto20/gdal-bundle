@@ -1,6 +1,6 @@
 package dev.gdal4k.sample.cli
 
-import dev.gdal4k.binary.Gdal4kBinary
+import dev.gdal4k.Gdal4k
 import kotlin.system.exitProcess
 
 private const val DEBUG_PROPERTY = "sample-cli.debug"
@@ -36,7 +36,7 @@ private suspend fun runInfo(args: List<String>) {
     val infoArgs = args.drop(1)
 
     debug("acquiring GDAL runtime (initializes on first use)")
-    val runtime = Gdal4kBinary.runtime()
+    val runtime = Gdal4k.runtime()
 
     debug("opening dataset $datasetPath")
     val output = DatasetInfoService(runtime).describe(datasetPath, infoArgs)
@@ -52,7 +52,7 @@ private suspend fun runSmoke(args: List<String>) {
     }
 
     debug("acquiring GDAL runtime (initializes on first use)")
-    val runtime = Gdal4kBinary.runtime()
+    val runtime = Gdal4k.runtime()
 
     debug("running surface smoke checks")
     val output = SurfaceSmokeService(runtime).run()
@@ -78,7 +78,7 @@ private fun printUsage() {
           sample-cli info ./example.tif --json
           sample-cli smoke
 
-        The GDAL runtime bundle is packaged inside the gdal4k-binary dependency.
+        Select a gdal4k-binary-<platform> runtime dependency when building the application.
         """.trimIndent(),
     )
 }

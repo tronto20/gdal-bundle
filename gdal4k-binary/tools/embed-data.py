@@ -3,16 +3,23 @@
 import argparse
 import json
 from pathlib import Path
+from gdal_resources import resource_files
 
 p = argparse.ArgumentParser()
 p.add_argument('prefix', type=Path)
 p.add_argument('output', type=Path)
+p.add_argument('--web', action='store_true', help='Web resources are read on demand from the packaged resource data asset')
 a = p.parse_args()
 root = a.prefix/'share/gdal'
-files = [f for f in sorted(root.rglob('*')) if f.is_file() and f.suffix != '.cmake' and not f.name.startswith('vcpkg') and f.name not in ('copyright','usage')]
-if not any(f.name == 'tms_NZTM2000.json' for f in files):
-    raise SystemExit('The complete installed GDAL data files are required (USE_ONLY_EMBEDDED_RESOURCE_FILES=OFF for GDAL)')
+files = resource_files(a.prefix)
 notices = '\n\n'.join('=== '+f.parent.name+' ===\n'+f.read_text() for f in sorted((a.prefix/'share').glob('*/copyright')))
+if a.web:
+    a.output.parent.mkdir(parents=True,exist_ok=True)
+    a.output.write_text('// GDAL data bytes live in the lazily read web resource asset.\n'
+        'const char* gdal4k_data_directory() { return "/vsigdal4k/resources"; }\n'
+        'const char* gdal4k_license_notices() { return '+json.dumps(notices,ensure_ascii=True)+'; }\n'
+        'void gdal4k_install_resources() {}\n')
+    raise SystemExit(0)
 lines = ['// Generated from the pinned GDAL distribution.','''#include "resources.h"
 #include <cpl_vsi.h>
 #include <cpl_conv.h>

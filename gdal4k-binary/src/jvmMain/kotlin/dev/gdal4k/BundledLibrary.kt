@@ -16,8 +16,19 @@ private object BundledLibrary {
         }
         if (bundledLoaded) return
         val name = System.mapLibraryName("gdal4k")
-        val resource = "/gdal4k/${GdalPlatform.current().classifier}/$name"
-        val bytes = requireNotNull(javaClass.getResourceAsStream(resource)) { "Missing embedded GDAL runtime: $resource" }.use { it.readBytes() }
+        val platform = GdalPlatform.current().classifier
+        val resource = "/gdal4k/$platform/$name"
+        val artifact = when (platform) {
+            "macos-amd64" -> "macos-x64"
+            "linux-amd64" -> "linux-x64-gnu"
+            "linux-arm64" -> "linux-arm64-gnu"
+            "windows-amd64" -> "windows-x64"
+            else -> platform
+        }
+        val bytes = checkNotNull(javaClass.getResourceAsStream(resource)) {
+            "Missing GDAL JVM binary for $platform. Add runtimeOnly(\"dev.tronto.gdal4k:gdal4k-binary-$artifact:<gdal4k-version>\") " +
+                "using the same version as gdal4k. No JVM binary is included by default. Missing resource: $resource"
+        }.use { it.readBytes() }
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val directory = java.io.File(System.getProperty("java.io.tmpdir"), "gdal4k/$digest").toPath()
         Files.createDirectories(directory)

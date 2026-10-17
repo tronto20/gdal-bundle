@@ -11,7 +11,7 @@ TARGETS={
  'linux-amd64':'x64-linux','linux-arm64':'arm64-linux',
  'windows-amd64':'x64-mingw-static',
  'ios-arm64':'arm64-ios','ios-simulator-arm64':'arm64-ios-simulator','ios-simulator-amd64':'x64-ios',
- 'android-arm64-v8a':'arm64-android','android-x86_64':'x64-android',
+ 'android-arm64-v8a':'arm64-android',
  'web':'wasm32-emscripten',
 }
 def run(*args,**kwargs):subprocess.run([str(a) for a in args],check=True,**kwargs)
@@ -24,7 +24,7 @@ def link_arguments(command):
  return shlex.split(command.replace('\\','/'))
 def fingerprint():
  digest=hashlib.sha256()
- for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web/vendor']:
+ for directory in [ROOT/'gdal4k/native',BINARY/'ports',BINARY/'engine',BINARY/'tools',BINARY/'web']:
   # WindowsPath sorts without case; compare the same slash-separated names on every host.
   for source in sorted(directory.rglob('*'),key=lambda p:p.relative_to(ROOT).as_posix()):
    if source.is_file() and '__pycache__' not in source.parts:
@@ -94,6 +94,7 @@ def main():
  run(*cmd,env=env);run('cmake','--build',build,'--parallel',a.jobs,env=env)
  if target=='web':
   shutil.copy2(build/'gdal4k.mjs',out/'gdal4k.mjs')
+  shutil.copy2(build/'gdal4k.wasm',out/'gdal4k.wasm')
   run(os.sys.executable,BINARY/'tools/package-web.py',out/'gdal4k.mjs')
  else:
   # Merge the bridge and its actual static dependency closure into one relocatable archive.
@@ -138,8 +139,8 @@ def main():
  licenses=out/'licenses';licenses.mkdir(exist_ok=True)
  for f in (installed/triplet/'share').glob('*/copyright'):
   shutil.copy2(f,licenses/(f.parent.name+'.txt'))
- artifacts=[out/'gdal4k.mjs'] if target=='web' else [out/'libgdal4k.a',out/'native-linker-options.json']
- if target=='web':artifacts+=list((BINARY/'build/generated/web').rglob('*.kt'))
+ artifacts=[out/'gdal4k.mjs',out/'gdal4k.wasm'] if target=='web' else [out/'libgdal4k.a',out/'native-linker-options.json']
+ if target=='web':artifacts += [p for p in (BINARY/'build/generated/web/assets').rglob('*') if p.is_file()]
  elif dest:artifacts.append(dest)
  artifacts+=list(licenses.glob('*.txt'))
  hashes={f.relative_to(BINARY/'build').as_posix():hashlib.sha256(f.read_bytes()).hexdigest() for f in artifacts}
