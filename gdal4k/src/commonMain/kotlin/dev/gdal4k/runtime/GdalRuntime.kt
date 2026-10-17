@@ -68,6 +68,25 @@ interface GdalRuntime {
  * Shared dataset handle. Platform-specific implementations will wrap the native dataset object.
  */
 interface Dataset {
+    /**
+     * Compute terrain derivatives with GDAL DEMProcessing. [processing] is hillshade,
+     * slope, aspect, TRI, TPI or roughness (case insensitive). [arguments] are gdaldem
+     * mode options, e.g. -b, -compute_edges, -alg, -s/-xscale/-yscale and -co.
+     * GDAL controls NoData, edge handling and CRS/band-unit scaling; scale/offset are
+     * not applied by this wrapper. Use explicit scaling when units are ambiguous.
+     * Returns independent output files after processing and closing the output dataset.
+     * Only concrete file formats are supported; MEM/VRT and color-relief are excluded.
+     * The source remains caller-owned. Progress callbacks are not exposed.
+     */
+    suspend fun demProcessing(processing: String, driver: String = "GTiff", name: String = "terrain.tif", arguments: List<String> = emptyList()): GdalFiles
+
+    /**
+     * Like [demProcessing], writing directly to an OS/Node path or browser opfs:/ path.
+     * Output and sidecars, including partial files after failure/cancellation, belong
+     * to the caller. No output bytes are copied back into a GdalFiles result.
+     */
+    suspend fun demProcessingTo(path: String, processing: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+
     suspend fun getRootGroup(): Group?
     /** Returns an independent domain/relationship copy, owned by the caller. */
     suspend fun getFieldDomain(name: String): FieldDomain?

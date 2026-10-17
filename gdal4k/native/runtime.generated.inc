@@ -62,6 +62,12 @@
     if(type=="GdalRuntime" && method=="datasetInfo_Dataset_DatasetInfoOptions") {
         return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));
     }
+    if(type=="Dataset" && method=="demProcessing_String_String_String_List_String") {
+        return demProcessing(h,a,false);
+    }
+    if(type=="Dataset" && method=="demProcessingTo_String_String_String_List_String") {
+        return demProcessing(h,a,true);
+    }
     if(type=="Dataset" && method=="getRootGroup") {
         return r.result(GDALDatasetGetRootGroup(h),"Group",true,id);
     }
