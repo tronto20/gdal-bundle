@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
 p=argparse.ArgumentParser();p.add_argument('platform');a=p.parse_args()
 platform=a.platform
-base=ROOT/'gdal4k-binary/build'
+base=ROOT/'gdal4k-engine/build'
 dependencies=[]
 if platform=='web':
     wasm=base/'engine/web/gdal4k.wasm'
@@ -25,7 +25,7 @@ if platform=='web':
         subprocess.run([str(opt),str(data),'--mvp-features','-o',str(Path(temp)/'validated-data.wasm')],check=True)
         entries=json.loads(re.search(r'export const resources = (.*);', (assets/'gdal4k-resources.mjs').read_text())[1])
         prefix=base/'engine/web/installed/gdal4k-web/share/gdal'
-        sys_path=ROOT/'gdal4k-binary/tools'
+        sys_path=ROOT/'gdal4k-engine/tools'
         import sys
         sys.path.insert(0,str(sys_path))
         from gdal_resources import resource_files

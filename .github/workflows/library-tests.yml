@@ -47,9 +47,9 @@ jobs:
         id: native-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-${{ matrix.target }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**', 'gdal4k-binary/tools/toolchains.py') }}-
+            engine-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-
             engine-${{ matrix.target }}-
       - name: Build GDAL and codecs
         run: python verification/ci.py '${{ matrix.target }}' --build-engine-only
@@ -82,10 +82,10 @@ jobs:
             gdal4k/build/reports/tests/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
-            gdal4k-binary/build/engine/*/cmake/build.ninja
-            gdal4k-binary/build/engine/*/cmake/CMakeCache.txt
-            gdal4k-binary/build/engine/*/cmake/gdal4k-static-dependencies.txt
-            gdal4k-binary/build/engine/*/manifest.json
+            gdal4k-engine/build/engine/*/cmake/build.ninja
+            gdal4k-engine/build/engine/*/cmake/CMakeCache.txt
+            gdal4k-engine/build/engine/*/cmake/gdal4k-static-dependencies.txt
+            gdal4k-engine/build/engine/*/manifest.json
           if-no-files-found: warn
 
   web:
@@ -110,9 +110,9 @@ jobs:
         id: web-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-web-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-web-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-web-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-
             engine-web-
       - name: Browser test runtime
         run: |
@@ -181,9 +181,9 @@ jobs:
         id: android-cache
         with:
           path: verification/build/vcpkg-cache
-          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-binary/ports/**', 'gdal4k-binary/engine/**') }}-
+            engine-android-${{ matrix.abi }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**') }}-
             engine-android-${{ matrix.abi }}-
       - run: python verification/ci.py 'android-${{ matrix.abi }}'
       - name: Allow emulator acceleration

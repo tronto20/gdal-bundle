@@ -2,14 +2,40 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins { alias(libs.plugins.kotlin.multiplatform); `maven-publish` }
 repositories { mavenCentral() }
-val engineBuild = project(":gdal4k-binary").layout.buildDirectory
+val pythonCommand = if (System.getProperty("os.name").startsWith("Windows")) "python" else "python3"
+fun registerEngineBuild(target: String) = tasks.register<Exec>("buildEngine" + target.split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }) {
+    group = "GDAL runtime"
+    // These outputs can arrive from verified CI artifacts. Gradle's first-run
+    // stale-output cleanup must not delete them before the producer checks hashes.
+    doNotTrackState("The engine producer fingerprints sources and verifies every artifact hash")
+    workingDir(rootDir)
+    commandLine(pythonCommand, "gdal4k-engine/tools/build-engine.py", target)
+    environment("GDAL4K_BINARY_VERSION", rootProject.version.toString())
+    inputs.files(fileTree("ports") { exclude("**/__pycache__/**") })
+    inputs.dir("engine")
+    inputs.files(fileTree("tools") { include("*.py") })
+    inputs.dir("web")
+    inputs.dir(rootProject.file("gdal4k/native"))
+    outputs.file(layout.buildDirectory.file("engine/$target/manifest.json"))
+    if (target == "web") outputs.dir(layout.buildDirectory.dir("generated/web"))
+    else {
+        outputs.file(layout.buildDirectory.file("engine/$target/libgdal4k.a"))
+        outputs.file(layout.buildDirectory.file("engine/$target/native-linker-options.json"))
+        if (target.startsWith("android")) outputs.file(layout.buildDirectory.file("android-runtime/jniLibs/${target.removePrefix("android-")}/libgdal4k.so"))
+        else if (!target.startsWith("ios")) outputs.file(layout.buildDirectory.file("jvm-resources/gdal4k/$target/${if (target.startsWith("windows")) "gdal4k.dll" else if (target.startsWith("macos")) "libgdal4k.dylib" else "libgdal4k.so"}"))
+    }
+}
+val engineTargets = listOf("macos-arm64", "linux-amd64", "linux-arm64", "windows-amd64", "ios-arm64", "ios-simulator-arm64", "android-arm64-v8a", "web")
+engineTargets.forEach(::registerEngineBuild)
+
+val engineBuild = layout.buildDirectory
 val nativeTargets = mapOf("macosArm64" to "macos-arm64", "linuxX64" to "linux-amd64", "linuxArm64" to "linux-arm64", "mingwX64" to "windows-amd64", "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64")
 val nativeArtifacts = mapOf(
     "macosArm64" to "macos-arm64", "linuxX64" to "linux-x64-gnu",
     "linuxArm64" to "linux-arm64-gnu", "mingwX64" to "mingw-x64",
     "iosArm64" to "ios-arm64", "iosSimulatorArm64" to "ios-simulator-arm64",
 )
-fun engineTask(platform: String) = ":gdal4k-binary:buildEngine" + platform.split('-').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
+fun engineTask(platform: String) = ":gdal4k-engine:buildEngine" + platform.split('-').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
 kotlin {
     js { nodejs(); browser() }; wasmJs { nodejs(); browser() }
     macosArm64(); linuxX64(); linuxArm64(); mingwX64(); iosArm64(); iosSimulatorArm64()

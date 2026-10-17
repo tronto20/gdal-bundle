@@ -13,7 +13,7 @@ from jvm_binaries import JVM_BINARIES, host_binary
 from publication_versions import ANDROID_ENGINE, ENGINE_COORDINATES, ENGINE_TARGETS
 
 ROOT = Path(__file__).resolve().parent.parent
-BUILD = ROOT/'gdal4k-binary/build'
+BUILD = ROOT/'gdal4k-engine/build'
 REPO = ROOT/'verification/build/consumer-maven'
 GRADLE = ROOT/('gradlew.bat' if os.name == 'nt' else 'gradlew')
 PLATFORMS = {'macosArm64':'macos-arm64','linuxX64':'linux-amd64',
@@ -28,7 +28,7 @@ def gradle(*tasks, options=()):
 
 def publish(target):
     title=target[0].upper()+target[1:]
-    modules=['gdal4k-runtime','gdal4k-binary','gdal4k']
+    modules=['gdal4k-runtime','gdal4k']
     if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
     gradle(*(f':{m}:publish{p}PublicationToMavenLocal' for m in modules for p in ['KotlinMultiplatform',title]))
 
@@ -44,9 +44,9 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
         files.add(manifest)
         files.update(BUILD/f for f in data['artifacts'])
     suffixes={'wasmJs':'wasm-js'}
-    coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k-binary','gdal4k'] for t in targets]
+    coordinates=[m+'-'+suffixes.get(t,t.lower()) for m in ['gdal4k-runtime','gdal4k'] for t in targets]
     coordinates+=[ENGINE_COORDINATES[suffixes.get(t,t.lower())] for t in targets if suffixes.get(t,t.lower()) in ENGINE_TARGETS]
-    if include_root:coordinates+=['gdal4k-runtime','gdal4k-binary','gdal4k','gdal4k-engine',ANDROID_ENGINE]
+    if include_root:coordinates+=['gdal4k-runtime','gdal4k','gdal4k-engine',ANDROID_ENGINE]
     if include_jvm_binaries:coordinates += ['gdal4k-engine-jvm-'+b for b in JVM_BINARIES]
     for coordinate in coordinates:
         directory=REPO/'dev/tronto/gdal4k'/coordinate
@@ -70,7 +70,7 @@ def main():
     if target in PLATFORMS:
         gradle(f':gdal4k-runtime:compileKotlin{target[0].upper()+target[1:]}') # initialize matching K/N toolchain
         if a.build_engine_only:
-            run(sys.executable,ROOT/'gdal4k-binary/tools/build-engine.py',PLATFORMS[target])
+            run(sys.executable,ROOT/'gdal4k-engine/tools/build-engine.py',PLATFORMS[target])
             return
         cross=target in ['iosArm64','linuxArm64']
         options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
@@ -90,7 +90,7 @@ def main():
             run(sys.executable, ROOT/'verification/web-inputs.py', '--repo', REPO, '--target', t)
         stage('web',['web'],['js','wasmJs'])
     elif target.startswith('android-'):
-        run(sys.executable,ROOT/'gdal4k-binary/tools/build-engine.py',target)
+        run(sys.executable,ROOT/'gdal4k-engine/tools/build-engine.py',target)
         run(sys.executable,ROOT/'verification/audit-engine.py',target)
         stage(target,[target])
     elif target=='aggregate':

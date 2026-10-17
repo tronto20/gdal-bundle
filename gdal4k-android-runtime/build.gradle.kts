@@ -12,13 +12,13 @@ android {
         minSdk = 28
         ndk { abiFilters += androidAbis }
     }
-    sourceSets["main"].jniLibs.srcDir(rootProject.file("gdal4k-binary/build/android-runtime/jniLibs"))
+    sourceSets["main"].jniLibs.srcDir(rootProject.file("gdal4k-engine/build/android-runtime/jniLibs"))
     // A library AAR can retain jniLibs outside ndk.abiFilters, including stale producer outputs.
     packaging.jniLibs.excludes += (listOf("arm64-v8a", "x86_64", "armeabi-v7a", "x86") - androidAbis.toSet()).map { "**/$it/**" }
     publishing { singleVariant("release") }
 }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
-    dependsOn(androidAbis.map { abi -> ":gdal4k-binary:buildEngine" + "android-$abi".split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) } })
+    dependsOn(androidAbis.map { abi -> ":gdal4k-engine:buildEngine" + "android-$abi".split('-','_').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) } })
 }
 afterEvaluate {
     publishing.publications.create<MavenPublication>("androidRuntime") {
