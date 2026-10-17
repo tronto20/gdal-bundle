@@ -8,6 +8,8 @@ import kotlinx.serialization.json.*
 internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine, "0", null), GdalRuntime {
     override suspend fun createFeature(definition: FeatureDefn): Feature { val result = invoke("GdalRuntime", "createFeature_FeatureDefn", mapOf("definition" to handle(definition))); return requireNotNull(engine.wrapFeature(result, null)) }
     override suspend fun createFieldDefn(name: String, type: Int): FieldDefn { val result = invoke("GdalRuntime", "createFieldDefn_String_Int", mapOf("name" to encode(name), "type" to encode(type))); return requireNotNull(engine.wrapFieldDefn(result, null)) }
+    override suspend fun createCodedFieldDomain(name: String, description: String, fieldType: Int, values: List<CodedFieldValue>, fieldSubType: Int): FieldDomain { val result = invoke("GdalRuntime", "createCodedFieldDomain_String_String_Int_List_CodedFieldValue_Int", mapOf("name" to encode(name), "description" to encode(description), "fieldType" to encode(fieldType), "values" to encode(values), "fieldSubType" to encode(fieldSubType))); return requireNotNull(engine.wrapFieldDomain(result, null)) }
+    override suspend fun createRangeFieldDomain(name: String, description: String, fieldType: Int, minimum: FieldDomainBound?, maximum: FieldDomainBound?, fieldSubType: Int): FieldDomain { val result = invoke("GdalRuntime", "createRangeFieldDomain_String_String_Int_FieldDomainBound_FieldDomainBound_Int", mapOf("name" to encode(name), "description" to encode(description), "fieldType" to encode(fieldType), "minimum" to encode(minimum), "maximum" to encode(maximum), "fieldSubType" to encode(fieldSubType))); return requireNotNull(engine.wrapFieldDomain(result, null)) }
     override suspend fun createGlobFieldDomain(name: String, description: String, fieldType: Int, glob: String, fieldSubType: Int): FieldDomain { val result = invoke("GdalRuntime", "createGlobFieldDomain_String_String_Int_String_Int", mapOf("name" to encode(name), "description" to encode(description), "fieldType" to encode(fieldType), "glob" to encode(glob), "fieldSubType" to encode(fieldSubType))); return requireNotNull(engine.wrapFieldDomain(result, null)) }
     override suspend fun createRelationship(name: String, leftTable: String, rightTable: String, cardinality: Int): Relationship { val result = invoke("GdalRuntime", "createRelationship_String_String_String_Int", mapOf("name" to encode(name), "leftTable" to encode(leftTable), "rightTable" to encode(rightTable), "cardinality" to encode(cardinality))); return requireNotNull(engine.wrapRelationship(result, null)) }
     override suspend fun versionInfo(request: String): String { val result = invoke("GdalRuntime", "versionInfo_String", mapOf("request" to encode(request))); return result.jsonPrimitive.contentOrNull.orEmpty() }
@@ -523,6 +525,11 @@ internal class BundledGroup(engine: RuntimeEngine, id: String, parent: RuntimeHa
     override suspend fun createGroup(name: String, options: List<String>): Group? { val result = invoke("Group", "createGroup_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return engine.wrapGroup(result, this) }
     override suspend fun createDimension(name: String, size: Long, type: String, direction: String, options: List<String>): Dimension? { val result = invoke("Group", "createDimension_String_Long_String_String_List_String", mapOf("name" to encode(name), "size" to encode(size), "type" to encode(type), "direction" to encode(direction), "options" to encode(options))); return engine.wrapDimension(result, this) }
     override suspend fun createArray(name: String, dimensions: List<Dimension>, dataType: Int, options: List<String>): MDArray? { val result = invoke("Group", "createArray_String_List_Dimension_Int_List_String", mapOf("name" to encode(name), "dimensions" to encode(dimensions), "dataType" to encode(dataType), "options" to encode(options))); return engine.wrapMDArray(result, this) }
+    override suspend fun getAttribute(name: String): Attribute? { val result = invoke("Group", "getAttribute_String", mapOf("name" to encode(name))); return engine.wrapAttribute(result, this) }
+    override suspend fun getAttributes(options: List<String>): List<Attribute> { val result = invoke("Group", "getAttributes_List_String", mapOf("options" to encode(options))); return result.jsonArray.map { requireNotNull(engine.wrapAttribute(it, this)) } }
+    override suspend fun createAttribute(name: String, dimensions: LongArray, dataType: MDDataType, options: List<String>): Attribute? { val result = invoke("Group", "createAttribute_String_LongArray_MDDataType_List_String", mapOf("name" to encode(name), "dimensions" to encode(dimensions), "dataType" to encode(dataType), "options" to encode(options))); return engine.wrapAttribute(result, this) }
+    override suspend fun deleteAttribute(name: String, options: List<String>): Boolean { val result = invoke("Group", "deleteAttribute_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return result.jsonPrimitive.boolean }
+    override suspend fun createArray(name: String, dimensions: List<Dimension>, dataType: MDDataType, options: List<String>): MDArray? { val result = invoke("Group", "createArray_String_List_Dimension_MDDataType_List_String", mapOf("name" to encode(name), "dimensions" to encode(dimensions), "dataType" to encode(dataType), "options" to encode(options))); return engine.wrapMDArray(result, this) }
 }
 
 internal class BundledMDArray(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), MDArray {
@@ -533,6 +540,13 @@ internal class BundledMDArray(engine: RuntimeEngine, id: String, parent: Runtime
     override suspend fun getDataType(): Int { val result = invoke("MDArray", "getDataType", mapOf()); return result.jsonPrimitive.int }
     override suspend fun read(start: LongArray, count: LongArray): DoubleArray { val result = invoke("MDArray", "read_LongArray_LongArray", mapOf("start" to encode(start), "count" to encode(count))); return result.jsonArray.map { it.jsonPrimitive.content.toDouble() }.toDoubleArray() }
     override suspend fun write(start: LongArray, count: LongArray, values: DoubleArray): Boolean { val result = invoke("MDArray", "write_LongArray_LongArray_DoubleArray", mapOf("start" to encode(start), "count" to encode(count), "values" to encode(values))); return result.jsonPrimitive.boolean }
+    override suspend fun getAttribute(name: String): Attribute? { val result = invoke("MDArray", "getAttribute_String", mapOf("name" to encode(name))); return engine.wrapAttribute(result, this) }
+    override suspend fun getAttributes(options: List<String>): List<Attribute> { val result = invoke("MDArray", "getAttributes_List_String", mapOf("options" to encode(options))); return result.jsonArray.map { requireNotNull(engine.wrapAttribute(it, this)) } }
+    override suspend fun createAttribute(name: String, dimensions: LongArray, dataType: MDDataType, options: List<String>): Attribute? { val result = invoke("MDArray", "createAttribute_String_LongArray_MDDataType_List_String", mapOf("name" to encode(name), "dimensions" to encode(dimensions), "dataType" to encode(dataType), "options" to encode(options))); return engine.wrapAttribute(result, this) }
+    override suspend fun deleteAttribute(name: String, options: List<String>): Boolean { val result = invoke("MDArray", "deleteAttribute_String_List_String", mapOf("name" to encode(name), "options" to encode(options))); return result.jsonPrimitive.boolean }
+    override suspend fun getExtendedDataType(): MDDataType { val result = invoke("MDArray", "getExtendedDataType", mapOf()); return decodeMDType(result) }
+    override suspend fun readValues(start: LongArray, count: LongArray): List<MDValue> { val result = invoke("MDArray", "readValues_LongArray_LongArray", mapOf("start" to encode(start), "count" to encode(count))); return result.jsonArray.map(::decodeMDValue) }
+    override suspend fun writeValues(start: LongArray, count: LongArray, values: List<MDValue>): Boolean { val result = invoke("MDArray", "writeValues_LongArray_LongArray_List_MDValue", mapOf("start" to encode(start), "count" to encode(count), "values" to encode(values))); return result.jsonPrimitive.boolean }
 }
 
 internal class BundledDimension(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Dimension {
@@ -551,6 +565,9 @@ internal class BundledFieldDomain(engine: RuntimeEngine, id: String, parent: Run
     override suspend fun getDomainType(): Int { val result = invoke("FieldDomain", "getDomainType", mapOf()); return result.jsonPrimitive.int }
     override suspend fun getFieldType(): Int { val result = invoke("FieldDomain", "getFieldType", mapOf()); return result.jsonPrimitive.int }
     override suspend fun getFieldSubType(): Int { val result = invoke("FieldDomain", "getFieldSubType", mapOf()); return result.jsonPrimitive.int }
+    override suspend fun getCodedValues(): List<CodedFieldValue>? { val result = invoke("FieldDomain", "getCodedValues", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonArray.map(::decodeCodedValue) } }
+    override suspend fun getMinimum(): FieldDomainBound? { val result = invoke("FieldDomain", "getMinimum", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> decodeDomainBound(v) } }
+    override suspend fun getMaximum(): FieldDomainBound? { val result = invoke("FieldDomain", "getMaximum", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> decodeDomainBound(v) } }
     override suspend fun getGlob(): String? { val result = invoke("FieldDomain", "getGlob", mapOf()); return result.takeUnless { it is JsonNull }?.let { v -> v.jsonPrimitive.contentOrNull.orEmpty() } }
     override suspend fun getSplitPolicy(): Int { val result = invoke("FieldDomain", "getSplitPolicy", mapOf()); return result.jsonPrimitive.int }
     override suspend fun setSplitPolicy(policy: Int): Unit { invoke("FieldDomain", "setSplitPolicy_Int", mapOf("policy" to encode(policy))); return Unit }
@@ -574,6 +591,16 @@ internal class BundledRelationship(engine: RuntimeEngine, id: String, parent: Ru
     override suspend fun setType(type: Int): Unit { invoke("Relationship", "setType_Int", mapOf("type" to encode(type))); return Unit }
 }
 
+internal class BundledAttribute(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Attribute {
+    override suspend fun close() = closeHandle()
+    override suspend fun getName(): String { val result = invoke("Attribute", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getFullName(): String { val result = invoke("Attribute", "getFullName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
+    override suspend fun getDimensions(): LongArray { val result = invoke("Attribute", "getDimensions", mapOf()); return result.jsonArray.map { it.jsonPrimitive.content.toLong() }.toLongArray() }
+    override suspend fun getDataType(): MDDataType { val result = invoke("Attribute", "getDataType", mapOf()); return decodeMDType(result) }
+    override suspend fun readValues(): List<MDValue> { val result = invoke("Attribute", "readValues", mapOf()); return result.jsonArray.map(::decodeMDValue) }
+    override suspend fun writeValues(values: List<MDValue>): Boolean { val result = invoke("Attribute", "writeValues_List_MDValue", mapOf("values" to encode(values))); return result.jsonPrimitive.boolean }
+}
+
 internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: RuntimeHandle?): RuntimeHandle? {
     if (value is JsonNull) return null
     val id = value.jsonPrimitive.content
@@ -595,6 +622,7 @@ internal fun RuntimeEngine.wrap(type: String, value: JsonElement, parent: Runtim
         "Dimension" -> BundledDimension(this, id, parent)
         "FieldDomain" -> BundledFieldDomain(this, id, parent)
         "Relationship" -> BundledRelationship(this, id, parent)
+        "Attribute" -> BundledAttribute(this, id, parent)
         else -> error("Unknown GDAL handle type: $type")
     }
 }
@@ -615,3 +643,4 @@ internal fun RuntimeEngine.wrapMDArray(value: JsonElement, parent: RuntimeHandle
 internal fun RuntimeEngine.wrapDimension(value: JsonElement, parent: RuntimeHandle?): Dimension? = wrap("Dimension", value, parent) as Dimension?
 internal fun RuntimeEngine.wrapFieldDomain(value: JsonElement, parent: RuntimeHandle?): FieldDomain? = wrap("FieldDomain", value, parent) as FieldDomain?
 internal fun RuntimeEngine.wrapRelationship(value: JsonElement, parent: RuntimeHandle?): Relationship? = wrap("Relationship", value, parent) as Relationship?
+internal fun RuntimeEngine.wrapAttribute(value: JsonElement, parent: RuntimeHandle?): Attribute? = wrap("Attribute", value, parent) as Attribute?

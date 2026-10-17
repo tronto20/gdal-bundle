@@ -171,8 +171,8 @@ Dataset의 모든 호출은 공통 `suspend` API이며 기존 플랫폼별 실�
 - `getSpatialRef` / `setSpatialRef`: 공간 참조 객체와 연결합니다. 조회는 독립 복제본을 반환하므로 `use`로 닫습니다. 설정은 복사하며 `null`로 제거할 수 있습니다. `getAccess`, `addBand`, Dataset `createMaskBand`, `clearStatistics`도 제공합니다.
 - Dataset `readRaster` / `writeRaster`: Byte/Short/Int/Long/Float/Double 배열, 다중 밴드·window·출력 해상도를 지원합니다. 버퍼는 **band-sequential** 순서이며 밴드는 1부터 시작합니다. `RasterIOOptions.resampling`은 읽기에 적용합니다. Int64는 JSON에서 문자열로 전송해 정밀도를 보존합니다.
 - `createLayer`, `copyLayer`, `deleteLayer`, `executeSQL`, `startTransaction` / `commitTransaction` / `rollbackTransaction`: 벡터 관리. SQL 결과는 `Layer.use`로 해제하며 부모 Dataset을 닫을 때도 정리됩니다. 레이어 삭제는 활성 SQL 결과를 먼저 해제하고 해당 레이어의 기존 핸들을 무효화합니다. Dataset 마스크 재생성은 이전 밴드 마스크/overview 핸들을 무효화하므로 다시 조회합니다. `runtime.createFieldDefn`, `Layer.createField`, `runtime.createFeature`로 새 레이어의 피처를 구성합니다.
-- `Driver.createMultidimensional`, `Dataset.getRootGroup`, `Group` / `Dimension` / `MDArray`: 그룹·차원·숫자 배열 생성과 탐색, 부분 읽기·쓰기. `DatasetKind.Multidimensional`로 다차원 파일을 엽니다. 현재 MDArray slice는 Float64 변환으로 읽고 쓰며, 큰 Int64의 정밀도가 필요한 용도로 사용하지 않습니다. 문자열·복합 배열과 attribute API는 아직 노출하지 않습니다.
-- 필드 도메인·관계 이름 조회 및 추가·조회·갱신·삭제. `createGlobFieldDomain`과 `createRelationship`으로 객체를 만듭니다. 조회 결과는 독립 복제본입니다. coded/range 도메인의 생성과 상세 값 API는 아직 노출하지 않습니다.
+- `Driver.createMultidimensional`, `Dataset.getRootGroup`, `Group` / `Dimension` / `MDArray`: 그룹·차원·숫자 배열 생성과 탐색, 부분 읽기·쓰기. `DatasetKind.Multidimensional`로 다차원 파일을 엽니다. `read`/`write`는 기존 Float64 변환 API입니다. `readValues`/`writeValues`는 문자열·복합 레코드·복소수·Int64/UInt64를 저장된 타입으로 다루며 요청한 부분만 읽습니다.
+- 필드 도메인·관계 이름 조회 및 추가·조회·갱신·삭제. `createCodedFieldDomain` / `createRangeFieldDomain` / `createGlobFieldDomain`과 `createRelationship`으로 객체를 만듭니다. 조회 결과는 독립 복제본입니다.
 
 API가 존재해도 드라이버가 해당 기능이나 수정을 지원해야 합니다. 지원 여부는 capability와 반환 코드로 판단하며, 도메인·관계 수정 실패는 설명을 포함한 예외를 반환합니다. 기존 HDF5/netCDF 등 선택적 드라이버를 새로 번들하지 않습니다. GDAL의 전체 API를 모두 노출한다는 의미는 아닙니다.
 
@@ -201,3 +201,42 @@ JVM·Android·Native의 출력은 접근 가능한 OS/GDAL VSI 경로입니다. 
 출력 경로와 sidecar 파일은 호출자가 소유합니다. 오류나 취소 후 부분 파일이 남을 수 있으며 라이브러리가 기존 사용자 파일을 삭제하지 않습니다. 정상 반환은 GDAL 출력 close까지 성공했다는 뜻입니다. GDAL 드라이버의 블록 캐시·압축·재투영 작업 메모리는 계속 필요합니다. `/vsimem/`을 명시하면 그 출력은 메모리를 사용합니다.
 
 CRS 객체의 축 순서는 GDAL 규칙을 따릅니다. 경도/위도 순서의 GeoTransform과 함께 쓸 경우 공간 참조에 `setAxisMappingStrategy(0)`을 설정합니다. GPKG처럼 스키마 생성을 지연하는 드라이버는 레이어/필드 생성 후 `flushCache()`로 스키마를 확정한 뒤 트랜잭션을 시작하는 편이 안전합니다.
+
+
+### 다차원 문자열·복합 레코드와 attribute
+
+`MDDataType.Numeric(GdalDataType.Int64)`, `MDDataType.Text(maxLength = 0)`, `MDDataType.Compound(name, components)`로 스키마를 만듭니다. 복합 타입의 메모리 정렬과 필드 위치, 문자열 할당·해제는 엔진이 관리합니다. 중첩 타입은 최대 32단계입니다. `Text.maxLength`는 UTF-8 바이트 수이며 0은 무제한입니다.
+
+```kotlin
+val runtime = Gdal4k.runtime()
+requireNotNull(runtime.getDriver("MEM")).use { driver ->
+    requireNotNull(driver.createMultidimensional("")).use { dataset ->
+        requireNotNull(dataset.getRootGroup()).use { group ->
+            val dim = requireNotNull(group.createDimension("sample", 2))
+            val type = MDDataType.Compound("observation", listOf(
+                MDComponent("id", MDDataType.Numeric(GdalDataType.UInt64)),
+                MDComponent("label", MDDataType.Text()),
+            ))
+            requireNotNull(group.createArray("observations", listOf(dim), type)).use { array ->
+                check(array.writeValues(longArrayOf(0), longArrayOf(1), listOf(
+                    MDValue.Record(listOf(MDValue.Numeric("18446744073709551615"), MDValue.Text("영상"))),
+                )))
+                val first = array.readValues(longArrayOf(0), longArrayOf(1))
+                requireNotNull(array.createAttribute("units", longArrayOf(), MDDataType.Text())).use {
+                    check(it.writeValues(listOf(MDValue.Text("reflectance"))))
+                }
+            }
+        }
+    }
+}
+```
+
+`MDValue.Numeric`는 숫자를 텍스트로 전송하여 JS에서도 64비트 정수의 모든 비트를 유지합니다. `Long`/`Int`/`Double` 편의 생성자도 제공합니다. 실수에는 `NaN` / `Infinity` / `-Infinity`를 사용할 수 있습니다. 복소수 타입은 `Numeric(real, imaginary)`를 사용합니다. 읽은 실수 텍스트는 반올림 복원에 충분한 정밀도로 정규화되므로 입력 텍스트의 형식까지 보존하지는 않습니다. `Record.fields`는 스키마의 필드 순서이며 중첩 레코드도 같은 규칙입니다. `Text(null)`과 `Text("")`는 구분합니다. NUL 문자열, 정수 범위 초과, 스키마 불일치, 잘못된 window·요소 수는 쓰기 호출 전에 거부합니다. 이후 드라이버 자체의 쓰기 실패는 트랜잭션으로 취급하지 않습니다.
+
+`Group`과 `MDArray` 모두 attribute 생성·단건/목록 조회·삭제를 제공합니다. attribute는 작은 메타데이터이므로 값 전체를 읽고 쓰며, 빈 차원 배열은 scalar입니다. 배열 데이터는 `start`와 `count`로 필요한 부분만 요청합니다. attribute를 삭제하면 열린 별칭을 무효화하고, 부모를 닫으면 하위 핸들도 닫습니다. 각 드라이버의 타입·차원·쓰기 지원 여부는 GDAL에 따릅니다. 번들에 없는 netCDF/HDF5 드라이버가 추가되지는 않습니다.
+
+### Coded·range 도메인
+
+`CodedFieldValue(code, label)`은 nullable label을 지원하며 중복 코드는 거부합니다. `FieldDomain.getCodedValues()`는 coded 도메인에서만 목록을 반환합니다. `FieldDomainBound(value, inclusive)`로 숫자 텍스트 또는 DateTime을 지정하고, `null`은 해당 방향에 한계가 없다는 뜻입니다. range 도메인은 GDAL이 지원하는 Integer(0), Real(2), DateTime(11), Integer64(12)를 사용하며 `getMinimum` / `getMaximum`으로 경계를 조회합니다. DateTime은 ISO 8601로 읽어 옵니다. 다른 종류의 도메인을 조회한 경우 상세 값은 `null`입니다.
+
+독립 도메인과 배열의 Int64 값은 정확히 전달합니다. 다만 GDAL 3.12.4의 GeoPackage 드라이버는 range 경계를 REAL로 저장합니다. 이때 정밀도를 잃는 Integer64 경계값은 `addFieldDomain` / `updateFieldDomain`에서 저장 전에 명확히 거부합니다. 다른 드라이버·파일 형식의 저장 제약도 별도로 확인해야 합니다. 이 API 확장은 GDAL 전체 API의 완전한 노출을 의미하지 않습니다.

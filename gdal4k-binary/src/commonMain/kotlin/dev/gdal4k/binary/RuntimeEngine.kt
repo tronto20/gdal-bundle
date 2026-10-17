@@ -58,7 +58,7 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         require(h.engine === engine) { "Handle belongs to another GDAL runtime" }
         h.checkOpen()
         val type = when(value) {
-            is Group -> "Group"; is MDArray -> "MDArray"; is Dimension -> "Dimension"
+            is Attribute -> "Attribute"; is Group -> "Group"; is MDArray -> "MDArray"; is Dimension -> "Dimension"
             is FieldDomain -> "FieldDomain"; is Relationship -> "Relationship"
             is Dataset -> "Dataset"; is Driver -> "Driver"; is Band -> "Band"
             is SpatialReference -> "SpatialReference"; is CoordinateTransformation -> "CoordinateTransformation"
@@ -70,6 +70,10 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
     }
     fun encode(value: Any?): JsonElement = when(value) {
         null -> JsonNull
+        is MDDataType -> encodeMDType(value)
+        is MDValue -> encodeMDValue(value)
+        is CodedFieldValue -> buildJsonObject { put("code", encode(value.code)); put("label", encode(value.label)) }
+        is FieldDomainBound -> buildJsonObject { put("value", encode(value.value)); put("inclusive", value.inclusive) }
         is RasterIOOptions -> buildJsonObject {
             put("xOffset", value.xOffset); put("yOffset", value.yOffset)
             put("xSize", value.xSize); put("ySize", value.ySize)

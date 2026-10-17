@@ -8,6 +8,11 @@ interface FieldDomain {
     suspend fun getDomainType(): Int
     suspend fun getFieldType(): Int
     suspend fun getFieldSubType(): Int
+    /** Null for non-coded domains. */
+    suspend fun getCodedValues(): List<CodedFieldValue>?
+    /** Null for non-range domains or an unbounded endpoint. */
+    suspend fun getMinimum(): FieldDomainBound?
+    suspend fun getMaximum(): FieldDomainBound?
     suspend fun getGlob(): String?
     suspend fun getSplitPolicy(): Int
     suspend fun setSplitPolicy(policy: Int)

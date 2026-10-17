@@ -16,6 +16,13 @@
 #include <vector>
 #include <atomic>
 
+#include <cstring>
+#include <charconv>
+#include <cpl_float.h>
+#include <iomanip>
+#include <sstream>
+#include <set>
+
 namespace g4k {
 inline void require(bool ok,const char* message) { if(!ok) throw std::runtime_error(message); }
 inline CPLJSONObject nullValue() { CPLJSONObject o; o.AddNull("value");return o; }
@@ -104,6 +111,7 @@ struct Runtime {
         }
         else if(e.type=="Group")GDALGroupRelease(static_cast<GDALGroupH>(e.pointer));
         else if(e.type=="MDArray")GDALMDArrayRelease(static_cast<GDALMDArrayH>(e.pointer));
+        else if(e.type=="Attribute")GDALAttributeRelease(static_cast<GDALAttributeH>(e.pointer));
         else if(e.type=="Dimension")GDALDimensionRelease(static_cast<GDALDimensionH>(e.pointer));
         else if(e.type=="FieldDomain")OGR_FldDomain_Destroy(static_cast<OGRFieldDomainH>(e.pointer));
         else if(e.type=="Relationship")GDALDestroyRelationship(e.pointer);
@@ -230,6 +238,7 @@ inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) 
     GDALExtendedDataTypeRelease(edt);if(write)return value(ok!=0);
     require(ok!=0,"Multidimensional read failed");return numbers(data.data(),data.size());
 }
+#include "runtime-md.hpp"
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));

@@ -12,6 +12,13 @@ interface Group {
     suspend fun createGroup(name: String, options: List<String> = emptyList()): Group?
     suspend fun createDimension(name: String, size: Long, type: String = "", direction: String = "", options: List<String> = emptyList()): Dimension?
     suspend fun createArray(name: String, dimensions: List<Dimension>, dataType: Int, options: List<String> = emptyList()): MDArray?
+    suspend fun getAttribute(name: String): Attribute?
+    suspend fun getAttributes(options: List<String> = emptyList()): List<Attribute>
+    /** Empty dimensions create a scalar attribute. */
+    suspend fun createAttribute(name: String, dimensions: LongArray, dataType: MDDataType, options: List<String> = emptyList()): Attribute?
+    suspend fun deleteAttribute(name: String, options: List<String> = emptyList()): Boolean
+    suspend fun createArray(name: String, dimensions: List<Dimension>, dataType: MDDataType, options: List<String> = emptyList()): MDArray?
+
 }
 
 suspend inline fun <T : Group, R> T.use(block: (T) -> R): R {

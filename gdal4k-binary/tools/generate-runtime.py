@@ -8,7 +8,7 @@ engine target, so an API/version mismatch cannot become a published stub.
 from pathlib import Path
 import re
 ROOT = Path(__file__).resolve().parents[2]
-TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry','Group','MDArray','Dimension','FieldDomain','Relationship']
+TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry','Group','MDArray','Dimension','FieldDomain','Relationship','Attribute']
 
 def methods(cls):
     text = '\n'.join(p.read_text() for p in (ROOT/'gdal4k-runtime/src/commonMain/kotlin/dev/gdal4k/runtime').glob('*.kt'))
@@ -45,6 +45,10 @@ def kt_result(typ,expr,parent):
         out=f'{expr}.jsonArray.map {{ it.jsonPrimitive.content.{cv}() }}.to{t}()'
     elif t=='List<String>':out=f'{expr}.jsonArray.map {{ it.jsonPrimitive.content }}'
     elif t=='List<DoubleArray>':out=f'{expr}.jsonArray.map {{ p -> p.jsonArray.map {{ it.jsonPrimitive.content.toDouble() }}.toDoubleArray() }}'
+    elif t=='MDDataType':out=f'decodeMDType({expr})'
+    elif t=='FieldDomainBound':out=f'decodeDomainBound({expr})'
+    elif t=='List<CodedFieldValue>':out=f'{expr}.jsonArray.map(::decodeCodedValue)'
+    elif t=='List<MDValue>':out=f'{expr}.jsonArray.map(::decodeMDValue)'
     elif t=='GdalFiles':out=f'decodeFiles({expr})'
     elif t=='List<GdalDriver>':out=f'{expr}.jsonArray.map {{ it.jsonObject.let {{ d -> GdalDriver(d.getValue("name").jsonPrimitive.content, d.getValue("longName").jsonPrimitive.content, d.getValue("raster").jsonPrimitive.boolean, d.getValue("vector").jsonPrimitive.boolean) }} }}'
     elif t.startswith('List<') and t[5:-1] in TYPES:out=f'{expr}.jsonArray.map {{ requireNotNull(engine.wrap{t[5:-1]}(it, {parent})) }}'
@@ -99,7 +103,8 @@ for typ,arg in [('FieldDomain','domain'),('Relationship','relationship')]:
     special('Dataset','get'+typ+'Names',f'auto p=GDALDatasetGet{typ}Names(h,nullptr);auto out=strings(p);CSLDestroy(p);return out;')
     for op in ['add','update','delete']:
         operand='a["name"].ToString().c_str()' if op=='delete' else f'static_cast<OGRFieldDomainH>(r.arg(a["{arg}"]))' if typ=='FieldDomain' else f'r.arg(a["{arg}"])'
-        special('Dataset',op+typ,f'char* reason=nullptr;auto ok=GDALDataset{op.capitalize()}{typ}(h,{operand},&reason);std::string message=reason?reason:"GDAL {op} {typ} failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();')
+        guard='validateDomainStorage(h,static_cast<OGRFieldDomainH>(r.arg(a["domain"])));' if typ=='FieldDomain' and op!='delete' else ''
+        special('Dataset',op+typ,f'{guard}char* reason=nullptr;auto ok=GDALDataset{op.capitalize()}{typ}(h,{operand},&reason);std::string message=reason?reason:"GDAL {op} {typ} failed";CPLFree(reason);if(!ok)throw std::runtime_error(message);return nullValue();')
 special('GdalRuntime','createGlobFieldDomain','return r.result(OGR_GlobFldDomain_Create(a["name"].ToString().c_str(),a["description"].ToString().c_str(),static_cast<OGRFieldType>(a.GetInteger("fieldType")),static_cast<OGRFieldSubType>(a.GetInteger("fieldSubType")),a["glob"].ToString().c_str()),"FieldDomain",true);')
 special('GdalRuntime','createRelationship','auto c=a.GetInteger("cardinality");require(c>=0&&c<=3,"Invalid relationship cardinality");return r.result(GDALRelationshipCreate(a["name"].ToString().c_str(),a["leftTable"].ToString().c_str(),a["rightTable"].ToString().c_str(),static_cast<GDALRelationshipCardinality>(c)),"Relationship",true);')
 special('FieldDomain','getGlob','return value(OGR_FldDomain_GetDomainType(h)==OFDT_GLOB?OGR_GlobFldDomain_GetGlob(h):nullptr);')
@@ -116,6 +121,27 @@ special('MDArray','getDimensions','size_t n=0;auto dims=GDALMDArrayGetDimensions
 special('MDArray','getDataType','auto type=GDALMDArrayGetDataType(h);auto numeric=GDALExtendedDataTypeGetClass(type)==GEDTC_NUMERIC?GDALExtendedDataTypeGetNumericDataType(type):GDT_Unknown;GDALExtendedDataTypeRelease(type);return value(numeric);')
 special('MDArray','read','return mdRaster(h,a,false);')
 special('MDArray','write','return mdRaster(h,a,true);')
+
+# Extended multidimensional values keep all ABI layout and dynamic allocations inside the engine.
+PREFIX['Attribute']='GDALAttribute'
+OWNED.update({('GdalRuntime','createCodedFieldDomain'),('GdalRuntime','createRangeFieldDomain')})
+special('Group','createArray_String_List_Dimension_MDDataType_List_String','return createExtendedArray(r,h,a,id);')
+special('MDArray','getExtendedDataType','return extendedTypeResult(GDALMDArrayGetDataType(h));')
+for op in ['readValues','writeValues']:
+    special('MDArray',op,'return mdValues(h,a,'+str(op=='writeValues').lower()+');')
+for owner in ['Group','MDArray']:
+    for op in ['getAttribute','getAttributes','createAttribute','deleteAttribute']:
+        PARENT_OWNED.add((owner,op))
+        special(owner,op,f'return attributeOperation(r,h,a,id,"{owner}","{op}");')
+special('Attribute','getDataType','return extendedTypeResult(GDALAttributeGetDataType(h));')
+special('Attribute','getDimensions','size_t n=0;auto p=GDALAttributeGetDimensionsSize(h,&n);auto out=numbers(p,n);CPLFree(p);return out;')
+special('Attribute','readValues','return attributeValues(h,a,false);')
+special('Attribute','writeValues','return attributeValues(h,a,true);')
+special('GdalRuntime','createCodedFieldDomain','return createCodedDomain(r,a);')
+special('GdalRuntime','createRangeFieldDomain','return createRangeDomain(r,a);')
+special('FieldDomain','getCodedValues','return codedDomainValues(h);')
+special('FieldDomain','getMinimum','return rangeDomainBound(h,true);')
+special('FieldDomain','getMaximum','return rangeDomainBound(h,false);')
 
 OWNED.update({('GdalRuntime','createFeature'),('GdalRuntime','createFieldDefn')})
 special('GdalRuntime','createFeature','return r.result(OGR_F_Create(r.arg(a["definition"])),"Feature",true);')
@@ -238,9 +264,9 @@ for cls in TYPES:
             body='val result = '+call+'; return '+kt_result(ret,'result',parent)
         kt.append(f'    override suspend fun {name}({argstr}): {ret} {{ {body} }}')
         cpp.append(f'    if(type=="{cls}" && method=="{sig}") {{')
-        custom=SPECIAL.get((cls,name))
+        custom=SPECIAL.get((cls,sig), SPECIAL.get((cls,name)))
         if custom:
-            cast={'Group':'GDALGroupH','MDArray':'GDALMDArrayH','Dimension':'GDALDimensionH','FieldDomain':'OGRFieldDomainH'}.get(cls)
+            cast={'Group':'GDALGroupH','MDArray':'GDALMDArrayH','Dimension':'GDALDimensionH','Attribute':'GDALAttributeH','FieldDomain':'OGRFieldDomainH'}.get(cls)
             if cast:custom=re.sub(r'\bh\b',f'static_cast<{cast}>(h)',custom)
             cpp.append('        '+custom)
         else:

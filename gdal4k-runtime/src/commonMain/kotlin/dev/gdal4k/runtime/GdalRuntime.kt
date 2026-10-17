@@ -10,6 +10,8 @@ interface GdalRuntime {
     suspend fun createFeature(definition: FeatureDefn): Feature
     suspend fun createFieldDefn(name: String, type: Int): FieldDefn
 
+    suspend fun createCodedFieldDomain(name: String, description: String, fieldType: Int, values: List<CodedFieldValue>, fieldSubType: Int = 0): FieldDomain
+    suspend fun createRangeFieldDomain(name: String, description: String, fieldType: Int, minimum: FieldDomainBound?, maximum: FieldDomainBound?, fieldSubType: Int = 0): FieldDomain
     suspend fun createGlobFieldDomain(name: String, description: String, fieldType: Int, glob: String, fieldSubType: Int = 0): FieldDomain
     suspend fun createRelationship(name: String, leftTable: String, rightTable: String, cardinality: Int = 0): Relationship
 
