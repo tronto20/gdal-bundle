@@ -313,6 +313,7 @@ data class DatasetOpenOptions(
     val accessMode: DatasetAccessMode = DatasetAccessMode.ReadOnly,
     val kind: DatasetKind = DatasetKind.Any,
     val openOptions: List<String> = emptyList(),
+    val httpInputPolicy: HttpInputPolicy? = null,
 )
 
 data class DatasetInfoOptions(

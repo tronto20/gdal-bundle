@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.io.encoding.Base64
 
 internal class RuntimeEngine(private val transport: GdalTransport) {
+    val supportsHttpInputPolicy: Boolean get() = transport.supportsHttpInputPolicy
     private val mutex = Mutex()
     private var closed = false
     suspend fun close() = withContext(NonCancellable) { mutex.withLock {
@@ -29,6 +30,12 @@ internal class RuntimeEngine(private val transport: GdalTransport) {
             putJsonObject("args") {
                 put("type", type); put("handle", handle); put("method", method)
                 put("parameters", JsonObject(parameters))
+            }
+        }
+        if ((parameters["options"] as? JsonObject)?.containsKey("httpInputPolicy") == true) {
+            require(type == "GdalRuntime" && method == "openDataset_String_DatasetOpenOptions" &&
+                parameters["source"]?.jsonPrimitive?.content?.let { it.startsWith("http://", true) || it.startsWith("https://", true) } == true) {
+                "HTTP input policy requires a direct HTTP(S) URL"
             }
         }
         val response = Json.parseToJsonElement(transport.call(request.toString(), attachment)).jsonObject
@@ -107,6 +114,14 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
             put("update", value.accessMode == DatasetAccessMode.Update)
             put("kind", when(value.kind) { DatasetKind.Any -> 0; DatasetKind.Raster -> 2; DatasetKind.Vector -> 4; DatasetKind.Multidimensional -> 16 })
             put("options", encode(value.openOptions))
+            value.httpInputPolicy?.let { policy ->
+                require(engine.supportsHttpInputPolicy) { "HTTP input policy requires the JS/wasmJs HTTP backend; Native/JNI support is not provided by the default engine" }
+                putJsonObject("httpInputPolicy") {
+                    put("requestTimeoutMillis", policy.requestTimeoutMillis); put("maxRetries", policy.maxRetries)
+                    put("retryDelayMillis", policy.retryDelayMillis); put("maxRetryDelayMillis", policy.maxRetryDelayMillis)
+                    put("requireStrongETag", policy.requireStrongETag)
+                }
+            }
         }
         is DatasetInfoOptions -> buildJsonObject { put("arguments", encode(value.arguments)) }
         is GdalFiles -> buildJsonObject {
