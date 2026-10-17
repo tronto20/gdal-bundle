@@ -8,7 +8,7 @@ internal data class GdalOptions(
 
 internal interface GdalTransport {
     val supportsHttpInputPolicy: Boolean get() = false
-    suspend fun call(request: String, attachment: Any? = null): String
+    suspend fun call(request: String, attachment: Any? = null, control: GdalCallControl? = null): String
     suspend fun close()
 }
 internal expect suspend fun createTransport(options: GdalOptions): GdalTransport

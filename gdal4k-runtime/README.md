@@ -337,3 +337,23 @@ source.rasterizeTo(
 필터링하고 변경 시 읽기를 초기화합니다. 공간/속성 조건은 함께 적용되지만 `getFeature(fid)`는
 필터를 무시합니다. 드라이버의 envelope 후보 판정 가능성을 포함한 정확한 계약과 예시는
 [OGR 사용법](../README.md#ogr-geometry-생성과-공간-조회)을 참고하세요.
+
+### GDAL 진행률과 협력적 취소
+
+```kotlin
+val files = withGdalProgress({ progress ->
+    // 콜백은 짧고 thread-safe해야 합니다. UI에는 Flow/Channel 등으로 전달하세요.
+    println("${progress.operation}: ${progress.fraction * 100}% ${progress.message}")
+    true // false를 반환하면 현재 native 호출의 취소를 요청
+}) {
+    source.warp("EPSG:3857", "-r", "bilinear", driver = "GTiff")
+}
+```
+
+`withGdalProgress`는 시그니처를 바꾸지 않고 블록의 각 GDAL 호출을 관찰합니다. 각 호출마다 fraction0~1과 메시지를 새로 보고하며, 빠른 호출은 마지막 샘플만 전달할 수 있습니다. GDAL이 중간 콜백을 제공하지 않는 드라이버·작업은 호출 경계에서만 취소를 확인합니다. Translate/Warp/VectorTranslate/DEM/Rasterize/BuildVRT/Polygonize, CreateCopy/overviews, band statistics/histograms와 RasterIO의 실제 GDAL 콜백을 연결합니다. 여러 단계의 fraction을 전체 블록의 선형 완료율로 해석하지 않습니다.
+
+긴 작업은 관찰자를 설치하지 않아도 호출자 Job 취소를 확인합니다. 관찰자에서 false를 반환하거나 코루틴을 취소하면 CancellationException을 전달하되, native 실행 종료와 정리를 기다립니다. 관찰자 예외는 GDAL UserInterrupt로 바꾸지 않고 원래 오류(코루틴 stacktrace 복원 시 cause 포함)를 보존합니다. 콜백은 같은 런타임을 다시 호출하거나 차단하지 않아야 합니다. 서로 다른 런타임은 동일 관찰자를 동시에 호출할 수 있습니다. 중간 콜백 사이의 취소 지연이나 드라이버의 무응답을 강제 중단으로 해결하지 않습니다.
+
+JNI·Native는 독립 control의 atomic 취소/진행률을 읽으며 GDAL native 콜백에서 Kotlin을 재진입하지 않습니다. 웹 Worker는 진행률 콜백에서 ordinary single-thread Wasm을 yield하고 취소 메시지를 실행 큐 밖에서 처리합니다. 작업·입력 핸들이 살아 있는 동안 Worker를 종료하거나 native 스레드를 강제 종료하지 않습니다. 취소/관찰자 실패 직전에 만들어진 반환 핸들도 모두 닫은 뒤 예외를 전달합니다. VRT의 입력 lease, URI/Node/OPFS mount와 directory descriptor는 실제 Dataset 해제 시점까지 유지됩니다.
+
+입력은 호출자 소유이며 이미 쓴 출력·cursor·metadata 변경은 rollback하지 않습니다. 직접 출력의 부분 파일도 호출자가 정리합니다. HTTP·파일 mount 단계의 전송 정책은 별개이며, native 진행률 자체가 전송 제한 시간이나 무조건적인 네트워크 중단을 제공하지는 않습니다.
