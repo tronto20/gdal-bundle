@@ -19,6 +19,7 @@ p.add_argument('--target',choices=['js','wasmJs'],default='js')
 p.add_argument('--browser-only',action='store_true')
 p.add_argument('--memory-only',action='store_true',help='Measure external-asset engine initialization instead of input tests')
 p.add_argument('--workload',action='store_true',help='Include full-raster checksum and 1024x1024 JXL work in memory measurements')
+p.add_argument('--window-only',action='store_true',help='Measure just one 512x512 read instead of the full-raster/JXL workload')
 p.add_argument('--profile-label',default='optimized',help='Name the local memory experiment without overwriting its baseline')
 a=p.parse_args()
 with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
@@ -83,6 +84,10 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
                 data=b'<!doctype html><input type="file" id="file">'
                 self.send_response(200);self.send_header('Content-Type','text/html');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data);return
             if route=='/missing.tif':self.send_error(404);return
+            # GDAL now probes real sibling names. Unknown sidecars must not return
+            # the large TIFF as if it were an XML, DBF, or overview file.
+            if route not in {'/large.tif','/no-range.tif','/changed.tif','/wrong-range.tif','/no-cors.tif','/no-expose.tif'}:
+                self.send_response(404);self.cors();self.end_headers();return
             header=self.headers.get('Range','')
             if not header.startswith('bytes='):self.send_error(400);return
             start,end=map(int,header[6:].split('-'));total=image.stat().st_size
@@ -107,7 +112,7 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     url=f'http://127.0.0.1:{server.server_port}'
     archive=io.BytesIO()
     with zipfile.ZipFile(archive,'w') as z:z.writestr('small.tif',(ROOT/'verification/fixtures/sample.tif').read_bytes())
-    config={'output':str(work/'memory.json'),'zip':base64.b64encode(archive.getvalue()).decode(),'assets':str(assets),'url':url,'file':str(image),'browserOnly':a.browser_only,'root':str(ROOT),'workload':a.workload,'compactRead':(assets/'gdal4k-resources.mjs').exists()}
+    config={'output':str(work/'memory.json'),'zip':base64.b64encode(archive.getvalue()).decode(),'assets':str(assets),'url':url,'file':str(image),'browserOnly':a.browser_only,'root':str(ROOT),'workload':a.workload or a.window_only,'windowOnly':a.window_only,'compactRead':(assets/'gdal4k-resources.mjs').exists()}
     config_file=work/'config.json';config_file.write_text(json.dumps(config))
     try:subprocess.run(['node',str(ROOT/('verification/web-memory.mjs' if a.memory_only else 'verification/web-inputs.mjs')),str(config_file)],check=True,cwd=ROOT)
     finally:server.shutdown();server.server_close()

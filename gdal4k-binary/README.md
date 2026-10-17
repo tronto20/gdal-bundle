@@ -41,7 +41,7 @@ python3 verification/consumer.py --target wasmJs
 
 웹 엔진은 `gdal3.js`를 사용하지 않습니다. 자체 빌드한 `gdal4k.mjs`, `gdal4k.wasm`, Worker와 입력 어댑터를 JS/wasmJs KLIB에 같은 정적 자산으로 넣습니다. 엔진을 Kotlin/Base64 문자열로 펼치거나 Blob/data URL로 모듈을 재생성하지 않습니다. Kotlin Gradle의 Maven→로컬 npm 추출과 webpack의 정적 `new URL(..., import.meta.url)` 처리로 앱에 자산을 함께 배포합니다. 별도 npm 엔진 게시, CDN 또는 앱의 GDAL 경로 설정이 필요하지 않습니다.
 
-브라우저는 별도 `.wasm` 응답을 스트리밍 컴파일하고, Node는 파일 자산을 로드합니다. 앱 호스팅은 `.wasm`에 `application/wasm` MIME을 제공해야 스트리밍 컴파일을 사용할 수 있으며, 전송량을 줄이려면 일반 정적 자산처럼 gzip/Brotli 압축과 캐시를 적용합니다. KLIB 게시와 독립 Kotlin 소비 테스트에 필요한 자산이 빠지면 검증이 실패합니다.
+브라우저는 별도 `.wasm` 응답을 스트리밍 컴파일합니다. Node는 엔진 파일의 정확한 범위를 가리키는 `ArrayBuffer`를 전달해 Emscripten이 `Buffer` 내용을 다시 복사하는 단계를 없앱니다. 엔진 파일 바이트는 초기 컴파일에 필요하지만 입력 영상 전체를 적재하는 것은 아닙니다. 앱 호스팅은 `.wasm`에 `application/wasm` MIME을 제공해야 스트리밍 컴파일을 사용할 수 있으며, 전송량을 줄이려면 일반 정적 자산처럼 gzip/Brotli 압축과 캐시를 적용합니다. KLIB 게시와 독립 Kotlin 소비 테스트에 필요한 자산이 빠지면 검증이 실패합니다.
 
 웹 입력은 GDAL VSI 콜백을 Worker의 비동기 읽기에 연결합니다. Asyncify로 C 호출을 대기·재개하므로 SharedArrayBuffer, COOP/COEP 또는 JSPI를 요구하지 않습니다. Asyncify는 Wasm 코드 크기와 실행 비용을 추가하므로 로딩 방식 변경의 메모리 효과와 함께 측정합니다.
 
@@ -76,6 +76,8 @@ python3 verification/web-inputs.py --repo verification/build/consumer-maven --ta
 python3 verification/web-inputs.py --memory-only
 # 동일 sparse TIFF 전체 checksum·JXL 변환·window 읽기의 전후 비교
 python3 verification/web-inputs.py --memory-only --workload --profile-label after
+# 필요한 window만 읽는 경우를 별도로 측정
+python3 verification/web-inputs.py --memory-only --window-only --profile-label window-after
 ```
 
 256 MiB sparse TIFF에서 처음·마지막 window의 정확한 픽셀을 HTTP Range, 선택한 브라우저 File, Node 디스크 경로로 검사합니다. Range 미지원·잘못된 Content-Range·파일 변경·CORS 오류 뒤의 복구, 64 KiB 요청과 전체 8 MiB 캐시 상한 및 close 시 캐시 반환도 검사합니다. 입력을 `/vsimem`에 복사하지 않습니다. 브라우저의 파일 선택 권한은 File 객체를 얻기 전에 앱이 처리합니다.

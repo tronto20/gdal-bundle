@@ -7,6 +7,13 @@ const port = node ? process.getBuiltinModule('worker_threads').parentPort : glob
 const wasmUrl = new URL('./gdal4k.wasm', import.meta.url);
 let module, context, inputs, queue = Promise.resolve();
 const datasets = new Map();
+function nodeWasmBinary() {
+    const bytes = process.getBuiltinModule('fs').readFileSync(wasmUrl);
+    // Emscripten makes a copy of a Buffer/Uint8Array, but only a view of an
+    // ArrayBuffer. Preserve the exact file range if Node used a pooled buffer.
+    return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+        ? bytes.buffer : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
 async function execute(request) {
     const pointer = await module.ccall('gdal4k_execute', 'number', ['number', 'string'], [context, JSON.stringify(request)], {async: true});
     if (!pointer) throw new Error('GDAL allocation failed');
@@ -17,11 +24,8 @@ async function dispatch({id, operation, payload, file}) {
     try {
         let result = null;
         if (operation === 'init') {
-            const options = node
-                ? {wasmBinary: process.getBuiltinModule('fs').readFileSync(wasmUrl)}
-                : {locateFile: () => wasmUrl.href};
-            module = await createModule(options);
-            delete options.wasmBinary;
+            const options = node ? {wasmBinary: nodeWasmBinary()} : {locateFile: () => wasmUrl.href};
+            try { module = await createModule(options); } finally { delete options.wasmBinary; }
             inputs = new Inputs();
             inputs.registerResources(resources, resourceUrl, resourceBytes);
             module.gdal4kInputs = inputs;

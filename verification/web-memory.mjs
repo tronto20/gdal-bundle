@@ -12,7 +12,7 @@ import {workload} from ${JSON.stringify(new URL('./web-workload.mjs', import.met
 const before=process.memoryUsage().rss;let peak=before;
 const timer=setInterval(()=>peak=Math.max(peak,process.memoryUsage().rss),5);
 const start=performance.now();const bridge=await createGdalWorker();const initMs=performance.now()-start;const initialized=process.memoryUsage().rss;
-const work=${config.workload ? `await workload(bridge,${JSON.stringify(config.file)},${config.compactRead})` : 'null'};
+const work=${config.workload ? `await workload(bridge,${JSON.stringify(config.file)},${config.compactRead},${config.windowOnly})` : 'null'};
 await new Promise(r=>setTimeout(r,1000));clearInterval(timer);
 console.log(JSON.stringify({beforeRssBytes:before,initializedRssBytes:initialized,sampledPeakRssBytes:peak,increaseBytes:initialized-before,afterWorkRssBytes:process.memoryUsage().rss,initMs,work}));
 await bridge.close();`;
@@ -57,11 +57,11 @@ for(let i=0;i<3;i++){
         let work=null,afterWorkRssBytes=null,afterWorkHeap=null;
         if(config.workload){
             await page.locator('#file').setInputFiles(config.file);
-            work=await page.evaluate(async ({text,compactRead})=>{
+            work=await page.evaluate(async ({text,compactRead,windowOnly})=>{
                 const run=(0,eval)('('+text+')');const file=document.querySelector('#file').files[0];
                 const bridge={call:request=>JSON.parse(request).args.method==='openDataset_String_DatasetOpenOptions'?globalThis.bridge.call(request,file):globalThis.bridge.call(request)};
-                return run(bridge,file.name,compactRead);
-            },{text:workload.toString(),compactRead:config.compactRead});
+                return run(bridge,file.name,compactRead,windowOnly);
+            },{text:workload.toString(),compactRead:config.compactRead,windowOnly:config.windowOnly});
             await pageCdp.send('HeapProfiler.collectGarbage');await command('HeapProfiler.collectGarbage');
             afterWorkRssBytes=await rss();afterWorkHeap=await command('Runtime.getHeapUsage');
         }
@@ -70,4 +70,4 @@ for(let i=0;i<3;i++){
         await page.evaluate(()=>globalThis.bridge.close());
     }finally{await browser.close();}
 }
-fs.writeFileSync(config.output,JSON.stringify({description:(config.workload?'Engine initialization plus 256 MiB tiled TIFF checksum, three 1024x1024 lossless JXL conversions and a 512x512 raster read.':'Engine-only initialization; no raster.')+' No Kotlin application. RSS includes runtime/code/shared mappings and uncollected temporary allocations. Browser RSS sums renderer processes; shared pages can be counted twice.',platform:process.platform,arch:process.arch,node:process.version,nodeRuns,browserRuns},null,2)+'\n');
+fs.writeFileSync(config.output,JSON.stringify({description:(config.windowOnly?'Engine initialization plus a 512x512 window read from a 256 MiB TIFF.':config.workload?'Engine initialization plus 256 MiB tiled TIFF checksum, three 1024x1024 lossless JXL conversions and a 512x512 raster read.':'Engine-only initialization; no raster.')+' No Kotlin application. RSS includes runtime/code/shared mappings and uncollected temporary allocations. Browser RSS sums renderer processes; shared pages can be counted twice.',platform:process.platform,arch:process.arch,node:process.version,nodeRuns,browserRuns},null,2)+'\n');
