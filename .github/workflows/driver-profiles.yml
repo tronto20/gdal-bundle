@@ -37,7 +37,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/profile-cache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/verification/build/vcpkg-cache,readwrite
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -45,10 +45,24 @@ jobs:
       - uses: actions/setup-python@v6
         with: { python-version: '3.12' }
       - run: python -m pip install -r verification/requirements.txt h5py==3.13.0 numpy==2.2.6
+      - uses: actions/cache/restore@v6
+        id: profile-cache
+        with:
+          path: verification/build/vcpkg-cache
+          key: optional-${{ matrix.profile }}-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            optional-${{ matrix.profile }}-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-
+            optional-${{ matrix.profile }}-${{ matrix.target }}-
+            engine-${{ matrix.native }}-
       - name: Default engine size baseline
         run: python verification/ci.py '${{ matrix.native }}' --build-engine-only
       - name: Isolated profile source, Native and published JVM consumers
         run: python gdal4k-engine/tools/driver-profile.py '${{ matrix.profile }}' '${{ matrix.target }}'
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: verification/build/vcpkg-cache
+          key: ${{ steps.profile-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: profile-${{ matrix.profile }}-${{ matrix.target }}
@@ -65,6 +79,7 @@ jobs:
             build/driver-profiles/**/source/gdal4k-runtime/build/test-results/
             build/driver-profiles/**/source/verification/results/
             build/driver-profiles/**/source/verification/tools/vcpkg/buildtrees/*/*.log
+            build/driver-profiles/**/source/.gradle/vcpkg/**/buildtrees/*/*.log
           if-no-files-found: warn
   database:
     name: Profile postgresql on linux-amd64
@@ -82,7 +97,7 @@ jobs:
           --health-cmd "pg_isready -U gdal4k -d gdal4k"
           --health-interval 10s --health-timeout 5s --health-retries 10
     env:
-      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/build/profile-cache,readwrite
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/verification/build/vcpkg-cache,readwrite
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -90,10 +105,24 @@ jobs:
       - uses: actions/setup-python@v6
         with: { python-version: '3.12' }
       - run: python -m pip install -r verification/requirements.txt
+      - uses: actions/cache/restore@v6
+        id: profile-cache
+        with:
+          path: verification/build/vcpkg-cache
+          key: optional-postgresql-linux-amd64-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            optional-postgresql-linux-amd64-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-
+            optional-postgresql-linux-amd64-
+            engine-linuxX64-
       - name: Default engine size baseline
         run: python verification/ci.py linuxX64 --build-engine-only
       - name: Real PostgreSQL create, write, read and delete on disposable PostGIS
         run: python gdal4k-engine/tools/driver-profile.py postgresql linux-amd64
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: verification/build/vcpkg-cache
+          key: ${{ steps.profile-cache.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@v4
         with:
           name: profile-postgresql-linux-amd64
@@ -110,4 +139,5 @@ jobs:
             build/driver-profiles/**/source/gdal4k-runtime/build/test-results/
             build/driver-profiles/**/source/verification/results/
             build/driver-profiles/**/source/verification/tools/vcpkg/buildtrees/*/*.log
+            build/driver-profiles/**/source/.gradle/vcpkg/**/buildtrees/*/*.log
           if-no-files-found: warn

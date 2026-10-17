@@ -1,0 +1,12 @@
+diff --git a/include/mimalloc/internal.h b/include/mimalloc/internal.h
+--- a/include/mimalloc/internal.h
++++ b/include/mimalloc/internal.h
+@@ -1243,7 +1243,7 @@
+ 
+ static inline bool mi_profiler_set_enabled(mi_profiler_t* prof, bool enable) {
+   _Atomic(size_t)* penabled = (_Atomic(size_t)*)&prof->reserved;
+-  return (mi_atomic_exchange_release(penabled, (enable ? 1 : 0)) != 0);
++  return (mi_atomic_exchange_release(penabled, (size_t)(enable ? 1 : 0)) != 0);
+ }
+ 
+ 
