@@ -58,6 +58,7 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         require(h.engine === engine) { "Handle belongs to another GDAL runtime" }
         h.checkOpen()
         val type = when(value) {
+            is ColorTable -> "ColorTable"; is RasterAttributeTable -> "RasterAttributeTable"
             is Attribute -> "Attribute"; is Group -> "Group"; is MDArray -> "MDArray"; is Dimension -> "Dimension"
             is FieldDomain -> "FieldDomain"; is Relationship -> "Relationship"
             is Dataset -> "Dataset"; is Driver -> "Driver"; is Band -> "Band"
@@ -74,6 +75,7 @@ internal open class RuntimeHandle(val engine: RuntimeEngine, private val id: Str
         is MDValue -> encodeMDValue(value)
         is CodedFieldValue -> buildJsonObject { put("code", encode(value.code)); put("label", encode(value.label)) }
         is FieldDomainBound -> buildJsonObject { put("value", encode(value.value)); put("inclusive", value.inclusive) }
+        is ColorEntry -> JsonArray(listOf(value.c1, value.c2, value.c3, value.c4).map(::JsonPrimitive))
         is ULong -> JsonPrimitive(value.toString())
         is BandRasterIOOptions -> buildJsonObject {
             put("xOffset", value.xOffset); put("yOffset", value.yOffset)

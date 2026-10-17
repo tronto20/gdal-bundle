@@ -7,6 +7,8 @@ import dev.gdal4k.GdalFiles
  * Common GDAL entry point for dataset, spatial reference, and transformation operations.
  */
 interface GdalRuntime {
+    suspend fun createColorTable(paletteInterpretation: Int = 1): ColorTable
+    suspend fun createRasterAttributeTable(): RasterAttributeTable
     suspend fun createFeature(definition: FeatureDefn): Feature
     suspend fun createFieldDefn(name: String, type: Int): FieldDefn
 
