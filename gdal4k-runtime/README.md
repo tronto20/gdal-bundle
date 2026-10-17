@@ -337,3 +337,6 @@ source.rasterizeTo(
 필터링하고 변경 시 읽기를 초기화합니다. 공간/속성 조건은 함께 적용되지만 `getFeature(fid)`는
 필터를 무시합니다. 드라이버의 envelope 후보 판정 가능성을 포함한 정확한 계약과 예시는
 [OGR 사용법](../README.md#ogr-geometry-생성과-공간-조회)을 참고하세요.
+
+`Dataset.grid`/`gridTo`와 `viewshed`/`viewshedTo`는 포인트 보간과 DEM 가시권을
+처리합니다. [예제와 좌표계·입력 NoData 제약](../README.md#포인트-보간과-가시권-분석)을 참고하세요.
