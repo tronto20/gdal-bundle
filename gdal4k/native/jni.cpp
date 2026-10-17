@@ -11,11 +11,31 @@ static std::string bytes(JNIEnv *env, jbyteArray input) {
     env->GetByteArrayRegion(input, 0, n, reinterpret_cast<jbyte *>(value.data()));
     return value;
 }
+#include "jni-inputs.hpp"
 extern "C" JNIEXPORT jlong JNICALL Java_dev_gdal4k_JniBridge_create(JNIEnv *env, jobject, jbyteArray proj, jbyteArray data) {
     return reinterpret_cast<jlong>(gdal4k_create(bytes(env, proj).c_str(), bytes(env, data).c_str()));
 }
 extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_gdal4k_JniBridge_execute(JNIEnv *env, jobject, jlong handle, jbyteArray request) {
-    char *result = gdal4k_execute(reinterpret_cast<gdal4k_context *>(handle), bytes(env, request).c_str());
+    const auto input = bytes(env, request);
+    auto* context = reinterpret_cast<gdal4k_context *>(handle);
+    char *result = gdal4k_execute(context, input.c_str());
+    if (auto failure = g4k_jni_inputs::takeFailure(handle)) {
+        // A driver may ignore an optional sidecar error and still return a live dataset.
+        // Close that new dataset before the caller releases its directory descriptors.
+        CPLJSONDocument requestDoc, responseDoc;
+        if (result && requestDoc.LoadMemory(input) && responseDoc.LoadMemory(result)) {
+            auto args = requestDoc.GetRoot().GetObj("args");
+            auto id = responseDoc.GetRoot().GetObj("result").GetString("value");
+            if (args.GetString("method") == "openDataset_String_DatasetOpenOptions" && !id.empty()) {
+                CPLJSONObject closeArgs, closeRequest;
+                closeArgs.Add("type", "Handle"); closeArgs.Add("method", "close"); closeArgs.Add("handle", id);
+                closeArgs.Add("parameters", CPLJSONObject());
+                closeRequest.Add("op", "runtime"); closeRequest.Add("args", closeArgs);
+                gdal4k_free(gdal4k_execute(context, closeRequest.Format(CPLJSONObject::PrettyFormat::Plain).c_str()));
+            }
+        }
+        gdal4k_free(result); env->Throw(failure); env->DeleteGlobalRef(failure); return nullptr;
+    }
     if (!result) { env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "GDAL bridge allocation failed"); return nullptr; }
     const std::string value(result);
     gdal4k_free(result);

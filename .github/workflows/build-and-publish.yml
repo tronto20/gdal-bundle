@@ -1,7 +1,7 @@
 name: Build and Publish
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/**']
     paths: ['.github/workflows/**', 'gdal4k*/**', 'verification/**', 'sample-cli/**', 'sample-app/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'kotlin-js-store/**']
   push:
     branches: [main]
