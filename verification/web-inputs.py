@@ -24,7 +24,7 @@ p.add_argument('--profile-label',default='optimized',help='Name the local memory
 a=p.parse_args()
 with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     work=Path(temporary)
-    assets=ROOT/'gdal4k-binary/build/generated/web/assets'
+    assets=ROOT/'gdal4k-engine/build/generated/web/assets'
     if a.repo:
         suffix='js' if a.target=='js' else 'wasm-js'
         klibs=list((a.repo.resolve()/f'dev/tronto/gdal4k/gdal4k-engine-{suffix}').glob('*/*.klib'))

@@ -10,10 +10,10 @@ val binaries = listOf(
 )
 binaries.forEach { binary ->
     val artifactName = "gdal4k-engine-jvm-${binary.suffix}"
-    val payload = project(":gdal4k-binary").layout.buildDirectory.file("jvm-resources/gdal4k/${binary.platform}/${binary.library}")
+    val payload = project(":gdal4k-engine").layout.buildDirectory.file("jvm-resources/gdal4k/${binary.platform}/${binary.library}")
     val jar = tasks.register<Jar>("${binary.publication}Jar") {
         val engineTask = binary.platform.split('-').joinToString("") { it.replaceFirstChar(Char::uppercaseChar) }
-        dependsOn(":gdal4k-binary:buildEngine$engineTask")
+        dependsOn(":gdal4k-engine:buildEngine$engineTask")
         archiveBaseName.set(artifactName)
         from(payload) { into("gdal4k/${binary.platform}") }
         doFirst { require(payload.get().asFile.isFile) { "Missing JVM payload: ${binary.platform}" } }

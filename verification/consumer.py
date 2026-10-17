@@ -29,7 +29,7 @@ gradle=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
 def run(args,**kwargs):subprocess.run([str(x) for x in args],check=True,**kwargs)
 if not a.no_publish:
  tasks=[]
- modules=['gdal4k-runtime','gdal4k-binary','gdal4k']
+ modules=['gdal4k-runtime','gdal4k']
  if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
  for module in modules:
   tasks += [f':{module}:publishKotlinMultiplatformPublicationToMavenLocal',f':{module}:publish{title}PublicationToMavenLocal']
@@ -188,7 +188,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  hidden=[]
  try:
   if platform:
-   for original in [ROOT/f'gdal4k-binary/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
+   for original in [ROOT/f'gdal4k-engine/build/engine/{platform}',ROOT/f'gdal4k-engine/build/classes/kotlin/{target}/main/cinterop']:
     if original.exists():
      moved=original.with_name(original.name+'-consumer-hidden')
      if moved.exists():raise RuntimeError('Previous hidden producer files must be restored: '+str(moved))

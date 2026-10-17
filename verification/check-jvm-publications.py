@@ -15,7 +15,7 @@ p.add_argument('--binary', action='append', choices=JVM_BINARIES, help='Check a 
 a = p.parse_args()
 base = a.repo.resolve()/'dev/tronto/gdal4k'
 ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
-for module in ['gdal4k', 'gdal4k-runtime', 'gdal4k-binary']:
+for module in ['gdal4k', 'gdal4k-runtime']:
     for suffix in ['', '-jvm']:
         directory = base/(module+suffix)
         poms = list(directory.glob('*/*.pom'))
@@ -42,7 +42,7 @@ for suffix in a.binary or JVM_BINARIES:
     jars = list(directory.glob('*/*-SNAPSHOT.jar'))
     if len(jars) != 1: raise RuntimeError('Missing resource JAR: '+suffix)
     resource = f'gdal4k/{platform}/{filename}'
-    original = ROOT/'gdal4k-binary/build/jvm-resources'/resource
+    original = ROOT/'gdal4k-engine/build/jvm-resources'/resource
     with zipfile.ZipFile(jars[0]) as archive:
         files = {n for n in archive.namelist() if not n.endswith('/') and n != 'META-INF/MANIFEST.MF'}
         if files != {resource}: raise RuntimeError(f'Unexpected payload files in {suffix}: {files}')

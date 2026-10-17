@@ -8,7 +8,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 
 const root = path.resolve(import.meta.dirname, '..');
-const assets = path.resolve(process.argv[2] || path.join(root, 'gdal4k-binary/build/generated/web/assets'));
+const assets = path.resolve(process.argv[2] || path.join(root, 'gdal4k-engine/build/generated/web/assets'));
 const {createGdalWorker} = await import(pathToFileURL(path.join(assets, 'index.mjs')));
 const {Inputs} = await import(pathToFileURL(path.join(assets, 'gdal4k-inputs.mjs')));
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gdal4k-related-'));

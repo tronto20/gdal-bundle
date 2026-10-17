@@ -155,22 +155,22 @@ class OptionalBinariesTest(unittest.TestCase):
     def check_repository(self, defect=None):
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
-            for module in ['gdal4k', 'gdal4k-binary']:
+            for module in ['gdal4k', 'gdal4k-runtime']:
                 directory = repo/'dev/tronto/gdal4k'/module/'0.1.0-SNAPSHOT'
                 directory.mkdir(parents=True)
                 dependency = ''
-                if defect == 'pom' and module == 'gdal4k-binary':
+                if defect == 'pom' and module == 'gdal4k-runtime':
                     dependency = '<dependencies><dependency><groupId>dev.tronto.gdal4k</groupId><artifactId>gdal4k-engine</artifactId></dependency></dependencies>'
                 (directory/(module+'.pom')).write_text(
                     '<project xmlns="http://maven.apache.org/POM/4.0.0"><groupId>dev.tronto.gdal4k</groupId>'+
                     '<artifactId>'+module+'</artifactId><version>0.1.0-SNAPSHOT</version>'+dependency+'</project>')
                 metadata = {'variants': []}
-                if defect == 'metadata' and module == 'gdal4k-binary':
+                if defect == 'metadata' and module == 'gdal4k-runtime':
                     metadata['variants'] = [{'dependencies': [{'group': 'dev.tronto.gdal4k', 'module': 'gdal4k-engine-android-arm64'}]}]
                 (directory/(module+'.module')).write_text(json.dumps(metadata))
                 with zipfile.ZipFile(directory/(module+'.klib'), 'w') as archive:
                     archive.writestr('default/manifest', 'fixture')
-                    if defect == 'payload' and module == 'gdal4k-binary':
+                    if defect == 'payload' and module == 'gdal4k-runtime':
                         archive.writestr('default/targets/macos_arm64/included/libgdal4k.a', b'fixture')
             with patch('sys.argv', ['check-optional-binaries.py', '--repo', str(repo), '--partial']), contextlib.redirect_stdout(io.StringIO()):
                 runpy.run_path(str(ROOT/'check-optional-binaries.py'), run_name='__main__')

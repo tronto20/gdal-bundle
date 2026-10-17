@@ -23,7 +23,7 @@ def is_binary_module(module):
 
 
 def expected_coordinates():
-    return {m+s for m in ['gdal4k','gdal4k-runtime','gdal4k-binary'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine', ANDROID_ENGINE} | set(ENGINE_COORDINATES.values()) | JVM_PAYLOADS
+    return {m+s for m in ['gdal4k','gdal4k-runtime'] for s in ['', *['-'+t for t in LIBRARY_TARGETS]]} | {'gdal4k-engine', ANDROID_ENGINE} | set(ENGINE_COORDINATES.values()) | JVM_PAYLOADS
 
 
 def library_version_from_repo(repo):

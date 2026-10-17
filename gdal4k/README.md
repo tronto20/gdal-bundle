@@ -1,6 +1,6 @@
 # 공통 API
 
-`gdal4k-runtime`의 기존 GDAL 객체 인터페이스를 모든 지원 타깃에 공개하고, `gdal4k-binary`가 구현합니다. 테스트 전용 인터페이스/contract 모듈은 없습니다. `gdal4k`는 두 모듈을 함께 제공하는 진입점입니다.
+`gdal4k`는 `gdal4k-runtime`의 GDAL 객체 인터페이스를 모든 지원 타깃에 구현하며, 공통 진입점과 플랫폼별 로더를 제공합니다. 엔진은 별도 `gdal4k-engine-*` 의존성으로 선택합니다.
 
 ## 초기화와 수명
 
@@ -24,7 +24,7 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 
 `runtime()`은 `suspend` 함수입니다. 최초 호출이 내장 엔진을 초기화하고, 동시에 호출한 coroutine들은 하나의 초기화 결과를 공유합니다. 준비된 뒤에는 같은 런타임을 반환합니다. 초기화와 명시적 종료는 같은 잠금으로 직렬화하며, 닫은 뒤 다음 `runtime()` 호출은 새 엔진을 만듭니다. 기존 핸들은 새 엔진으로 자동 이관되지 않습니다.
 
-`prepare()`는 앱 시작 시 엔진을 미리 로딩하고 싶은 경우만 호출하는 선택 기능입니다. binary 모듈의 호환 진입점 `Gdal4kBinary.prepare()` / `runtime()`도 같은 초기화·수명 규칙을 사용합니다. GDAL 호출과 런타임 초기화는 `suspend`이고, 이미 확보한 Kotlin 값의 프로퍼티 접근은 동기입니다.
+`prepare()`는 앱 시작 시 엔진을 미리 로딩하고 싶은 경우만 호출하는 선택 기능입니다. GDAL 호출과 런타임 초기화는 `suspend`이고, 이미 확보한 Kotlin 값의 프로퍼티 접근은 동기입니다.
 
 `Gdal4k.close()`는 앱 종료 시 반드시 호출해야 하는 함수가 아닙니다. 앱이 살아 있는 동안 엔진 컨텍스트·데이터셋 핸들·Worker를 명시적으로 반환하거나 테스트 사이 상태를 초기화할 때 사용합니다. 프로세스가 종료되면 메모리는 회수되지만, 이는 출력 파일 쓰기의 정상 완료를 보장하지 않습니다. **데이터셋은 계속 `use`로 닫아 flush와 자원 정리를 보장해야 합니다.**
 
@@ -74,11 +74,11 @@ suspend fun toJxlCog(input: ByteArray, inputPath: String, outputPath: String): B
 | 플랫폼 | GDAL 실행 위치 | 내장 방식 |
 | --- | --- | --- |
 | JVM | `Dispatchers.IO` | 명시적으로 선택한 플랫폼 리소스 JAR의 JNI 라이브러리를 해시별 임시 디렉터리에 자동 추출 |
-| Android | `Dispatchers.IO` | 전이 의존 AAR의 `jniLibs`를 Android가 설치·로드 |
+| Android | `Dispatchers.IO` | 선택한 엔진 AAR의 `jniLibs`를 Android가 설치·로드 |
 | Native | `Dispatchers.Default` | 게시 KLIB 안의 GDAL·의존성 정적 archive를 최종 앱에 링크 |
 | JS / wasmJs | 전용 Worker | 같은 자체 GDAL Wasm을 정적 자산으로 배포하고 Worker에서 로드·초기화 |
 
-JVM은 기본 바이너리가 없으며 `gdal4k-binary-<platform>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
+JVM은 기본 바이너리가 없으며 `gdal4k-engine-jvm-<platform>`을 명시적으로 추가해야 합니다. [플랫폼별 의존성 설정](../README.md)을 참고하세요.
 
 Android는 API 28 이상에서 `arm64-v8a`만 지원합니다. x86_64와 32비트 ARM/x86 바이너리는 배포하지 않습니다.
 
@@ -131,7 +131,7 @@ GDAL 3.12.4, PROJ의 `proj.db`, 전체 GDAL 데이터 파일과 종속 라이브
 
 ## 하나의 진입점과 바이트 입력
 
-공개 사용 진입점은 `Gdal4k`입니다. `Gdal.create()`, `GdalSession`, 별도의 `GdalDataset` 및 Android 전용 세션 팩토리는 제거했습니다. 초기화·Worker·호출 직렬화·종료를 기존 runtime에 통합했습니다. 기존 `Gdal4kBinary` 초기화 함수는 binary 모듈의 호환 진입점으로 유지합니다.
+공개 사용 진입점은 `Gdal4k`입니다. `Gdal.create()`, `GdalSession`, 별도의 `GdalDataset` 및 Android 전용 세션 팩토리는 제거했습니다. 초기화·Worker·호출 직렬화·종료를 기존 runtime에 통합했습니다.
 
 경로, 단일 바이트 파일, 다중 파일 입력 모두 `runtime.openDataset(...)`으로 열고 **같은 `Dataset` 인터페이스**를 반환합니다. 따라서 바이트 입력에서도 `getRasterBand`, `getLayer` 같은 기존 API와 편의 변환을 함께 사용합니다.
 
