@@ -335,6 +335,123 @@
     if(type=="Driver" && method=="deregister") {
         apply(GDALDeregisterDriver, Arg(r,h)); return nullValue();
     }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_DoubleArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_FloatArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_LongArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_IntArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_ShortArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="writeRaster_BandRasterIOOptions_ByteArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_DoubleArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_FloatArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_LongArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_IntArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_ShortArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="readRaster_BandRasterIOOptions_ByteArray") {
+        return raster(h,a,method.find("writeRaster")==0,method);
+    }
+    if(type=="Band" && method=="getBandNumber") {
+        auto out=apply(GDALGetBandNumber, Arg(r,h));return value(out);
+    }
+    if(type=="Band" && method=="getAccess") {
+        auto out=apply(GDALGetRasterAccess, Arg(r,h));return value(out);
+    }
+    if(type=="Band" && method=="getDescription") {
+        auto out=apply(GDALGetDescription, Arg(r,h));return value(out);
+    }
+    if(type=="Band" && method=="setDescription_String") {
+        apply(GDALSetDescription, Arg(r,h), Arg(r,a["description"])); return nullValue();
+    }
+    if(type=="Band" && method=="getMetadataDomainList") {
+        auto p=GDALGetMetadataDomainList(h);auto out=strings(p);CSLDestroy(p);return out;
+    }
+    if(type=="Band" && method=="getMetadata_String") {
+        auto p=GDALGetMetadata(h,a["domain"].ToString().c_str());auto out=strings(p);return out;
+    }
+    if(type=="Band" && method=="setMetadata_List_String_String") {
+        Strings list(a.GetArray("metadata"));return value(GDALSetMetadata(h,list.data(),a["domain"].ToString().c_str()));
+    }
+    if(type=="Band" && method=="getMetadataItem_String_String") {
+        return value(GDALGetMetadataItem(h,a["name"].ToString().c_str(),a["domain"].ToString().c_str()));
+    }
+    if(type=="Band" && method=="setMetadataItem_String_String_String") {
+        auto text=a["value"].ToString();return value(GDALSetMetadataItem(h,a["name"].ToString().c_str(),a["value"].GetType()==CPLJSONObject::Type::Null?nullptr:text.c_str(),a["domain"].ToString().c_str()));
+    }
+    if(type=="Band" && method=="getScale") {
+        int ok=0;auto v=GDALGetRasterScale(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="setScale_Double") {
+        auto out=apply(GDALSetRasterScale, Arg(r,h), Arg(r,a["scale"]));return value(out);
+    }
+    if(type=="Band" && method=="getOffset") {
+        int ok=0;auto v=GDALGetRasterOffset(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="setOffset_Double") {
+        auto out=apply(GDALSetRasterOffset, Arg(r,h), Arg(r,a["offset"]));return value(out);
+    }
+    if(type=="Band" && method=="getMinimum") {
+        int ok=0;auto v=GDALGetRasterMinimum(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="getMaximum") {
+        int ok=0;auto v=GDALGetRasterMaximum(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="getNoDataValueAsInt64") {
+        require(GDALGetRasterDataType(h)==GDT_Int64,"Exact NoData type does not match band");int ok=0;auto v=GDALGetRasterNoDataValueAsInt64(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="setNoDataValueAsInt64_Long") {
+        require(GDALGetRasterDataType(h)==GDT_Int64,"Exact NoData type does not match band");return value(GDALSetRasterNoDataValueAsInt64(h,std::stoll(a["value"].ToString())));
+    }
+    if(type=="Band" && method=="getNoDataValueAsUInt64") {
+        require(GDALGetRasterDataType(h)==GDT_UInt64,"Exact NoData type does not match band");int ok=0;auto v=GDALGetRasterNoDataValueAsUInt64(h,&ok);return ok?value(v):nullValue();
+    }
+    if(type=="Band" && method=="setNoDataValueAsUInt64_ULong") {
+        require(GDALGetRasterDataType(h)==GDT_UInt64,"Exact NoData type does not match band");return value(GDALSetRasterNoDataValueAsUInt64(h,std::stoull(a["value"].ToString())));
+    }
+    if(type=="Band" && method=="fill_Double_Double") {
+        auto out=apply(GDALFillRaster, Arg(r,h), Arg(r,a["realValue"]), Arg(r,a["imaginaryValue"]));return value(out);
+    }
+    if(type=="Band" && method=="getStatistics_Boolean_Boolean") {
+        return bandStatistics(h,a,false);
+    }
+    if(type=="Band" && method=="computeStatistics_Boolean") {
+        return bandStatistics(h,a,true);
+    }
+    if(type=="Band" && method=="setStatistics_Double_Double_Double_Double") {
+        return setBandStatistics(h,a);
+    }
+    if(type=="Band" && method=="computeRasterMinMax_Boolean") {
+        double v[2];require(GDALComputeRasterMinMax(h,a.GetBool("approximate"),v)==CE_None,"Cannot compute band extrema");return numbers(v,2);
+    }
+    if(type=="Band" && method=="getHistogram_Double_Double_Int_Boolean_Boolean") {
+        return bandHistogram(h,a);
+    }
+    if(type=="Band" && method=="getDefaultHistogram_Boolean") {
+        return defaultBandHistogram(h,a.GetBool("force"));
+    }
+    if(type=="Band" && method=="setDefaultHistogram_Double_Double_LongArray") {
+        return setBandHistogram(h,a);
+    }
     if(type=="Band" && method=="getXSize") {
         auto out=apply(GDALGetRasterBandXSize, Arg(r,h));return value(out);
     }

@@ -177,22 +177,34 @@ struct Arg {
 template<class R,class... P,class... A> R apply(R(*fn)(P...),const A&... a){static_assert(sizeof...(P)==sizeof...(A),"Incorrect GDAL arity");return fn(static_cast<P>(a)...);}
 
 template<class T> CPLJSONObject rasterTyped(GDALRasterBandH h,const CPLJSONObject& a,bool write,GDALDataType type){
-    auto json=a.GetArray("buffer");int x=a.GetInteger("xOffset"),y=a.GetInteger("yOffset");
-    int width=a["xSize"].IsValid()?a.GetInteger("xSize"):GDALGetRasterBandXSize(h);
-    int height=a["ySize"].IsValid()?a.GetInteger("ySize"):GDALGetRasterBandYSize(h);
+    auto json=a.GetArray("buffer");auto o=a.GetObj("options");bool options=o.IsValid();
+    auto region=options?o:a;int x=region.GetInteger("xOffset"),y=region.GetInteger("yOffset");
+    require(x>=0 && y>=0 && x<GDALGetRasterBandXSize(h) && y<GDALGetRasterBandYSize(h),"Raster offset is outside band");
+    int width=region["xSize"].IsValid()?region.GetInteger("xSize"):GDALGetRasterBandXSize(h);
+    int height=region["ySize"].IsValid()?region.GetInteger("ySize"):GDALGetRasterBandYSize(h);
+    if(options && width==0)width=GDALGetRasterBandXSize(h)-x;
+    if(options && height==0)height=GDALGetRasterBandYSize(h)-y;
+    int bw=options?o.GetInteger("bufferWidth"):width,bh=options?o.GetInteger("bufferHeight"):height;
+    if(options && bw==0)bw=width;if(options && bh==0)bh=height;
+    require(bw>0 && bh>0,"Raster buffer dimensions must be positive");
     require(x>=0&&y>=0&&width>0&&height>0&&x<=GDALGetRasterBandXSize(h)-width&&y<=GDALGetRasterBandYSize(h)-height,"Raster window is outside the band");
     // size_t is 32-bit in Wasm. Validate before narrowing
     // so a huge virtual raster cannot wrap into a small allocation passed to GDAL.
     const auto capacity = !write && a["bufferSize"].IsValid() ? a.GetLong("bufferSize") : json.Size();
-    uint64_t count=static_cast<uint64_t>(width)*height;
+    uint64_t count=static_cast<uint64_t>(bw)*bh;
     require(capacity>=0 && count<=static_cast<uint64_t>(capacity),"Raster buffer is too small");
+    require(count<=INT_MAX,"Raster buffer exceeds bridge limit; read smaller windows");
     require(count<=SIZE_MAX/sizeof(T),"Raster buffer exceeds addressable memory");
     std::vector<T> data(count);
     if(write)for(size_t i=0;i<count;i++){
         if constexpr(std::is_floating_point_v<T>)data[i]=static_cast<T>(CPLAtof(json[static_cast<int>(i)].ToString().c_str()));
         else data[i]=static_cast<T>(std::stoll(json[static_cast<int>(i)].ToString()));
     }
-    auto code=GDALRasterIO(h,write?GF_Write:GF_Read,x,y,width,height,data.data(),width,height,type,0,0);
+    GDALRasterIOExtraArg extra;INIT_RASTERIO_EXTRA_ARG(extra);
+    int alg=options?o.GetInteger("resampling"):0;require((alg>=0 && alg<=7)||alg==14,"Unknown raster resampling algorithm");
+    require(!write || alg==0,"Resampling selection is only supported for reads");
+    extra.eResampleAlg=static_cast<GDALRIOResampleAlg>(alg);
+    auto code=GDALRasterIOEx(h,write?GF_Write:GF_Read,x,y,width,height,data.data(),bw,bh,type,0,0,&extra);
     CPLJSONObject out;out.Add("code",code);if(!write)out.Add("buffer",numbers(data.data(),data.size())["value"]);CPLJSONObject result;result.Add("value",out);return result;
 }
 inline CPLJSONObject raster(GDALRasterBandH h,const CPLJSONObject& a,bool write,const std::string& method){
@@ -268,6 +280,7 @@ inline CPLJSONObject mdRaster(GDALMDArrayH h,const CPLJSONObject& a,bool write) 
     require(ok!=0,"Multidimensional read failed");return numbers(data.data(),data.size());
 }
 #include "runtime-md.hpp"
+#include "runtime-band.hpp"
 inline CPLJSONObject Runtime::execute(const CPLJSONObject& request){
     Runtime& r=*this;const auto type=request.GetString("type"),method=request.GetString("method");
     auto id=std::stoull(request.GetString("handle","0"));
