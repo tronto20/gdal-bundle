@@ -20,6 +20,20 @@ if platform=='web':
     opt=Path(os.environ['EMSDK'])/'upstream/bin'/('wasm-opt.exe' if os.name=='nt' else 'wasm-opt')
     with tempfile.TemporaryDirectory(prefix='gdal4k-wasm-audit-') as temp:
         subprocess.run([str(opt),str(wasm),'--enable-bulk-memory','--enable-sign-ext','--enable-mutable-globals','--enable-nontrapping-float-to-int','--disable-gc','--disable-threads','--disable-simd','--disable-exception-handling','--print-features','-o',str(Path(temp)/'validated.wasm')],check=True)
+        assets=base/'generated/web/assets'
+        data=assets/'gdal4k-data.wasm'
+        subprocess.run([str(opt),str(data),'--mvp-features','-o',str(Path(temp)/'validated-data.wasm')],check=True)
+        entries=json.loads(re.search(r'export const resources = (.*);', (assets/'gdal4k-resources.mjs').read_text())[1])
+        prefix=base/'engine/web/installed/gdal4k-web/share/gdal'
+        sys_path=ROOT/'gdal4k-binary/tools'
+        import sys
+        sys.path.insert(0,str(sys_path))
+        from gdal_resources import resource_files
+        expected={p.relative_to(prefix).as_posix():p.read_bytes() for p in resource_files(prefix.parent.parent)}
+        if {entry['name'] for entry in entries}!=set(expected):raise RuntimeError('Incomplete web resource asset')
+        payload=data.read_bytes()
+        for entry in entries:
+            if payload[entry['offset']:entry['offset']+entry['size']]!=expected[entry['name']]:raise RuntimeError('Corrupt bundled resource: '+entry['name'])
     dependencies=['ordinary Wasm; GC/threads/SIMD/EH disabled during validation']
 elif platform.startswith(('macos','ios')):
     library=base/f'engine/{platform}/cmake/libgdal4k.dylib'

@@ -45,7 +45,7 @@ python3 verification/consumer.py --target wasmJs
 
 웹 입력은 GDAL VSI 콜백을 Worker의 비동기 읽기에 연결합니다. Asyncify로 C 호출을 대기·재개하므로 SharedArrayBuffer, COOP/COEP 또는 JSPI를 요구하지 않습니다. Asyncify는 Wasm 코드 크기와 실행 비용을 추가하므로 로딩 방식 변경의 메모리 효과와 함께 측정합니다.
 
-웹의 GDAL 보조 데이터 157개는 엔진의 정적 배열에 넣지 않습니다. `gdal4k-resources.mjs`의 파일명·크기·위치만 등록하고, GDAL이 파일을 읽을 때 해당 구간을 `gdal4k-data.wasm`에서 읽습니다. 이 파일은 KGP가 Maven 아티팩트에서 자동 추출할 수 있는 **Wasm custom section 데이터 컨테이너**이며 실행하거나 인스턴스화하지 않습니다. Node는 디스크의 필요한 구간을, 브라우저는 정적 자산의 HTTP Range를 읽습니다. 호스팅은 이 데이터 자산에도 206/Content-Range 응답을 지원해야 합니다. 입력 파일과 같은 LRU에 읽은 구간만 보관하며 전체 데이터를 `/vsimem`에 복제하지 않습니다. PROJ의 `proj.db`와 실행 코드는 여전히 엔진에 내장합니다.
+웹 빌드에서 gdal4k가 생성하던 GDAL 보조 데이터 157개의 정적 배열을 제거합니다. `gdal4k-resources.mjs`의 파일명·크기·위치만 등록하고, GDAL이 파일을 읽을 때 해당 구간을 `gdal4k-data.wasm`에서 읽습니다. 이 파일은 KGP가 Maven 아티팩트에서 자동 추출할 수 있는 **Wasm custom section 데이터 컨테이너**이며 실행하거나 인스턴스화하지 않습니다. Node는 디스크의 필요한 구간을, 브라우저는 정적 자산의 HTTP Range를 읽습니다. 호스팅은 이 데이터 자산에도 206/Content-Range 응답을 지원해야 합니다. 입력 파일과 같은 LRU에 읽은 구간만 보관하며 전체 데이터를 `/vsimem`에 복제하지 않습니다. GDAL 내부 fallback 리소스와 PROJ의 `proj.db`, 실행 코드는 여전히 엔진에 내장합니다.
 
 웹 초기 작업 힙은 1 MiB에서 시작하고 정적 데이터·스택을 합친 초기 Wasm 메모리 크기는 링커가 계산합니다. 필요한 할당에 따라 증가하며, 별도의 GDAL 블록 캐시 상한은 설정하지 않습니다. 늘어난 Wasm 메모리를 실행 중에 다시 축소하는 기능은 없으므로 엔진 전체 반환에는 Worker 종료가 필요합니다. 래스터 읽기는 출력 배열의 길이만 엔진으로 보내고, 출력용 배열의 기존 내용을 JSON으로 복제하지 않습니다. 반환 래스터와 나머지 JSON 브리지 비용은 남아 있습니다.
 

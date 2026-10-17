@@ -130,5 +130,5 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-web-inputs-') as temporary:
     if not resources or any(r['status']!=206 or not r['range'] for r in resources):raise RuntimeError('GDAL resources were not read by range')
     if sum(r['bytes_sent'] for r in resources) >= (assets/'gdal4k-data.wasm').stat().st_size:raise RuntimeError('Unused GDAL resources were downloaded')
     destination=ROOT/'verification/results'/('web-inputs-'+a.target);destination.mkdir(parents=True,exist_ok=True)
-    (destination/'result.json').write_text(json.dumps({'target':a.target,'published_assets':bool(a.repo),'logical_file_bytes':image.stat().st_size,'http_bytes_sent':total_read,'requests':records,'result':'passed'},indent=2)+'\n')
+    (destination/'result.json').write_text(json.dumps({'target':a.target,'published_assets':bool(a.repo),'logical_file_bytes':image.stat().st_size,'http_bytes_sent':total_read,'resource_asset_bytes':(assets/'gdal4k-data.wasm').stat().st_size,'resource_bytes_sent':sum(r['bytes_sent'] for r in resources),'requests':records,'result':'passed'},indent=2)+'\n')
     print('GDAL4K_WEB_DIRECT_INPUTS_OK',total_read,'bytes fetched from',image.stat().st_size,flush=True)

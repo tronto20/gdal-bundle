@@ -70,4 +70,4 @@ for(let i=0;i<3;i++){
         await page.evaluate(()=>globalThis.bridge.close());
     }finally{await browser.close();}
 }
-fs.writeFileSync(config.output,JSON.stringify({description:(config.workload?'Engine initialization plus 256 MiB tiled TIFF checksum and three 1024x1024 lossless JXL conversions.':'Engine-only initialization; no raster.')+' No Kotlin application. RSS includes runtime/code/shared mappings and uncollected temporary allocations. Browser RSS sums renderer processes; shared pages can be counted twice.',platform:process.platform,arch:process.arch,node:process.version,nodeRuns,browserRuns},null,2)+'\n');
+fs.writeFileSync(config.output,JSON.stringify({description:(config.workload?'Engine initialization plus 256 MiB tiled TIFF checksum, three 1024x1024 lossless JXL conversions and a 512x512 raster read.':'Engine-only initialization; no raster.')+' No Kotlin application. RSS includes runtime/code/shared mappings and uncollected temporary allocations. Browser RSS sums renderer processes; shared pages can be counted twice.',platform:process.platform,arch:process.arch,node:process.version,nodeRuns,browserRuns},null,2)+'\n');

@@ -68,6 +68,7 @@ export class Inputs {
     }
     list(path) {
         path = this.key(path); const prefix = path.endsWith('/') ? path : path + '/';
+        if (!prefix.startsWith('/vsigdal4k/resources/')) return [];
         return [...new Set([...this.providers.keys()].filter(key => key.startsWith(prefix)).map(key => key.slice(prefix.length).split('/')[0]))].sort();
     }
     registerResources(entries, url, size) {
