@@ -43,8 +43,9 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-verified-publisher-') as tempora
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 plugins { id 'maven-publish'; id 'signing' }
 def localDestination = '''+json.dumps(destination)+'''
-def central = !localDestination && System.getenv('PUBLISH_TARGET') == 'mavenCentral'
+def central = !localDestination && (System.getenv('PUBLISH_TARGET') ?: 'mavenCentral') == 'mavenCentral'
 def items = new JsonSlurper().parse(file('artifacts.json'))
+def snapshot = items.every { it.coordinate[2].endsWith('SNAPSHOT') }
 publishing {
     publications {
         items.eachWithIndex { item, index ->
@@ -59,7 +60,6 @@ publishing {
     repositories {
         maven {
             name='Verified'
-            def snapshot=items[0].coordinate[2].endsWith('SNAPSHOT')
             url=uri(localDestination ?: (central ? (snapshot ? 'https://central.sonatype.com/repository/maven-snapshots/' : 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/') : System.getenv('GITHUB_PACKAGES_URL')))
             if(!localDestination) credentials {
                 username=System.getenv(central ? 'MAVEN_CENTRAL_USERNAME' : 'GITHUB_ACTOR')
@@ -73,7 +73,7 @@ items.eachWithIndex { item, index ->
         doLast { destination.text=file(item.pom).getText('UTF-8') }
     }
 }
-if(central) signing {
+if(central && !snapshot) signing {
     def key=System.getenv('SIGNING_KEY')
     if(key && !key.contains('-----BEGIN PGP')) key=new String(Base64.mimeDecoder.decode(key),'UTF-8')
     useInMemoryPgpKeys(System.getenv('SIGNING_KEY_ID'),key,System.getenv('SIGNING_PASSWORD') ?: '')

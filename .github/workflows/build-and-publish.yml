@@ -15,8 +15,8 @@ on:
       publish_target:
         description: Maven repository
         type: choice
-        options: [githubPackages, mavenCentral]
-        default: githubPackages
+        options: [mavenCentral, githubPackages]
+        default: mavenCentral
 permissions:
   contents: read
 concurrency:
@@ -43,7 +43,7 @@ jobs:
       - run: python -c 'import tarfile; tarfile.open("verification/build/downloads/complete-maven.tar.gz").extractall(filter="data")'
       - name: Publish exactly the tested Maven artifacts
         env:
-          PUBLISH_TARGET: ${{ inputs.publish_target || 'githubPackages' }}
+          PUBLISH_TARGET: ${{ inputs.publish_target || 'mavenCentral' }}
           GITHUB_PACKAGES_URL: https://maven.pkg.github.com/${{ github.repository }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

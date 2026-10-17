@@ -126,12 +126,12 @@ subprojects {
 
         extensions.configure<SigningExtension> {
             setRequired {
-                publishTargetParam == "mavenCentral" && gradle.taskGraph.allTasks.any { task ->
+                publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT") && gradle.taskGraph.allTasks.any { task ->
                     task.name.startsWith("publish") && !task.name.endsWith("ToMavenLocal")
                 }
             }
 
-            if (publishTargetParam == "mavenCentral" && publishTasksRequested) {
+            if (publishTargetParam == "mavenCentral" && !version.toString().endsWith("SNAPSHOT") && publishTasksRequested) {
                 useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
                 val publishing = extensions.getByType(PublishingExtension::class.java)
                 sign(publishing.publications)

@@ -85,3 +85,10 @@ python3 verification/web-inputs.py --memory-only --window-only --profile-label w
 메모리 보고서는 `verification/results/web-engine-memory-optimized/profile.json`에 저장합니다. 엔진만 측정하며 Kotlin 앱과 영상 작업 메모리는 포함하지 않습니다. RSS는 코드·런타임·공유 페이지·미회수 임시 할당을 포함하므로 정확한 엔진 allocator 크기로 해석하지 않습니다.
 
 `--workload`를 사용하면 256 MiB 영상 전체 checksum, 1024×1024 무손실 JXL 변환 3회, 512×512 래스터 읽기를 포함합니다. `--profile-label`별로 보고서를 보존하고, 실행 중 다른 빌드·측정 작업과 겹치지 않게 비교합니다. 테스트는 데이터 자산의 전체 다운로드 없이 내장 NZTM2000 타일 정의를 읽어 COG를 생성하는 경우도 검사합니다.
+
+
+## CI 게시 대상
+
+main push의 전체 검증이 성공하면 검증한 Maven 파일을 기본적으로 Maven Central에 게시합니다. 현재 `3.12.4-1.0.1-SNAPSHOT`은 `https://central.sonatype.com/repository/maven-snapshots/`로 전송합니다. 수동 workflow도 `mavenCentral`이 기본이며 `githubPackages`는 명시적으로 선택할 수 있습니다. PR에서는 원격 게시하지 않습니다.
+
+GitHub Actions repository secrets의 `MAVEN_CENTRAL_USERNAME`과 `MAVEN_CENTRAL_PASSWORD`에는 Central Portal에서 생성한 사용자 토큰의 username/password를 등록합니다. 게시 namespace에 Snapshot 게시가 활성화되어 있어야 합니다. Snapshot 게시에는 PGP 서명을 요구하지 않습니다. 정식 릴리스는 기존 `SIGNING_KEY`, `SIGNING_KEY_ID`, `SIGNING_PASSWORD` 설정을 사용해 서명합니다. 설정 변경만으로 실제 원격 게시 성공이 확인되는 것은 아닙니다.
