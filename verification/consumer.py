@@ -15,7 +15,7 @@ p=argparse.ArgumentParser()
 p.add_argument('--target', required=True, choices=['jvm','js','wasmJs','macosArm64','linuxX64','linuxArm64','mingwX64','iosArm64','iosSimulatorArm64','android'])
 p.add_argument('--repo',type=Path,default=ROOT/'verification/build/consumer-maven')
 p.add_argument('--no-publish',action='store_true')
-p.add_argument('--compile-only',action='store_true')
+p.add_argument('--compile-only',action='store_true',help='Link Native tests or compile Android device tests without running them')
 p.add_argument('--browser',action='store_true')
 p.add_argument('--ios-device')
 p.add_argument('--jvm-binary', action='append', choices=JVM_BINARIES, help='Explicit payload; repeat to verify a multi-OS application')
@@ -117,7 +117,7 @@ with tempfile.TemporaryDirectory(prefix='gdal4k-published-consumer-') as tempora
  elif target=='android':
   declaration='''androidLibrary { namespace="consumer.gdal4k"; compileSdk=35; minSdk=28
 withDeviceTestBuilder { sourceSetTreeName="test" }.configure { instrumentationRunner="androidx.test.runner.AndroidJUnitRunner" } }'''
-  task='connectedAndroidDeviceTest'
+  task='compileAndroidDeviceTest' if a.compile_only else 'connectedAndroidDeviceTest'
  else:
   declaration=target+'()'
   if target == 'iosSimulatorArm64' and a.ios_device:
@@ -206,7 +206,7 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
    expected_payloads = {'gdal4k-engine-jvm-'+b for b in binaries}
    actual_payloads = {coordinate.split(':')[1] for coordinate in runtime_coordinates if coordinate.startswith('dev.tronto.gdal4k:')} & available_payloads
    if actual_payloads != expected_payloads: raise RuntimeError(f'Unexpected JVM payload dependencies: {actual_payloads}; expected {expected_payloads}')
-  case = '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
+  case = '-compile' if target=='android' and a.compile_only else '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else '')+case)
   destination.mkdir(parents=True,exist_ok=True)
   for folder in ['build/test-results','build/outputs/androidTest-results','build/bin']:
