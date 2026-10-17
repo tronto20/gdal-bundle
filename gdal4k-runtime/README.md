@@ -337,3 +337,33 @@ source.rasterizeTo(
 필터링하고 변경 시 읽기를 초기화합니다. 공간/속성 조건은 함께 적용되지만 `getFeature(fid)`는
 필터를 무시합니다. 드라이버의 envelope 후보 판정 가능성을 포함한 정확한 계약과 예시는
 [OGR 사용법](../README.md#ogr-geometry-생성과-공간-조회)을 참고하세요.
+
+### OGR 레이어 연산과 제한된 피처 일괄 처리
+
+`overlayTo`는 두 입력 레이어를 새 결과 레이어로 Intersection/Union/SymDifference/Identity/Update/Clip/Erase 합니다. 입력끼리는 같아도 되지만 결과는 두 입력과 달라야 하며, 쓰기·필드 생성이 가능하고 속성 필드·피처·필터가 없어야 합니다. 먼저 결과 레이어의 살아 있는 Feature와 같은 데이터셋의 SQL 결과를 닫습니다. 결과 스키마의 빌린 정의 핸들은 드라이버 호출 전에 무효화되므로 실패 코드 이후에도 다시 조회합니다. 좌표계가 양쪽에 알려져 있는데 다르면 거절합니다. GEOS 평면 연산이며 자동 재투영·도형 복구·트랜잭션은 없습니다. 기본 geometry field를 사용하고 입력 커서/필터에는 GDAL 의미가 적용됩니다.
+
+```kotlin
+val code = input.overlayTo(method, output, LayerOverlayOperation.Intersection,
+    "INPUT_PREFIX=left_", "METHOD_PREFIX=right_")
+check(code == 0)
+
+layer.forEachFeatureBatch(batchSize = 256) { features ->
+    // 이 콜백을 벗어나면 모든 임시 Feature가 닫힙니다. 보관하려면 안에서 cloneFeature().
+    for (feature in features) println(feature.getFID())
+}
+```
+
+`readFeatureBatch(limit)`는 현재 필터·커서에서 최대 limit개를 읽고 소유권을 호출자에게 줍니다. 빈 목록은 EOF이며 실제 GDAL 읽기 오류는 예외로 구별합니다. 모든 반환 Feature를 닫아야 합니다. `forEachFeatureBatch`는 기본적으로 먼저 rewind하고 매 콜백 뒤 실패·취소 시에도 Feature를 정리합니다. 같은 레이어를 다른 코루틴에서 동시에 순회·변경하지 않습니다.
+
+`writeFeatureBatch`는 Create/Replace/Upsert를 순차 호출하고 첫 오류에서 `completed`와 `errorCode`를 반환합니다. 이전 쓰기와 GDAL의 FID 변경은 유지되고 입력 핸들은 닫지 않습니다. 원자성이 필요하면 명시적으로 지원되는 데이터셋 트랜잭션을 사용하고 실패 코드를 확인해 예외를 던집니다.
+
+```kotlin
+dataset.flushCache() // GPKG처럼 새 테이블 DDL을 미루는 드라이버의 스키마를 먼저 확정
+// 다른 작업과 같은 Dataset 트랜잭션을 공유하지 않습니다.
+dataset.withTransaction {
+    val result = output.writeFeatureBatch(features, FeatureWriteMode.Create)
+    check(result.successful) { "Written ${result.completed}, GDAL error ${result.errorCode}" }
+}
+```
+
+`withTransaction`은 start 성공 뒤에만 트랜잭션을 소유하며 성공 시 commit, 블록 실패·취소·commit 오류 시 rollback을 시도합니다. 정리 오류는 원래 오류에 suppressed로 보존합니다. 자동 중첩/에뮬레이션/fallback은 없으며 드라이버의 구조 변경 rollback과 핸들 재조회 정책은 호출자가 관리합니다. 반환된 nonzero 값 자체는 예외가 아니므로 블록에서 검사해야 합니다. 트랜잭션 도중 외부에서 commit/rollback하거나 Dataset을 닫지 않습니다.
