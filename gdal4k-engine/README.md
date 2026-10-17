@@ -1,6 +1,6 @@
 # 내장 GDAL 빌드와 배포
 
-`gdal4k-runtime`은 공통 인터페이스, `gdal4k`는 모든 타깃의 구현입니다. JVM 엔진은 `gdal4k-jvm-binaries` 모듈에서 플랫폼별 리소스 JAR로 별도 게시합니다. 소비 앱에는 GDAL, vcpkg, Emscripten, CMake가 필요하지 않습니다. 이 도구들은 라이브러리를 소스에서 만드는 producer에만 필요합니다.
+`gdal4k`는 공통 인터페이스, `gdal4k-runtime`은 모든 타깃의 구현입니다. 앱은 `gdal4k-runtime`과 엔진을 추가하며, 공통 인터페이스는 runtime을 통해 함께 제공됩니다. JVM 엔진은 `gdal4k-jvm-binaries` 모듈에서 플랫폼별 리소스 JAR로 별도 게시합니다. 소비 앱에는 GDAL, vcpkg, Emscripten, CMake가 필요하지 않습니다. 이 도구들은 라이브러리를 소스에서 만드는 producer에만 필요합니다.
 
 ## 고정된 소스
 
@@ -21,9 +21,9 @@ JDK 21, Python 3, Git, 플랫폼 SDK가 필요합니다.
 python3 -m venv verification/tools/python
 verification/tools/python/bin/pip install -r verification/requirements.txt
 export PATH="$PWD/verification/tools/python/bin:$PATH"
-./gradlew :gdal4k-runtime:compileKotlinMacosArm64
+./gradlew :gdal4k:compileKotlinMacosArm64
 python3 gdal4k-engine/tools/build-engine.py macos-arm64
-./gradlew :gdal4k:jvmTest :gdal4k:macosArm64Test
+./gradlew :gdal4k-runtime:jvmTest :gdal4k-runtime:macosArm64Test
 python3 verification/consumer.py --target macosArm64
 ```
 
@@ -33,8 +33,8 @@ python3 verification/consumer.py --target macosArm64
 
 ```sh
 source verification/tools/emsdk/emsdk_env.sh
-./gradlew :gdal4k:jsNodeTest :gdal4k:wasmJsNodeTest
-CHROME_BIN=/path/to/chrome ./gradlew :gdal4k:jsBrowserTest :gdal4k:wasmJsBrowserTest
+./gradlew :gdal4k-runtime:jsNodeTest :gdal4k-runtime:wasmJsNodeTest
+CHROME_BIN=/path/to/chrome ./gradlew :gdal4k-runtime:jsBrowserTest :gdal4k-runtime:wasmJsBrowserTest
 python3 verification/consumer.py --target js
 python3 verification/consumer.py --target wasmJs
 ```
@@ -51,11 +51,11 @@ python3 verification/consumer.py --target wasmJs
 
 ## 산출물과 게시
 
-- JVM 코드: `gdal4k-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
+- JVM 코드: `gdal4k-runtime-jvm`에는 JNI 호출 코드만 포함하며 기본 바이너리 전이 의존성이 없습니다.
 - JVM 리소스: `gdal4k-engine-jvm-linux-x64-gnu`, `gdal4k-engine-jvm-linux-arm64-gnu`, `gdal4k-engine-jvm-macos-arm64`, `gdal4k-engine-jvm-windows-x64`. 각 JAR에는 해당 플랫폼의 GDAL·JXL JNI 라이브러리 하나만 포함합니다. Linux는 glibc용이며 Alpine/musl은 지원하지 않습니다.
-- Native: 구현체 `gdal4k-<target>`에는 C 바인딩만 포함. 명시적으로 선택하는 `gdal4k-engine-native-<platform>` KLIB에 GDAL과 선택된 종속성의 정적 archive 포함
+- Native: 구현체 `gdal4k-runtime-<target>`에는 C 바인딩만 포함. 명시적으로 선택하는 `gdal4k-engine-native-<platform>` KLIB에 GDAL과 선택된 종속성의 정적 archive 포함
 - Android: 플랫폼 Kotlin 구현체에는 JNI를 포함하지 않음. 별도 `gdal4k-engine-android-arm64` AAR (`arm64-v8a`만 포함), Android 9 / API 28 이상
-- 웹: 구현체 `gdal4k-js` / `gdal4k-wasm-js`에는 엔진 자산을 포함하지 않음. 별도 `gdal4k-engine-js` / `gdal4k-engine-wasm-js`가 같은 Worker·ES module·Wasm 자산 제공
+- 웹: 구현체 `gdal4k-runtime-js` / `gdal4k-runtime-wasm-js`에는 엔진 자산을 포함하지 않음. 별도 `gdal4k-engine-js` / `gdal4k-engine-wasm-js`가 같은 Worker·ES module·Wasm 자산 제공
 - `gdal4k`, `gdal4k-runtime`: `0.1.0-SNAPSHOT`
 - `gdal4k-engine`, JVM 리소스 JAR, Android JNI AAR: `0.1.0-SNAPSHOT`
 
@@ -77,15 +77,15 @@ python3 verification/consumer.py --target wasmJs
 | JVM Windows x64 | `gdal4k-engine-jvm-windows-x64` |
 | Android ARM64 | `gdal4k-engine-android-arm64` |
 
-`gdal4k-engine` 루트의 Gradle metadata는 Native·JS·wasmJs 타깃에 맞는 위 좌표를 선택합니다. JVM과 Android는 해당 엔진 좌표를 명시적으로 선택합니다. Kotlin API·구현체는 `gdal4k-runtime`과 `gdal4k` 및 각 KMP 타깃 좌표로 게시합니다. 구현 코드와 로더는 `gdal4k`에 통합합니다. Gradle producer 모듈 이름과 네이티브 파일의 리소스 경로는 Maven artifactId와 독립적입니다.
+`gdal4k-engine` 루트의 Gradle metadata는 Native·JS·wasmJs 타깃에 맞는 위 좌표를 선택합니다. JVM과 Android는 해당 엔진 좌표를 명시적으로 선택합니다. Kotlin API·구현체는 `gdal4k-runtime`과 `gdal4k` 및 각 KMP 타깃 좌표로 게시합니다. 구현 코드와 로더는 `gdal4k-runtime`에 통합하며 `gdal4k`에 의존합니다. Gradle producer 모듈 이름과 네이티브 파일의 리소스 경로는 Maven artifactId와 독립적입니다.
 
-Kotlin 소비자는 `gdal4k` 루트 좌표를 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. 모든 플랫폼에서 엔진을 명시적으로 선택해야 합니다. JVM에서는 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
+GDAL을 실행하는 Kotlin 앱은 `gdal4k-runtime` 루트 좌표에 의존하며 Gradle이 Kotlin 타깃 아티팩트를 선택합니다. 모든 플랫폼에서 엔진을 명시적으로 선택해야 합니다. JVM에서는 필요한 플랫폼 리소스 좌표를 `runtimeOnly`로 지정합니다([사용 예시](../README.md)). KMP `jvmMain.dependencies`에도 같은 설정을 사용합니다. 기본값이나 전체 플랫폼 묶음 JAR은 없습니다.
 
 예를 들어 macOS ARM64 리소스만 로컬 게시하려면 `./gradlew :gdal4k-jvm-binaries:publishMacosArm64PublicationToMavenLocal`을 실행합니다. 다른 publication 이름은 `LinuxX64Gnu`, `LinuxArm64Gnu`, `WindowsX64`입니다. 선택한 작업만 해당 엔진을 빌드합니다. `verification/consumer.py --target jvm --jvm-binary macos-arm64`는 선택한 리소스와 코드 게시 후 외부 소비를 검증합니다. 테스트 도구에서 옵션을 생략하면 테스트 호스트를 선택하며 제품 의존성의 기본값으로 사용하지 않습니다.
 
 CI는 타깃별 빌드·공통 테스트·독립 소비 테스트 후 아티팩트를 모읍니다. 코드 JAR에 바이너리가 없는지, POM/Gradle metadata에 기본 바이너리 의존성이 없는지, JVM 4종의 각 JAR에 정확히 해당 리소스만 있고 SHA-256이 맞는지 검사합니다. 미선택·잘못된 플랫폼·복수 플랫폼 의존성도 별도 JVM 소비 테스트로 확인합니다. Android AAR에 ARM64 이외의 ABI가 들어가면 실패합니다. 전체 Maven 좌표는 라이브러리 22개와 엔진 14개를 합쳐 36개입니다. 모든 플랫폼의 라이브러리 POM/Gradle metadata에 엔진 의존성이 없고, JAR/KLIB/AAR에 엔진 파일이 없는지도 검사합니다. `verification/publish.py`는 합쳐진 **검증 완료 Maven 파일**을 재빌드 없이 게시합니다. PR에서는 게시하지 않으며 main push 또는 수동 publish 선택 시 모든 검증 성공 후 실행합니다. 실제 원격 게시 성공은 CI 검증 성공과 별도로 확인해야 합니다.
 
-기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k/README.md)를 참고하세요.
+기존 Conda/SWIG producer 스크립트는 더 이상 배포 경로가 아닙니다. 드라이버 프로필과 비동기 API의 변경 사항은 [공통 API 문서](../gdal4k-runtime/README.md)를 참고하세요.
 
 ## 웹 직접 읽기 검증
 

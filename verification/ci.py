@@ -28,7 +28,7 @@ def gradle(*tasks, options=()):
 
 def publish(target):
     title=target[0].upper()+target[1:]
-    modules=['gdal4k-runtime','gdal4k']
+    modules=['gdal4k','gdal4k-runtime']
     if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
     gradle(*(f':{m}:publish{p}PublicationToMavenLocal' for m in modules for p in ['KotlinMultiplatform',title]))
 
@@ -53,7 +53,7 @@ def stage(name, platforms=(), targets=(), include_root=False, include_tests=Fals
         if not directory.exists():raise RuntimeError('Missing publication '+coordinate)
         files.update(f for f in directory.rglob('*') if f.is_file())
     if include_tests:
-        files.update(f for f in (ROOT/'gdal4k/build/bin').rglob('*') if f.is_file() and 'debugTest' in f.parts)
+        files.update(f for f in (ROOT/'gdal4k-runtime/build/bin').rglob('*') if f.is_file() and 'debugTest' in f.parts)
         for result in (ROOT/'verification/results').glob('published-consumer-linuxArm64/bin/**/*'):
             if result.is_file():files.add(result)
     output=ROOT/f'verification/build/staged/{name}.tar.gz';output.parent.mkdir(parents=True,exist_ok=True)
@@ -68,21 +68,21 @@ def main():
     p.add_argument('--ios-device');a=p.parse_args();target=a.target
     if a.build_engine_only and target not in PLATFORMS:p.error('--build-engine-only requires a Native target')
     if target in PLATFORMS:
-        gradle(f':gdal4k-runtime:compileKotlin{target[0].upper()+target[1:]}') # initialize matching K/N toolchain
+        gradle(f':gdal4k:compileKotlin{target[0].upper()+target[1:]}') # initialize matching K/N toolchain
         if a.build_engine_only:
             run(sys.executable,ROOT/'gdal4k-engine/tools/build-engine.py',PLATFORMS[target])
             return
         cross=target in ['iosArm64','linuxArm64']
         options=[f'-PiosDevice={a.ios_device}'] if a.ios_device else []
-        tasks=[f':gdal4k:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k:{target}Test']
-        if target in ['macosArm64','linuxX64','mingwX64']:tasks+=[':gdal4k:jvmTest']
+        tasks=[f':gdal4k-runtime:linkDebugTest{target[0].upper()+target[1:]}'] if cross else [f':gdal4k-runtime:{target}Test']
+        if target in ['macosArm64','linuxX64','mingwX64']:tasks+=[':gdal4k-runtime:jvmTest']
         gradle(*tasks,options=options)
         run(sys.executable, ROOT/'verification/audit-engine.py', PLATFORMS[target])
         publish(target)
         consumer(target,*(['--compile-only'] if cross else []),*(['--ios-device',a.ios_device] if a.ios_device else []))
         stage(target,[PLATFORMS[target]],[target],include_tests=target=='linuxArm64')
     elif target=='web':
-        gradle(':gdal4k:jsNodeTest',':gdal4k:wasmJsNodeTest',':gdal4k:jsBrowserTest',':gdal4k:wasmJsBrowserTest')
+        gradle(':gdal4k-runtime:jsNodeTest',':gdal4k-runtime:wasmJsNodeTest',':gdal4k-runtime:jsBrowserTest',':gdal4k-runtime:wasmJsBrowserTest')
         run('node', ROOT/'verification/related-inputs.mjs')
         run(sys.executable, ROOT/'verification/audit-engine.py', 'web')
         for t in ['js','wasmJs']:
@@ -106,7 +106,7 @@ def main():
                 if hashlib.sha256((BUILD/name).read_bytes()).hexdigest()!=digest:
                     raise RuntimeError('Staged engine payload does not match its manifest: '+name)
         if len(fingerprints)!=1:raise RuntimeError('Staged engines were built from different sources')
-        gradle(':gdal4k:jvmTest')
+        gradle(':gdal4k-runtime:jvmTest')
         publish('jvm')
         gradle(*(f':gdal4k-jvm-binaries:publish{publication}PublicationToMavenLocal' for publication, _, _ in JVM_BINARIES.values()))
         run(sys.executable, ROOT/'verification/check-jvm-publications.py', '--repo', REPO)
@@ -133,7 +133,7 @@ def main():
         stage('jvm-maven',targets=['jvm'],include_root=True,include_jvm_binaries=True)
     elif target=='linuxArm64-run':
         # Kotlin/Native has no Linux ARM64 compiler host. Execute the cross-linked tests here.
-        native=ROOT/'gdal4k/build/bin/linuxArm64/debugTest/test.kexe'
+        native=ROOT/'gdal4k-runtime/build/bin/linuxArm64/debugTest/test.kexe'
         run(native)
         binaries=list((ROOT/'verification/results/published-consumer-linuxArm64/bin').glob('**/test.kexe'))
         if len(binaries)!=1:raise RuntimeError('Missing independent consumer executable')

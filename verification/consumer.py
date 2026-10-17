@@ -29,7 +29,7 @@ gradle=ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')
 def run(args,**kwargs):subprocess.run([str(x) for x in args],check=True,**kwargs)
 if not a.no_publish:
  tasks=[]
- modules=['gdal4k-runtime','gdal4k']
+ modules=['gdal4k','gdal4k-runtime']
  if target.lower().replace('wasmjs','wasm-js') in ENGINE_TARGETS:modules+=['gdal4k-engine']
  for module in modules:
   tasks += [f':{module}:publishKotlinMultiplatformPublicationToMavenLocal',f':{module}:publish{title}PublicationToMavenLocal']
@@ -135,7 +135,7 @@ kotlin {
     jvmToolchain(21)
     '''+declaration+'''
     sourceSets {
-        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k:'''+VERSION+'''") }
+        commonMain.dependencies { implementation("dev.tronto.gdal4k:gdal4k-runtime:'''+VERSION+'''") }
         commonTest.dependencies { implementation(kotlin("test")); implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2") }
         '''+extra+'''
     }
@@ -165,19 +165,19 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
  path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source)
  if not a.expect_missing_jvm_binary:
   # Exercise the expanded API from published coordinates, not producer project dependencies.
-  expanded = (ROOT/'gdal4k/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text()
+  expanded = (ROOT/'gdal4k-runtime/src/commonTest/kotlin/dev/gdal4k/DatasetApiTest.kt').read_text()
   expanded = expanded.replace('package dev.gdal4k\n','package consumer\nimport dev.gdal4k.Gdal4k\n')
   expanded_path = consumer/'src/commonTest/kotlin/consumer/DatasetApiTest.kt'
   expanded_path.write_text(expanded)
   test_set = 'androidDeviceTest' if target == 'android' else target+'Test' if target in ['jvm','js','wasmJs'] else 'nativeTest'
-  platform_path = ROOT/f'gdal4k/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
+  platform_path = ROOT/f'gdal4k-runtime/src/{test_set}/kotlin/dev/gdal4k/DatasetOutputPath.kt'
   actual_set = test_set if target in ['android','jvm','js','wasmJs'] else target+'Test'
   actual_path = consumer/f'src/{actual_set}/kotlin/consumer/DatasetOutputPath.kt'
   actual_path.parent.mkdir(parents=True,exist_ok=True)
   actual_path.write_text(platform_path.read_text().replace('package dev.gdal4k','package consumer'))
 
  if a.browser and target in ['js','wasmJs']:
-  browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text()
+  browser_source = (ROOT/f'gdal4k-runtime/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text()
   browser_source = browser_source.replace('package dev.gdal4k\n', 'package consumer\nimport dev.gdal4k.Gdal4k\n')
   browser_test = consumer/f'src/{target}Test/kotlin/consumer/BrowserFileTest.kt'
   browser_test.parent.mkdir(parents=True,exist_ok=True);browser_test.write_text(browser_source)

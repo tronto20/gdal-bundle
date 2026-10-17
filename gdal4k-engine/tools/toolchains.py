@@ -33,7 +33,7 @@ def konan_home():
     directory = Path(os.environ.get('KONAN_DATA_DIR', Path.home()/'.konan'))
     home = directory/f'kotlin-native-prebuilt-{host}-{arch}-{KOTLIN_VERSION}'
     if not home.exists():
-        raise RuntimeError(f'Initialize the pinned Kotlin/Native compiler first with a gdal4k-runtime native compilation task; expected {home}')
+        raise RuntimeError(f'Initialize the pinned Kotlin/Native compiler first with a gdal4k native compilation task; expected {home}')
     return home
 
 def native_toolchain(target, destination):

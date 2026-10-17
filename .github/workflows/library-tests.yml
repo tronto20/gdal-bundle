@@ -78,8 +78,8 @@ jobs:
         with:
           name: evidence-${{ matrix.target }}
           path: |
-            gdal4k/build/test-results/
-            gdal4k/build/reports/tests/
+            gdal4k-runtime/build/test-results/
+            gdal4k-runtime/build/reports/tests/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
             gdal4k-engine/build/engine/*/cmake/build.ninja
@@ -144,7 +144,7 @@ jobs:
         with:
           name: evidence-web
           path: |
-            gdal4k/build/test-results/
+            gdal4k-runtime/build/test-results/
             verification/results/published-consumer-*/
             verification/results/web-inputs-*/
             verification/results/related-inputs/
@@ -200,7 +200,7 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: python gdal4k/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi arm64-v8a --allow-native-bridge
+          script: python gdal4k-runtime/tools/run-android-tests.py --sdk "$ANDROID_HOME" --ndk "$ANDROID_NDK_HOME" --serial emulator-5554 --abi arm64-v8a --allow-native-bridge
       - uses: actions/cache/save@v6
         if: always()
         with:
@@ -216,8 +216,8 @@ jobs:
         with:
           name: evidence-android-${{ matrix.abi }}
           path: |
-            gdal4k/build/outputs/androidTest-results/
-            gdal4k/build/results/
+            gdal4k-runtime/build/outputs/androidTest-results/
+            gdal4k-runtime/build/results/
             verification/results/published-consumer-*/
             verification/tools/vcpkg/buildtrees/*/*.log
 
