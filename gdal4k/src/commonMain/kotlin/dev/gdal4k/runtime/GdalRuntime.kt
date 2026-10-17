@@ -13,19 +13,19 @@ interface GdalRuntime {
      * Defaults to -strict; pass -non_strict explicitly to permit GDAL to skip incompatible inputs.
      * This returns a live dataset, not a portable XML file with transient source paths.
      */
-    suspend fun buildVRT(sources: List<Dataset>, arguments: List<String> = emptyList()): Dataset
+    suspend fun buildVRT(sources: List<Dataset>, arguments: List<String>): Dataset
 
     /** Warps/mosaics in list order, with later valid pixels taking precedence.
      * Returns all generated files in memory. Use warpTo for large outputs.
      * Output must be a concrete file format, not VRT or MEM; arguments use GDAL utility syntax.
      */
-    suspend fun warp(sources: List<Dataset>, target: String, driver: String = "GTiff", name: String = "warped.tif", arguments: List<String> = emptyList()): GdalFiles
+    suspend fun warp(sources: List<Dataset>, target: String, driver: String = "GTiff", name: String = "warped.tif", arguments: List<String>): GdalFiles
 
     /** Writes directly to the GDAL/OS path (Node file / browser opfs:/ on web).
      * Does not return or stage the complete output in memory. Caller owns partial output on failure.
      * Uses a concrete output format; source handles remain owned by the caller.
      */
-    suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+    suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String = "GTiff", arguments: List<String>)
 
 
     suspend fun createColorTable(paletteInterpretation: Int = 1): ColorTable
@@ -99,26 +99,26 @@ interface Dataset {
      * Only concrete file formats are supported; MEM/VRT/stream and color-relief are excluded.
      * The source remains caller-owned. Progress callbacks are not exposed.
      */
-    suspend fun demProcessing(processing: String, driver: String = "GTiff", name: String = "terrain.tif", arguments: List<String> = emptyList()): GdalFiles
+    suspend fun demProcessing(processing: String, driver: String = "GTiff", name: String = "terrain.tif", arguments: List<String>): GdalFiles
 
     /**
      * Like [demProcessing], writing directly to an OS/Node path or browser opfs:/ path.
      * Output and sidecars, including partial files after failure/cancellation, belong
      * to the caller. No output bytes are copied back into a GdalFiles result.
      */
-    suspend fun demProcessingTo(path: String, processing: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+    suspend fun demProcessingTo(path: String, processing: String, driver: String = "GTiff", arguments: List<String>)
 
     /** Burns vector layers into a new raster using GDAL rasterize arguments (-burn/-a, -te, -ts/-tr, etc.).
      * Returns generated files in memory; use rasterizeTo for large outputs. Source remains caller-owned.
      * Requires a concrete file format (not MEM/VRT). Layer selection/filter/cursor behavior follows GDAL.
      */
-    suspend fun rasterize(driver: String = "GTiff", name: String = "rasterized.tif", arguments: List<String> = emptyList()): GdalFiles
+    suspend fun rasterize(driver: String = "GTiff", name: String = "rasterized.tif", arguments: List<String>): GdalFiles
 
     /** Creates a raster directly at the GDAL/OS path (Node file or browser opfs:/ on web).
      * Does not copy the complete output through the bridge. Caller owns partial output on failure/cancellation.
      * This creates output rather than updating an existing Dataset handle; arguments follow gdal_rasterize.
      */
-    suspend fun rasterizeTo(path: String, driver: String = "GTiff", arguments: List<String> = emptyList())
+    suspend fun rasterizeTo(path: String, driver: String = "GTiff", arguments: List<String>)
 
     suspend fun getRootGroup(): Group?
     /** Returns an independent domain/relationship copy, owned by the caller. */
@@ -153,9 +153,9 @@ interface Dataset {
     /** Writes directly to a GDAL/OS path. No output bytes are returned or copied through the bridge.
      * The caller owns output files, including any partial files after failure or cancellation.
      */
-    suspend fun translateTo(path: String, driver: String = "GTiff", arguments: List<String> = emptyList())
-    suspend fun warpTo(path: String, target: String, driver: String = "GTiff", arguments: List<String> = emptyList())
-    suspend fun translateVectorTo(path: String, driver: String = "GeoJSON", arguments: List<String> = emptyList())
+    suspend fun translateTo(path: String, driver: String = "GTiff", arguments: List<String>)
+    suspend fun warpTo(path: String, target: String, driver: String = "GTiff", arguments: List<String>)
+    suspend fun translateVectorTo(path: String, driver: String = "GeoJSON", arguments: List<String>)
 
     suspend fun createLayer(name: String, spatialReference: SpatialReference? = null, geometryType: Int = 0, options: List<String> = emptyList()): Layer?
     suspend fun copyLayer(source: Layer, name: String, options: List<String> = emptyList()): Layer?
@@ -183,25 +183,25 @@ interface Dataset {
     suspend fun close()
 
     /** GDAL JSON information for a raster or vector dataset. */
-    suspend fun info(arguments: List<String> = emptyList()): String
+    suspend fun info(arguments: List<String>): String
 
     suspend fun translate(
         driver: String = "GTiff",
         name: String = "output.tif",
-        arguments: List<String> = emptyList(),
+        arguments: List<String>,
     ): GdalFiles
 
     suspend fun warp(
         target: String,
         driver: String = "GTiff",
         name: String = "warped.tif",
-        arguments: List<String> = emptyList(),
+        arguments: List<String>,
     ): GdalFiles
 
     suspend fun translateVector(
         driver: String = "GeoJSON",
         name: String = "output.geojson",
-        arguments: List<String> = emptyList(),
+        arguments: List<String>,
     ): GdalFiles
 
     suspend fun flushCache(): Int

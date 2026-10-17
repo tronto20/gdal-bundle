@@ -25,7 +25,7 @@ class DemProcessingApiTest {
         FloatArray(out.getRasterXSize() * out.getRasterYSize()).also { assertEquals(0, out.readRaster(it)) }
     }
     @Test fun slopePlaneUnitsAndBandSelection() = runTest(timeout = 120.seconds) { source { ds ->
-        val degrees = ds.demProcessing("slope", arguments = listOf("-s", "1"))
+        val degrees = ds.demProcessing("slope", "-s", "1")
         assertEquals(45f, pixels(degrees)[12], 0.0001f)
         assertEquals(100f, pixels(ds.demProcessing("slope", arguments = listOf("-p", "-s", "1")))[12], 0.0001f)
         assertEquals(0f, pixels(ds.demProcessing("slope", arguments = listOf("-b", "2")))[12])
@@ -73,7 +73,7 @@ class DemProcessingApiTest {
         requireNotNull(runtime.getDriver("GTiff")).use { driver -> try {
             val result = source { ds ->
                 ds.demProcessingTo(path, "hillshade", arguments = listOf("-b", "2", "-co", "COMPRESS=JXL", "-co", "JXL_LOSSLESS=YES"))
-                ds.demProcessingTo(cogPath, "slope", driver = "COG", arguments = listOf("-s", "1"))
+                ds.demProcessingTo(cogPath, "slope", "-s", "1", driver = "COG")
                 ds.demProcessing("slope", name = "independent.tif", arguments = listOf("-s", "1"))
             }
             assertEquals("independent.tif", result.main); assertEquals(45f, pixels(result)[12], 0.0001f)
@@ -98,8 +98,8 @@ class DemProcessingApiTest {
         source { ds ->
             for (mode in listOf("", "missing", "color-relief", "slope\u0000")) assertFails { ds.demProcessing(mode) }
             for (driver in listOf("", "MEM", "vrt", "stream", "missing_driver")) {
-                assertFails { ds.demProcessing("slope", driver) }
-                assertFails { ds.demProcessingTo(datasetOutputPath("invalid-dem-output.tif"), "slope", driver) }
+                assertFails { ds.demProcessing("slope", driver = driver) }
+                assertFails { ds.demProcessingTo(datasetOutputPath("invalid-dem-output.tif"), "slope", driver = driver) }
             }
             for (args in listOf(listOf("-b", "0"), listOf("-b", "3"), listOf("-not-an-option"), listOf("-az", "5"), listOf("-co", "X=\u0000")))
                 assertFails { ds.demProcessing("slope", arguments = args) }

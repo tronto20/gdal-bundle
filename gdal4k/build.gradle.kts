@@ -13,6 +13,7 @@ kotlin {
     macosArm64(); linuxX64(); linuxArm64(); mingwX64()
     iosArm64(); iosSimulatorArm64()
     sourceSets.commonMain.dependencies { api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2") }
+    sourceSets.jvmTest.dependencies { implementation(kotlin("test-junit")) }
 }
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }

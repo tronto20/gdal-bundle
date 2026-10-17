@@ -47,7 +47,7 @@ class GdalIntegrationTest {
                 }
                 check(dataset.readRaster(window = RasterWindow(1, 0, 2, 2)).contentEquals(doubleArrayOf(1.0, 2.0, 4.0, 255.0)))
                 for (driver in listOf("GTiff", "COG")) {
-                    val output = dataset.translate(driver)
+                    val output = dataset.translate(driver = driver)
                     gdal.openDataset(output).use { reopened ->
                         check(reopened.readRaster().contentEquals(pixels))
                         if (driver == "COG") check(reopened.jsonInfo()["metadata"]!!.jsonObject["IMAGE_STRUCTURE"]!!.jsonObject["LAYOUT"]!!.jsonPrimitive.content == "COG")
@@ -61,7 +61,7 @@ class GdalIntegrationTest {
                         if (driver != "JPEGXL") check(reopened.info().toString().contains("JXL"))
                     }
                 }
-                val warped = dataset.warp("EPSG:3857", arguments = listOf("-ts", "3", "2", "-r", "near"))
+                val warped = dataset.warp("EPSG:3857", "-ts", "3", "2", "-r", "near")
                 gdal.openDataset(warped).use { reopened ->
                     check(reopened.getRasterXSize() == 3 && reopened.getRasterYSize() == 2)
                     check(reopened.jsonInfo()["coordinateSystem"]!!.jsonObject["wkt"]!!.jsonPrimitive.content.contains("3857"))
@@ -71,7 +71,7 @@ class GdalIntegrationTest {
                     check(other.getFileList().none { it in inputPaths })
                     check(other.readRaster().contentEquals(pixels))
                 }
-                expectFailure { dataset.translate("GDAL4K_MISSING_DRIVER") }
+                expectFailure { dataset.translate(driver = "GDAL4K_MISSING_DRIVER") }
                 expectFailure { dataset.info(listOf("--gdal4k-invalid-option")) }
                 check(dataset.readRaster().contentEquals(pixels)) // error state must be reset
                 stale = dataset
@@ -89,7 +89,7 @@ class GdalIntegrationTest {
                 check(ds.getLayerCount() == 1)
                 requireNotNull(ds.getLayer(0)).use { layer -> check(layer.getFeatureCount() == 1L) }
                 check(ds.jsonInfo()["layers"]!!.jsonArray.single().jsonObject["featureCount"]!!.jsonPrimitive.int == 1)
-                val shp = ds.translateVector("ESRI Shapefile", "shape.shp")
+                val shp = ds.translateVector(driver = "ESRI Shapefile", name = "shape.shp")
                 check(shp.files.any { it.name.endsWith(".dbf") } && shp.files.any { it.name.endsWith(".shx") })
                 gdal.openDataset(shp).use { reopened ->
                     val json = reopened.translateVector().mainFile().bytes.decodeToString()

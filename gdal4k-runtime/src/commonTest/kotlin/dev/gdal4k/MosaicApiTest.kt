@@ -24,7 +24,7 @@ class MosaicApiTest {
                 assertEquals("VRT",vrt.getDriverShortName());assertEquals(4,vrt.getRasterXSize());assertEquals(2,vrt.getRasterYSize())
                 assertContentEquals(byteArrayOf(1,2,5,6,3,4,7,8),pixels(vrt))
                 assertContentEquals(doubleArrayOf(0.0,1.0,0.0,2.0,0.0,-1.0),vrt.getGeoTransform())
-                vrt.translate("COG").let { files -> r.openDataset(files).use { assertContentEquals(pixels(vrt),pixels(it)) } }
+                vrt.translate(driver = "COG").let { files -> r.openDataset(files).use { assertContentEquals(pixels(vrt),pixels(it)) } }
             }
             r.buildVRT(listOf(left,right),listOf("-separate","-vrtnodata","99")).use { vrt ->
                 assertEquals(2,vrt.getRasterCount())
@@ -39,9 +39,9 @@ class MosaicApiTest {
         val r=Gdal4k.runtime()
         tile(r,0.0,byteArrayOf(1,2,3,4)).use { a -> tile(r,0.0,byteArrayOf(9,0,0,8)).use { b ->
             requireNotNull(b.getRasterBand(1)).use { assertEquals(0,it.setNoDataValue(0.0)) }
-            r.buildVRT(listOf(a,b)).use { assertContentEquals(byteArrayOf(9,2,3,8),pixels(it)) }
+            r.buildVRT(listOf(a,b), "-resolution", "highest").use { assertContentEquals(byteArrayOf(9,2,3,8),pixels(it)) }
             r.buildVRT(listOf(b,a)).use { assertContentEquals(byteArrayOf(1,2,3,4),pixels(it)) }
-            r.openDataset(r.warp(listOf(a,b),"EPSG:4326",arguments=listOf("-r","near"))).use { assertContentEquals(byteArrayOf(9,2,3,8),pixels(it)) }
+            r.openDataset(r.warp(listOf(a,b),"EPSG:4326","-r","near")).use { assertContentEquals(byteArrayOf(9,2,3,8),pixels(it)) }
             r.openDataset(r.warp(listOf(b,a),"EPSG:4326")).use { assertContentEquals(byteArrayOf(1,2,3,4),pixels(it)) }
         } }
     }
