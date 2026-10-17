@@ -7,6 +7,19 @@ package dev.gdal4k.runtime
  * the common collection/point accessors used by feature editing code.
  */
 interface Geometry {
+    /** Independent CRS copy; remains valid after this geometry closes. */
+    suspend fun getSpatialReference(): SpatialReference?
+    /** Assigns CRS metadata only. Null removes it; coordinates do not change. */
+    suspend fun assignSpatialReference(spatialReference: SpatialReference?)
+
+    /** Planar GEOS overlay in the input coordinate units. Does not reproject or repair inputs.
+     * Different explicitly assigned CRSs are rejected. Returns an independent geometry;
+     * Empty results may be null or empty geometries; native operation failures throw.
+     */
+    suspend fun intersection(other: Geometry): Geometry?
+    suspend fun union(other: Geometry): Geometry?
+    suspend fun difference(other: Geometry): Geometry?
+
     suspend fun close()
 
     suspend fun cloneGeometry(): Geometry

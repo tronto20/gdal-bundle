@@ -7,6 +7,16 @@ import dev.gdal4k.GdalFiles
  * Common GDAL entry point for dataset, spatial reference, and transformation operations.
  */
 interface GdalRuntime {
+    /** Creates an owned geometry. Optional CRS is assigned without transforming coordinates.
+     * Invalid/truncated input throws. Close the result with use.
+     */
+    suspend fun createGeometryFromWkt(wkt: String, spatialReference: SpatialReference? = null): Geometry
+    suspend fun createGeometryFromWkb(wkb: ByteArray, spatialReference: SpatialReference? = null): Geometry
+    /** Accepts a GeoJSON geometry object, not a Feature or FeatureCollection.
+     * Without an override, CRS handling follows GDAL's GeoJSON geometry parser.
+     */
+    suspend fun createGeometryFromGeoJson(geoJson: String, spatialReference: SpatialReference? = null): Geometry
+
     /** Builds a lazy, in-memory VRT without copying pixels. Inputs are used in list order.
      * Keeps native inputs, URI/file mounts and their workspaces alive even after their Kotlin handles close;
      * closes those resources when the last dependent VRT closes. Close the returned Dataset.

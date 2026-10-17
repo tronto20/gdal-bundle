@@ -6,6 +6,9 @@ import dev.gdal4k.*
 import kotlinx.serialization.json.*
 
 internal class BundledGdalRuntime(engine: RuntimeEngine) : RuntimeHandle(engine, "0", null), GdalRuntime {
+    override suspend fun createGeometryFromWkt(wkt: String, spatialReference: SpatialReference?): Geometry { val result = invoke("GdalRuntime", "createGeometryFromWkt_String_SpatialReference", mapOf("wkt" to encode(wkt), "spatialReference" to handle(spatialReference))); return requireNotNull(engine.wrapGeometry(result, null)) }
+    override suspend fun createGeometryFromWkb(wkb: ByteArray, spatialReference: SpatialReference?): Geometry { val result = invoke("GdalRuntime", "createGeometryFromWkb_ByteArray_SpatialReference", mapOf("wkb" to encode(wkb), "spatialReference" to handle(spatialReference))); return requireNotNull(engine.wrapGeometry(result, null)) }
+    override suspend fun createGeometryFromGeoJson(geoJson: String, spatialReference: SpatialReference?): Geometry { val result = invoke("GdalRuntime", "createGeometryFromGeoJson_String_SpatialReference", mapOf("geoJson" to encode(geoJson), "spatialReference" to handle(spatialReference))); return requireNotNull(engine.wrapGeometry(result, null)) }
     override suspend fun buildVRT(sources: List<Dataset>, arguments: List<String>): Dataset { val result = invoke("GdalRuntime", "buildVRT_List_Dataset_List_String", mapOf("sources" to encode(sources), "arguments" to encode(arguments))); return requireNotNull(engine.wrapDataset(result, null)) }
     override suspend fun warp(sources: List<Dataset>, target: String, driver: String, name: String, arguments: List<String>): GdalFiles { val result = invoke("GdalRuntime", "warp_List_Dataset_String_String_String_List_String", mapOf("sources" to encode(sources), "target" to encode(target), "driver" to encode(driver), "name" to encode(name), "arguments" to encode(arguments))); return decodeFiles(result) }
     override suspend fun warpTo(sources: List<Dataset>, path: String, target: String, driver: String, arguments: List<String>): Unit { invoke("GdalRuntime", "warpTo_List_Dataset_String_String_String_List_String", mapOf("sources" to encode(sources), "path" to encode(path), "target" to encode(target), "driver" to encode(driver), "arguments" to encode(arguments))); return Unit }
@@ -324,6 +327,9 @@ internal class BundledGCP(engine: RuntimeEngine, id: String, parent: RuntimeHand
 }
 
 internal class BundledLayer(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Layer {
+    override suspend fun setSpatialFilter(filter: Geometry?): Int { val result = invoke("Layer", "setSpatialFilter_Geometry", mapOf("filter" to handle(filter))); return result.jsonPrimitive.int }
+    override suspend fun setSpatialFilterRect(minX: Double, minY: Double, maxX: Double, maxY: Double): Int { val result = invoke("Layer", "setSpatialFilterRect_Double_Double_Double_Double", mapOf("minX" to encode(minX), "minY" to encode(minY), "maxX" to encode(maxX), "maxY" to encode(maxY))); return result.jsonPrimitive.int }
+    override suspend fun getSpatialFilter(): Geometry? { val result = invoke("Layer", "getSpatialFilter", mapOf()); return engine.wrapGeometry(result, null) }
     override suspend fun deleteField(index: Int): Int { val result = invoke("Layer", "deleteField_Int", mapOf("index" to encode(index))); return result.jsonPrimitive.int }
     override suspend fun reorderFields(newToOld: IntArray): Int { val result = invoke("Layer", "reorderFields_IntArray", mapOf("newToOld" to encode(newToOld))); return result.jsonPrimitive.int }
     override suspend fun reorderField(oldIndex: Int, newIndex: Int): Int { val result = invoke("Layer", "reorderField_Int_Int", mapOf("oldIndex" to encode(oldIndex), "newIndex" to encode(newIndex))); return result.jsonPrimitive.int }
@@ -499,6 +505,11 @@ internal class BundledGeomFieldDefn(engine: RuntimeEngine, id: String, parent: R
 }
 
 internal class BundledGeometry(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Geometry {
+    override suspend fun getSpatialReference(): SpatialReference? { val result = invoke("Geometry", "getSpatialReference", mapOf()); return engine.wrapSpatialReference(result, null) }
+    override suspend fun assignSpatialReference(spatialReference: SpatialReference?): Unit { invoke("Geometry", "assignSpatialReference_SpatialReference", mapOf("spatialReference" to handle(spatialReference))); return Unit }
+    override suspend fun intersection(other: Geometry): Geometry? { val result = invoke("Geometry", "intersection_Geometry", mapOf("other" to handle(other))); return engine.wrapGeometry(result, null) }
+    override suspend fun union(other: Geometry): Geometry? { val result = invoke("Geometry", "union_Geometry", mapOf("other" to handle(other))); return engine.wrapGeometry(result, null) }
+    override suspend fun difference(other: Geometry): Geometry? { val result = invoke("Geometry", "difference_Geometry", mapOf("other" to handle(other))); return engine.wrapGeometry(result, null) }
     override suspend fun close() = closeHandle()
     override suspend fun cloneGeometry(): Geometry { val result = invoke("Geometry", "cloneGeometry", mapOf()); return requireNotNull(engine.wrapGeometry(result, null)) }
     override suspend fun getGeometryType(): Int { val result = invoke("Geometry", "getGeometryType", mapOf()); return result.jsonPrimitive.int }

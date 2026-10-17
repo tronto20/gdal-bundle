@@ -6,6 +6,17 @@ package dev.gdal4k.runtime
  * The first pass keeps the surface focused on layer metadata, filtering, and iteration state.
  */
 interface Layer {
+    /** Filters the default geometry field. Copies filter; null clears it. Changes reset reading;
+     * use resetReading to rewind when the filter is already unchanged/cleared.
+     * Coordinates must use the layer CRS; different explicitly assigned CRSs are rejected.
+     * Combined with the attribute filter. GDAL/driver filtering may return envelope candidates;
+     * getFeature(fid) is random access and does not apply this filter.
+     */
+    suspend fun setSpatialFilter(filter: Geometry?): Int
+    suspend fun setSpatialFilterRect(minX: Double, minY: Double, maxX: Double, maxY: Double): Int
+    /** Independent copy, unaffected by later filter changes or layer/dataset close. */
+    suspend fun getSpatialFilter(): Geometry?
+
     /** Attribute schema changes require all Features using this layer definition (including clones)
      * to be closed first. Clear the attribute filter and close active SQL results first. Reacquire layer/field definitions after an attempted native change,
      * including a nonzero driver error. Driver capabilities and conversion rules apply;

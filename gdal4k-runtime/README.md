@@ -38,8 +38,8 @@ suspend fun readBand(bytes: ByteArray): ByteArray {
 | 공간 정보 | 영상 크기·밴드 타입·투영·GeoTransform·GCP, NoData·색 해석·마스크·overview 조회/생성 |
 | 포맷 변환 | `Driver.createCopy` 또는 `Dataset.translate`, GTiff·COG·JPEGXL 출력과 JXL 압축 |
 | 재투영 | `Dataset.warp`, CRS 생성·변환 및 좌표 목록 변환 |
-| 벡터 | 레이어·피처·필드 조회/편집, 속성 필터, `Dataset.translateVector`(GDAL 공간 필터 옵션 포함) |
-| Geometry | WKT/WKB/GeoJSON 등 내보내기, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
+| 벡터 | 레이어·피처·필드 조회/편집, 속성·공간 필터, `Dataset.translateVector`(GDAL 공간 필터 옵션 포함) |
+| Geometry | WKT/WKB/GeoJSON 생성·내보내기, CRS 할당, intersection/union/difference, 면적·길이·거리, 공간 관계·buffer·단순화·유효성 복구 |
 | 래스터→벡터 | `Dataset.polygonize` / `polygonizeTo`, 밴드·마스크·4/8방향 연결, GPKG·GeoJSON 등 새 벡터 파일 생성 |
 | 메모리 파일 | `/vsimem/` 바이트 입출력, 다중 파일 묶음(예: Shapefile) |
 
@@ -332,3 +332,16 @@ OGR 속성 스키마는 `Layer.deleteField/reorderField/reorderFields/alterField
 무관하게 borrowed 정의를 다시 조회합니다. borrowed FieldDefn setter/FeatureDefn 구조 변경은
 거부되며 독립 clone을 변경해 Layer API에 전달합니다. 지원 여부·변환·오류 코드는 드라이버 정책이며
 자동 트랜잭션·rollback은 없습니다. `createField`에도 같은 Feature 수명 검사가 적용됩니다.
+
+## OGR Geometry와 공간 필터
+
+`GdalRuntime.createGeometryFromWkt/FromWkb/FromGeoJson`으로 새 Geometry를 만들고
+기존 `Feature.setGeometry` / `Layer.createFeature` / `setFeature`로 피처를 작성·편집합니다.
+입력 형식 오류는 예외이며 빈 WKB는 GDAL 호출 전에 거부합니다. 생성·overlay·CRS 조회·필터
+조회 결과는 독립 핸들이므로 `use`로 닫습니다. CRS 할당은 좌표 변환이 아닙니다.
+
+`Geometry.intersection/union/difference`는 GEOS 기반 평면 연산이고 자동 재투영/복구를
+수행하지 않습니다. `Layer.setSpatialFilter`와 `setSpatialFilterRect`는 기본 geometry field를
+필터링하고 변경 시 읽기를 초기화합니다. 공간/속성 조건은 함께 적용되지만 `getFeature(fid)`는
+필터를 무시합니다. 드라이버의 envelope 후보 판정 가능성을 포함한 정확한 계약과 예시는
+[OGR 사용법](../README.md#ogr-geometry-생성과-공간-조회)을 참고하세요.

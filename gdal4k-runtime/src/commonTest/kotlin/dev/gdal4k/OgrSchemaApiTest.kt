@@ -7,16 +7,17 @@ import kotlin.test.*
 import kotlin.time.Duration.Companion.seconds
 
 class OgrSchemaApiTest {
-    private suspend fun table(block: suspend (Dataset, Layer) -> Unit) {
+    private suspend fun table(geometryType: Int = 100, block: suspend (Dataset, Layer) -> Unit) {
         val r = Gdal4k.runtime(); val path = "/vsimem/$datasetOutputPrefix-schema.gpkg"
         requireNotNull(r.getDriver("GPKG")).use { driver ->
             try {
                 requireNotNull(driver.createVector(path)).use { dataset ->
-                    requireNotNull(dataset.createLayer("items", geometryType = 100)).use { layer ->
+                    requireNotNull(dataset.createLayer("items", geometryType = geometryType)).use { layer ->
                         for ((name, type) in listOf("name" to 4, "number" to 0, "extra" to 4))
                             r.createFieldDefn(name, type).use { assertEquals(0, layer.createField(it, false)) }
                         requireNotNull(layer.getLayerDefn()).use { definition ->
                             r.createFeature(definition).use { feature ->
+                                if (geometryType != 100) r.createGeometryFromWkt("POINT (0 0)").use { assertEquals(0, feature.setGeometry(it)) }
                                 feature.setField("name", "alpha"); feature.setField("number", 42); feature.setField("extra", "tail")
                                 assertEquals(0, layer.createFeature(feature))
                             }
@@ -157,4 +158,21 @@ class OgrSchemaApiTest {
             }
         }
     }
+    @Test fun schemaChangesPreserveSpatialFiltersAndIndependentFilterCopies() = runTest(timeout = 120.seconds) {
+        var retained: Geometry? = null
+        table(geometryType = 1) { _, layer ->
+            assertEquals(0, layer.setSpatialFilterRect(-1.0, -1.0, 1.0, 1.0))
+            retained = requireNotNull(layer.getSpatialFilter())
+            assertEquals(0, layer.deleteField(2))
+            assertEquals(1, layer.getFeatureCount(true))
+            requireNotNull(layer.getNextFeature()).use { feature ->
+                assertEquals("alpha", feature.getFieldAsString("name"))
+                requireNotNull(feature.getGeometryRef()).use { assertContentEquals(doubleArrayOf(0.0, 0.0, 0.0), it.getPoint(0)) }
+            }
+            assertEquals(0, layer.setSpatialFilterRect(9.0, 9.0, 11.0, 11.0)); assertEquals(0, layer.getFeatureCount(true))
+            assertEquals(0, layer.setSpatialFilter(null)); assertEquals(1, layer.getFeatureCount(true))
+        }
+        requireNotNull(retained).use { assertEquals(4.0, it.getArea(), 1e-9) }
+    }
+
 }

@@ -168,6 +168,48 @@ setter나 FeatureDefn 직접 구조 변경은 거부하며, clone을 편집해 L
 flags는 `FieldAlterFlags`를 `or`로 조합합니다. 별도 자동 트랜잭션·형 변환 fallback·복구는 없고,
 GDAL 드라이버 실패는 nonzero 오류 코드로 반환합니다. 파일 전체를 bridge로 복사하지 않습니다.
 
+### OGR Geometry 생성과 공간 조회
+
+```kotlin
+val runtime = Gdal4k.runtime()
+runtime.createGeometryFromWkt("POLYGON ((0 0,2 0,2 2,0 2,0 0))").use { source ->
+    runtime.createGeometryFromGeoJson(
+        """{"type":"Polygon","coordinates":[[[1,1],[3,1],[3,3],[1,3],[1,1]]]}"""
+    ).use { other ->
+        source.intersection(other)?.use { intersection -> println(intersection.getArea()) } // 1.0
+    }
+}
+```
+
+`createGeometryFromWkt` / `createGeometryFromWkb` / `createGeometryFromGeoJson`는
+호출자가 `use`로 닫는 독립 Geometry를 만듭니다. GeoJSON은 Geometry 객체를 받으며
+Feature/FeatureCollection은 받지 않습니다. 선택적인 `spatialReference`와
+`Geometry.assignSpatialReference`는 CRS 메타데이터만 붙이고 좌표를 바꾸지 않습니다.
+`getSpatialReference()`는 원본을 닫아도 사용할 수 있는 독립 복사본을 반환합니다.
+
+`intersection` / `union` / `difference`는 현재 좌표 단위의 평면 GEOS 연산입니다.
+입력은 보존하며 결과는 독립 소유입니다. 자동 재투영이나 도형 복구를 하지 않고,
+서로 다른 CRS가 양쪽에 명시되어 있으면 거부합니다. 한쪽 CRS가 없을 때 좌표계가 맞는지는
+호출자가 확인해야 합니다. 결과가 없으면 null 또는 빈 Geometry이며, 연산 실패는 예외입니다.
+
+```kotlin
+runtime.openDataset("areas.gpkg").use { dataset ->
+    requireNotNull(dataset.getLayer(0)).use { layer ->
+        check(layer.setSpatialFilterRect(0.0, 0.0, 10.0, 10.0) == 0)
+        println(layer.getFeatureCount(true))
+        check(layer.setSpatialFilter(null) == 0) // 공간 조건 해제
+    }
+}
+```
+
+`setSpatialFilter(geometry)`는 입력을 복사하고, `getSpatialFilter()`도 독립 복사본을
+반환합니다. 기본 geometry field의 필터만 다루며 필터 변경 시 읽기 커서를 초기화합니다.
+이미 같은 필터 상태에서 되감으려면 `resetReading()`을 명시적으로 호출합니다.
+공간 조건은 속성 필터와 함께 적용됩니다. GDAL/드라이버에 따라 envelope 후보가 포함될 수
+있으므로 엄밀한 교차 판정이 필요하면 피처 Geometry로 추가 확인합니다. `getFeature(fid)`는
+필터를 적용하지 않는 임의 접근입니다. 필터 좌표는 레이어 CRS 단위여야 하며 알려진 CRS
+혼용을 거부합니다. 사각 범위는 유한한 값과 min≤max를 요구합니다.
+
 ### 분류 래스터를 폴리곤으로 변환 (Polygonize)
 
 ```kotlin
