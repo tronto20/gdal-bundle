@@ -64,7 +64,7 @@ class MosaicApiTest {
     }
 
     @Test fun multiInputWarpReprojectsAndWritesDirectly() = runTest(timeout=120.seconds) {
-        val r=Gdal4k.runtime();val path=datasetOutputPath("multi-warp.tif")
+        val r=Gdal4k.runtime();val path=datasetOutputPath("multi-warp.tif");val cogPath=datasetOutputPath("multi-warp-cog.tif")
         tile(r,0.0,byteArrayOf(1,2,3,4)).use { a -> tile(r,2.0,byteArrayOf(5,6,7,8)).use { b ->
             val options=listOf("-r","near","-ts","4","2")
             val files=r.warp(listOf(a,b),"EPSG:3857",driver="COG",name="mosaic.tif",arguments=options)
@@ -77,7 +77,9 @@ class MosaicApiTest {
                     r.warpTo(listOf(a,b),path,"EPSG:3857",arguments=options)
                     val mounted=r.openDataset(path);val virtual=r.buildVRT(listOf(mounted));mounted.close()
                     virtual.use { assertContentEquals(byteArrayOf(1,2,5,6,3,4,7,8),pixels(it)) }
-                } finally { driver.delete(path) }
+                    r.warpTo(listOf(a,b),cogPath,"EPSG:3857",driver="COG",arguments=options)
+                    r.openDataset(cogPath).use { assertContentEquals(byteArrayOf(1,2,5,6,3,4,7,8),pixels(it)) }
+                } finally { driver.delete(path);driver.delete(cogPath) }
             }
             assertContentEquals(byteArrayOf(1,2,3,4),pixels(a));assertContentEquals(byteArrayOf(5,6,7,8),pixels(b))
         } }

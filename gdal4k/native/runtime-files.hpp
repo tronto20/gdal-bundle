@@ -20,6 +20,23 @@ struct FileOptions {
     }
     ~FileOptions() { CSLDestroy(list); }
 };
+// GDALWarp's CreateCopy path (including COG) materializes a temporary GTiff.
+// Without CPL_TMPDIR it can use the process cwd, which is read-only on Android.
+// Use the output filesystem rather than staging a direct output in memory.
+struct OutputTemporaryDirectory {
+    char** previous = nullptr;
+    bool changed = false;
+    explicit OutputTemporaryDirectory(const std::string& path, bool enabled = true) {
+        if (enabled && !CPLGetConfigOption("CPL_TMPDIR", nullptr)) {
+            previous = CPLGetThreadLocalConfigOptions(); changed = true;
+            auto directory = CPLGetPathSafe(path.c_str());
+            CPLSetThreadLocalConfigOption("CPL_TMPDIR", directory.empty() ? "." : directory.c_str());
+        }
+    }
+    ~OutputTemporaryDirectory() {
+        if (changed) { CPLSetThreadLocalConfigOptions(previous); CSLDestroy(previous); }
+    }
+};
 inline CPLJSONObject objectValue(const CPLJSONObject& object) {
     CPLJSONObject result; result.Add("value", object); return result;
 }
@@ -108,6 +125,7 @@ inline void convertDatasetPath(GDALDatasetH dataset, const CPLJSONObject& args, 
     options.add(operation == "vector" ? "-f" : "-of"); options.add(args.GetString("driver"));
     GDALDatasetH result = nullptr;
     int usageError = 0;
+    OutputTemporaryDirectory temporary(path, operation == "warp");
     if (operation == "translate") {
         auto opts = GDALTranslateOptionsNew(options.list, nullptr); fileEnsure(opts != nullptr, "Invalid translate options");
         result = GDALTranslate(path.c_str(), dataset, opts, &usageError); GDALTranslateOptionsFree(opts);
@@ -162,6 +180,7 @@ inline void warpDatasetPath(Runtime& r,const CPLJSONObject& a,const std::string&
     require(!EQUAL(driver.c_str(),"VRT")&&!EQUAL(driver.c_str(),"MEM"),"Warp file output requires a concrete format, not VRT or MEM");
     FileOptions options(a.GetArray("arguments"));options.add("-t_srs");options.add(target);options.add("-of");options.add(driver);
     auto opts=GDALWarpAppOptionsNew(options.list,nullptr);fileEnsure(opts!=nullptr,"Invalid warp options");
+    OutputTemporaryDirectory temporary(path);
     int usage=0;auto p=GDALWarp(path.c_str(),nullptr,static_cast<int>(sources.datasets.size()),sources.datasets.data(),opts,&usage);
     GDALWarpAppOptionsFree(opts);auto code=p?GDALClose(p):CE_Failure;
     fileEnsure(p!=nullptr&&code==CE_None&&!usage,"Cannot warp datasets");
