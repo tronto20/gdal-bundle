@@ -13,6 +13,15 @@ env:
   VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/verification/build/vcpkg-cache,readwrite
 
 jobs:
+  publisher:
+    name: Central publication lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.14' }
+      - run: python -m unittest discover -s verification -p test_publish.py
   native:
     name: Native ${{ matrix.target }}
     strategy:

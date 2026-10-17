@@ -8,6 +8,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from jvm_binaries import JVM_BINARIES
+from central_release import CentralRelease
 
 ROOT=Path(__file__).resolve().parent.parent
 p=argparse.ArgumentParser(description=__doc__)
@@ -33,6 +34,17 @@ for directory in sorted(base.iterdir()):
         artifacts.append({'file':str(f),'extension':f.suffix[1:],'classifier':classifier})
     if not artifacts:raise SystemExit('Missing tested payload '+str(pom))
     items.append({'coordinate':coordinate,'pom':str(pom),'artifacts':artifacts})
+
+versions={item['coordinate'][2] for item in items}
+if len(versions)!=1:raise SystemExit('Expected the same tested version for every coordinate')
+version=versions.pop()
+target=os.environ.get('PUBLISH_TARGET') or 'mavenCentral'
+if target not in {'mavenCentral','githubPackages'}:raise SystemExit('Unexpected PUBLISH_TARGET')
+release=None
+if not a.destination and target=='mavenCentral' and not version.endswith('SNAPSHOT'):
+    release=CentralRelease.from_environment()
+    if not ('dev.tronto.gdal4k'==release.namespace or 'dev.tronto.gdal4k'.startswith(release.namespace+'.')):
+        raise SystemExit('MAVEN_CENTRAL_NAMESPACE must own dev.tronto.gdal4k')
 
 with tempfile.TemporaryDirectory(prefix='gdal4k-verified-publisher-') as temporary:
     project=Path(temporary)
@@ -76,9 +88,13 @@ items.eachWithIndex { item, index ->
 if(central && !snapshot) signing {
     def key=System.getenv('SIGNING_KEY')
     if(key && !key.contains('-----BEGIN PGP')) key=new String(Base64.mimeDecoder.decode(key),'UTF-8')
-    useInMemoryPgpKeys(System.getenv('SIGNING_KEY_ID'),key,System.getenv('SIGNING_PASSWORD') ?: '')
+    useInMemoryPgpKeys(System.getenv('SIGNING_KEY_ID')?.trim() ?: null,key,System.getenv('SIGNING_PASSWORD') ?: '')
     sign publishing.publications
 }
 '''
     (project/'build.gradle').write_text(build)
     subprocess.run([str(ROOT/('gradlew.bat' if os.name=='nt' else 'gradlew')),'-p',str(project),'--console=plain','publish'],check=True)
+
+if release:
+    deployment=release.finalize()
+    print('Maven Central publication complete: '+deployment,flush=True)

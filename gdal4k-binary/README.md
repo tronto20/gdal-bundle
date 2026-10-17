@@ -91,4 +91,19 @@ python3 verification/web-inputs.py --memory-only --window-only --profile-label w
 
 main push의 전체 검증이 성공하면 검증한 Maven 파일을 기본적으로 Maven Central에 게시합니다. 현재 `3.12.4-1.0.1-SNAPSHOT`은 `https://central.sonatype.com/repository/maven-snapshots/`로 전송합니다. 수동 workflow도 `mavenCentral`이 기본이며 `githubPackages`는 명시적으로 선택할 수 있습니다. PR에서는 원격 게시하지 않습니다.
 
-GitHub Actions repository secrets의 `MAVEN_CENTRAL_USERNAME`과 `MAVEN_CENTRAL_PASSWORD`에는 Central Portal에서 생성한 사용자 토큰의 username/password를 등록합니다. 게시 namespace에 Snapshot 게시가 활성화되어 있어야 합니다. Snapshot 게시에는 PGP 서명을 요구하지 않습니다. 정식 릴리스는 기존 `SIGNING_KEY`, `SIGNING_KEY_ID`, `SIGNING_PASSWORD` 설정을 사용해 서명합니다. 설정 변경만으로 실제 원격 게시 성공이 확인되는 것은 아닙니다.
+GitHub Actions의 `mavenCentral` Environment에 PostGIS 저장소와 같은 Secrets를 등록합니다. 기존 이름도 계속 사용할 수 있으며 둘 다 있으면 기존 GDAL 이름을 우선합니다.
+
+| PostGIS와 같은 이름 | 기존 GDAL 이름 | 내용 |
+| --- | --- | --- |
+| `MAVEN_USER` | `MAVEN_CENTRAL_USERNAME` | Central Portal 사용자 토큰 username |
+| `MAVEN_PASS` | `MAVEN_CENTRAL_PASSWORD` | Central Portal 사용자 토큰 password |
+| `SIGNING_CERT` | `SIGNING_KEY` | ASCII-armored PGP 개인키 또는 그 Base64 값 |
+| `SIGNING_PASS` | `SIGNING_PASSWORD` | 개인키 암호 |
+
+`SIGNING_KEY_ID`는 선택입니다. 공개키는 Central에서 조회할 수 있도록 공개키 서버에 등록되어 있어야 합니다. 다른 저장소의 Secrets는 자동 공유되지 않으므로 이 저장소에도 등록합니다. Environment variable `MAVEN_CENTRAL_NAMESPACE`는 Portal에 표시되는 실제 namespace로 설정합니다(기본 `dev.tronto.gdal4k`). 토큰은 해당 namespace의 게시 권한이 있어야 하며, 상위 namespace인 `dev.tronto`가 등록되어 있다면 그 값을 지정합니다.
+
+Snapshot은 PGP 서명 없이 Snapshot 저장소에 직접 게시하며 해당 namespace의 Snapshot 게시가 활성화되어 있어야 합니다. 정식 버전(`-SNAPSHOT`이 없는 버전)은 전체 검증 후 CI에서 PGP 서명 → 검증한 파일 업로드 → 같은 runner에서 Portal에 `publishing_type=automatic` 전달 → 해당 deployment가 `PUBLISHED`가 될 때까지 확인합니다. 실패·시간 초과는 CI 실패로 처리하며 Portal 전달 요청을 자동으로 재시도하지 않습니다. Portal에서 수동 Publish를 누를 필요는 없습니다. 이 흐름은 [Sonatype OSSRH 호환 API](https://central.sonatype.org/publish/publish-portal-ossrh-staging-api/)와 [deployment 상태 API](https://central.sonatype.org/publish/publish-portal-api/)를 사용합니다.
+
+현재 버전은 Snapshot이므로 이 변경만으로 정식 버전이 공개되지는 않습니다. 정식 릴리스를 만들 때는 소스의 `gdal4kVersion`을 정식 버전으로 변경하여 전체 CI에서 동일한 버전을 검증·게시합니다. PR에서는 원격 게시하지 않으며 로컬 `--destination` 게시 검증 및 GitHub Packages 게시에서는 Portal API를 호출하지 않습니다. 루트 Gradle의 개별 publication 게시 명령은 업로드만 수행합니다. 전체 검증 파일을 모은 `verification/publish.py`가 CI의 최종 공개 경로입니다.
+
+`python3 -m unittest discover -s verification -p test_publish.py`는 공개 성공·실패·시간 초과, 현재 deployment 식별, Snapshot/로컬/GitHub Packages의 분기와 업로드 실패 시 미공개를 원격 요청 없이 검사합니다. 실제 원격 게시 성공은 CI 검증 및 설정 검증과 별도로 확인해야 합니다.
