@@ -128,3 +128,23 @@ Snapshot은 PGP 서명 없이 Snapshot 저장소에 직접 게시하며 해당 n
 현재 버전은 Snapshot이므로 이 변경만으로 정식 버전이 공개되지는 않습니다. 정식 릴리스를 만들 때는 소스의 `gdal4kVersion`을 정식 버전으로 변경하여 전체 CI에서 같은 라이브러리 버전의 구현체와 엔진을 함께 검증·게시합니다. PR에서는 원격 게시하지 않으며 로컬 `--destination` 게시 검증 및 GitHub Packages 게시에서는 Portal API를 호출하지 않습니다. 루트 Gradle의 개별 publication 게시 명령은 업로드만 수행합니다. 전체 검증 파일을 모은 `verification/publish.py`가 CI의 최종 공개 경로입니다.
 
 `python3 -m unittest discover -s verification -p test_publish.py`는 공개 성공·실패·시간 초과, 현재 deployment 식별, Snapshot/로컬/GitHub Packages의 분기와 업로드 실패 시 미공개를 원격 요청 없이 검사합니다. 실제 원격 게시 성공은 CI 검증 및 설정 검증과 별도로 확인해야 합니다.
+
+
+## Gradle 도구 준비
+
+`prepareNativeBuildTools`는 CMake·Ninja·vcpkg를, `prepareWebBuildTools`는 Emscripten까지 준비합니다.
+`buildEngine*` Gradle task에도 연결되어 있습니다. 기본 경로는 루트의 `.gradle/cmake`,
+`.gradle/ninja`, `.gradle/vcpkg`, `.gradle/emsdk`이며 도구별로 변경할 수 있습니다.
+기존 설치는 `localDirectory`로 명시하면 버전 검증 후 수정 없이 사용합니다.
+설정·오프라인 동작·호스트 지원 범위는 [도구 준비 문서](../docs/build-tools.md)를 참고하세요.
+
+Linux x64/ARM64 및 Windows MinGW 엔진 task는 엔진에 의존하지 않는 `gdal4k` API 모듈의
+대응 Native 컴파일을 먼저 실행합니다. Kotlin/Native 컴파일러와 타깃 의존성은 KGP가 준비하므로
+첫 빌드 전에 별도의 초기화 명령을 실행할 필요가 없습니다. Kotlin/Native 저장소를 바꾸는
+`konan.data.dir` 설정도 producer에 전달합니다.
+
+vcpkg는 소스 revision과 실행 파일 release를 각각 고정하고, Gradle이 호스트별 실행 파일을
+SHA-256으로 검증해 직접 설치합니다. bootstrap 스크립트나 Git Bash 설치는 필요하지 않습니다.
+Gradle이 전달하는 빌드 환경에서는 POSIX 압축 명령도 관리 CMake/Python으로 처리합니다.
+Linux의 libcurl 런타임, OS SDK 및 vcpkg 호스트 도구 컴파일러 요구사항은
+[개발자 준비물](../docs/build-tools.md#developer-prerequisites)을 참고하세요.
