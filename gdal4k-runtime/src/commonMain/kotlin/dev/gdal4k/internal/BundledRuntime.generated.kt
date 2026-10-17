@@ -324,6 +324,10 @@ internal class BundledGCP(engine: RuntimeEngine, id: String, parent: RuntimeHand
 }
 
 internal class BundledLayer(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), Layer {
+    override suspend fun deleteField(index: Int): Int { val result = invoke("Layer", "deleteField_Int", mapOf("index" to encode(index))); return result.jsonPrimitive.int }
+    override suspend fun reorderFields(newToOld: IntArray): Int { val result = invoke("Layer", "reorderFields_IntArray", mapOf("newToOld" to encode(newToOld))); return result.jsonPrimitive.int }
+    override suspend fun reorderField(oldIndex: Int, newIndex: Int): Int { val result = invoke("Layer", "reorderField_Int_Int", mapOf("oldIndex" to encode(oldIndex), "newIndex" to encode(newIndex))); return result.jsonPrimitive.int }
+    override suspend fun alterFieldDefn(index: Int, definition: FieldDefn, flags: Int): Int { val result = invoke("Layer", "alterFieldDefn_Int_FieldDefn_Int", mapOf("index" to encode(index), "definition" to handle(definition), "flags" to encode(flags))); return result.jsonPrimitive.int }
     override suspend fun createField(field: FieldDefn, approximate: Boolean): Int { val result = invoke("Layer", "createField_FieldDefn_Boolean", mapOf("field" to handle(field), "approximate" to encode(approximate))); return result.jsonPrimitive.int }
     override suspend fun close() = closeHandle()
     override suspend fun getDataset(): Dataset? { val result = invoke("Layer", "getDataset", mapOf()); return engine.wrapDataset(result, this) }
@@ -439,6 +443,7 @@ internal class BundledFeatureDefn(engine: RuntimeEngine, id: String, parent: Run
 }
 
 internal class BundledFieldDefn(engine: RuntimeEngine, id: String, parent: RuntimeHandle?) : RuntimeHandle(engine, id, parent), FieldDefn {
+    override suspend fun cloneFieldDefn(): FieldDefn { val result = invoke("FieldDefn", "cloneFieldDefn", mapOf()); return requireNotNull(engine.wrapFieldDefn(result, null)) }
     override suspend fun close() = closeHandle()
     override suspend fun getName(): String { val result = invoke("FieldDefn", "getName", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }
     override suspend fun getNameRef(): String { val result = invoke("FieldDefn", "getNameRef", mapOf()); return result.jsonPrimitive.contentOrNull.orEmpty() }

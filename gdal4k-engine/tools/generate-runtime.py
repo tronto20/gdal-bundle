@@ -78,6 +78,11 @@ for m in ['cloneGeometry','centroid','pointOnSurface','boundary','convexHull','b
 SPECIAL={}
 def special(cls,name,body):SPECIAL[(cls,name)]=body
 
+OWNED.add(('FieldDefn','cloneFieldDefn'))
+special('FieldDefn','cloneFieldDefn','auto original=OGRFieldDefn::FromHandle(h);auto copy=new OGRFieldDefn(original);copy->SetIgnored(original->IsIgnored());return r.result(OGRFieldDefn::ToHandle(copy),"FieldDefn",true);')
+for method in ['createField','deleteField','reorderFields','reorderField','alterFieldDefn']:
+    special('Layer',method,f'return changeLayerFields(r,h,a,"{method}");')
+
 special('GdalRuntime','writeMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");auto slash=path.find_last_of(char(47));VSIMkdirRecursive(path.substr(0,slash).c_str(),0700);auto f=VSIFOpenL(path.c_str(),"wb");require(f!=nullptr,"Cannot create memory file");auto input=a.GetArray("bytes");std::vector<GByte> data;for(auto v:input)data.push_back(static_cast<GByte>(v.ToInteger()));auto written=VSIFWriteL(data.data(),1,data.size(),f);auto code=VSIFCloseL(f);require(written==data.size()&&code==0,"Cannot write memory file");return nullValue();')
 special('GdalRuntime','readMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");vsi_l_offset size=0;auto p=VSIGetMemFileBuffer(path.c_str(),&size,false);require(p!=nullptr,"Memory file does not exist");return numbers(p,size);')
 special('GdalRuntime','deleteMemoryFile','auto path=a["path"].ToString();require(path.rfind("/vsimem/",0)==0,"Memory file path must start with /vsimem/");VSIStatBufL info;if(VSIStatL(path.c_str(),&info)==0){auto code=VSI_ISDIR(info.st_mode)?VSIRmdirRecursive(path.c_str()):VSIUnlink(path.c_str());require(code==0,"Cannot remove memory file");}return nullValue();')
