@@ -54,6 +54,14 @@ jobs:
             optional-${{ matrix.profile }}-${{ matrix.target }}-${{ hashFiles('gdal4k-engine/ports/**', 'gdal4k-engine/engine/**', 'gdal4k-engine/tools/toolchains.py') }}-
             optional-${{ matrix.profile }}-${{ matrix.target }}-
             engine-${{ matrix.native }}-
+      - name: Modern Bison for macOS Parquet Thrift parser
+        if: matrix.profile == 'parquet' && runner.os == 'macOS'
+        run: |
+          brew install bison
+          bison_bin="$(brew --prefix bison)/bin"
+          "$bison_bin/bison" --version
+          "$bison_bin/bison" --help | rg -- '--file-prefix-map'
+          echo "$bison_bin" >> "$GITHUB_PATH"
       - name: Default engine size baseline
         run: python verification/ci.py '${{ matrix.native }}' --build-engine-only
       - name: Isolated profile source, Native and published JVM consumers

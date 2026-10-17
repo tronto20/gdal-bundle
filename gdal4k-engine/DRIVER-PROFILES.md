@@ -34,3 +34,5 @@ Only the target JVM classifier and Native variants tested in that archive are pr
 The producer copies Git-tracked source files only and rejects source symlinks. Commit or stage newly added producer files before preparing a snapshot. It verifies copied source hashes before reusing a prepared snapshot. Failed or changed snapshots are never silently overwritten. Remove only the owned generated directory when intentionally rebuilding it. Shared vcpkg download/binary caches may be explicitly configured, but installations remain isolated.
 
 Upstream driver requirements: [HDF5](https://gdal.org/en/stable/drivers/raster/hdf5.html), [netCDF](https://gdal.org/en/stable/drivers/raster/netcdf.html), [Parquet](https://gdal.org/en/stable/drivers/vector/parquet.html), [PostgreSQL](https://gdal.org/en/stable/drivers/vector/pg.html).
+
+The Parquet dependency Thrift0.25 generates its parser with Bison's `--file-prefix-map` option. macOS's system Bison2.3 is too old. CI provisions Homebrew Bison and places its bin directory first; local macOS profile builds need a modern Bison on PATH. This host tool is not included in the engine payload.

@@ -10,3 +10,39 @@ diff --git a/include/mimalloc/internal.h b/include/mimalloc/internal.h
  }
  
  
+diff --git a/src/libc.c b/src/libc.c
+--- a/src/libc.c
++++ b/src/libc.c
+@@ -135,7 +135,7 @@
+ 
+ void _mi_atomic_once_release(mi_atomic_once_t* once) {
+   if (mi_atomic_load_acquire(&once->tid)>1) {  // paranoia
+-    mi_atomic_store_release(&once->tid,1);     // done executing
++    mi_atomic_store_release(&once->tid,(uintptr_t)1);     // done executing
+     mi_lock_release(&once->lock);
+   }
+ }
+diff --git a/src/theap.c b/src/theap.c
+--- a/src/theap.c
++++ b/src/theap.c
+@@ -208,7 +208,7 @@
+   _mi_memcpy_aligned(theap, &_mi_theap_empty, sizeof(mi_theap_t));
+   theap->memid = memid;
+   theap->tld   = tld;  // avoid reading the thread-local tld during initialization
+-  mi_atomic_store_release(&theap->refcount,1);  
++  mi_atomic_store_release(&theap->refcount,(size_t)1);  
+   mi_atomic_store_ptr_release(mi_subproc_t,&theap->subproc,heap->subproc);
+   mi_assert_internal(theap->stats.size == sizeof(mi_stats_t));
+   mi_theap_options_init(theap);
+diff --git a/src/prim/unix/prim.c b/src/prim/unix/prim.c
+--- a/src/prim/unix/prim.c
++++ b/src/prim/unix/prim.c
+@@ -438,7 +438,7 @@
+         p = unix_mmap_prim_aligned(addr, size, try_alignment, protect_flags, lflags, lfd);
+         #ifdef MAP_HUGE_1GB
+         if (p == NULL && (lflags & MAP_HUGE_1GB) == MAP_HUGE_1GB) {
+-          mi_atomic_store_relaxed(&mi_huge_1gib_pages_unavailable,1); // don't try huge 1GiB pages again
++          mi_atomic_store_relaxed(&mi_huge_1gib_pages_unavailable,(size_t)1); // don't try huge 1GiB pages again
+           if (large_only) {
+             _mi_warning_message("unable to allocate huge (1GiB) page, trying large (2MiB) pages instead (errno: %i)\n", errno);
+           }

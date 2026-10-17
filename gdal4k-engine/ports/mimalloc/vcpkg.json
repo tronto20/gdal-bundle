@@ -24,5 +24,5 @@
       "description": "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)"
     }
   },
-  "port-version": 1
+  "port-version": 2
 }
