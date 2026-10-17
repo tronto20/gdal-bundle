@@ -120,7 +120,7 @@ Band와 수명이 분리된 복사본을 반환하므로 변경을 반영하려�
 and returns an independent `GdalFiles` result. `demProcessingTo(path, processing,
 driver, arguments)` writes directly to an OS/Node file or a browser `opfs:/` path.
 Supported modes are `hillshade`, `slope`, `aspect`, `TRI`, `TPI` and `roughness`
-(case insensitive). Both APIs require a concrete output format; MEM/VRT,
+(case insensitive). Both APIs require a concrete output format; MEM/VRT/stream,
 color-relief palette input and progress callbacks are not exposed in this API.
 
 ```kotlin

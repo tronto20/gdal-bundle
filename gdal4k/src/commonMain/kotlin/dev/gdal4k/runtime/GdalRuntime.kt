@@ -75,7 +75,7 @@ interface Dataset {
      * GDAL controls NoData, edge handling and CRS/band-unit scaling; scale/offset are
      * not applied by this wrapper. Use explicit scaling when units are ambiguous.
      * Returns independent output files after processing and closing the output dataset.
-     * Only concrete file formats are supported; MEM/VRT and color-relief are excluded.
+     * Only concrete file formats are supported; MEM/VRT/stream and color-relief are excluded.
      * The source remains caller-owned. Progress callbacks are not exposed.
      */
     suspend fun demProcessing(processing: String, driver: String = "GTiff", name: String = "terrain.tif", arguments: List<String> = emptyList()): GdalFiles

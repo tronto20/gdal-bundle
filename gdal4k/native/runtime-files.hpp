@@ -141,7 +141,7 @@ inline void demProcessingPath(GDALDatasetH source, const CPLJSONObject& args, co
         if (EQUAL(processing.c_str(), candidate)) mode = candidate;
     require(mode != nullptr && processing.find('\0') == std::string::npos, "Unsupported DEM processing mode");
     auto driver = args.GetString("driver");
-    require(!driver.empty() && !EQUAL(driver.c_str(), "MEM") && !EQUAL(driver.c_str(), "VRT"), "DEM processing requires a concrete output file format");
+    require(!driver.empty() && !EQUAL(driver.c_str(), "MEM") && !EQUAL(driver.c_str(), "VRT") && !EQUAL(driver.c_str(), "stream"), "DEM processing requires a concrete output file format");
     FileOptions options(CPLJSONArray{});
     // Parsing with the actual mode rejects options meant for a different algorithm.
     options.add(mode);

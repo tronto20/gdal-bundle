@@ -90,7 +90,7 @@ class DemProcessingApiTest {
     @Test fun validationFailuresPreserveSource() = runTest(timeout = 120.seconds) {
         source { ds ->
             for (mode in listOf("", "missing", "color-relief", "slope\u0000")) assertFails { ds.demProcessing(mode) }
-            for (driver in listOf("", "MEM", "vrt", "missing_driver")) assertFails { ds.demProcessing("slope", driver) }
+            for (driver in listOf("", "MEM", "vrt", "stream", "missing_driver")) assertFails { ds.demProcessing("slope", driver) }
             for (args in listOf(listOf("-b", "0"), listOf("-b", "3"), listOf("-not-an-option"), listOf("-az", "5"), listOf("-co", "X=\u0000")))
                 assertFails { ds.demProcessing("slope", arguments = args) }
             assertFails { ds.demProcessingTo("", "slope") }
