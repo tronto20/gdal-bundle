@@ -36,14 +36,14 @@ else()
     file(WRITE "${GDAL4K_RESOURCE_CPP}" "void gdal4k_install_resources() {}\nconst char* gdal4k_data_directory() { return \"\"; }\nconst char* gdal4k_license_notices() { return \"Developer runtime\"; }\n")
 endif()
 if(EMSCRIPTEN)
-    add_executable(gdal4k gdal4k.cpp "${GDAL4K_RESOURCE_CPP}")
+    add_executable(gdal4k gdal4k.cpp web-inputs.cpp "${GDAL4K_RESOURCE_CPP}")
     set_target_properties(gdal4k PROPERTIES SUFFIX ".mjs")
     target_compile_options(gdal4k PRIVATE -fexceptions)
     target_link_options(gdal4k PRIVATE
         -fexceptions --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
-        -sEXPORT_NAME=createGdal4kModule -sSINGLE_FILE=1 -sENVIRONMENT=web,worker
+        -sEXPORT_NAME=createGdal4kModule -sENVIRONMENT=web,worker
         -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=67108864 -sMAXIMUM_MEMORY=2147483648
-        -sSTACK_SIZE=1048576 -sFILESYSTEM=1
+        -sSTACK_SIZE=1048576 -sFILESYSTEM=1 -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=65536
         "-sEXPORTED_FUNCTIONS=['_gdal4k_create','_gdal4k_execute','_gdal4k_free','_gdal4k_destroy','_malloc','_free']"
         "-sEXPORTED_RUNTIME_METHODS=['ccall','UTF8ToString']")
 else()

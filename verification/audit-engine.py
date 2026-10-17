@@ -15,22 +15,10 @@ platform=a.platform
 base=ROOT/'gdal4k-binary/build'
 dependencies=[]
 if platform=='web':
-    engine=base/'engine/web/gdal4k.mjs'
-    # Emscripten SINGLE_FILE stores Wasm in a JS byte string. Capture the exact bytes
-    # used by the factory, then validate with GC, atomics, SIMD and EH disabled.
+    wasm=base/'engine/web/gdal4k.wasm'
+    if not wasm.is_file() or wasm.read_bytes()[:4] != b'\0asm':raise RuntimeError('Missing separate WebAssembly asset')
+    opt=Path(os.environ['EMSDK'])/'upstream/bin'/('wasm-opt.exe' if os.name=='nt' else 'wasm-opt')
     with tempfile.TemporaryDirectory(prefix='gdal4k-wasm-audit-') as temp:
-        wasm=Path(temp)/'engine.wasm'
-        script='''import {readFile,writeFile} from 'node:fs/promises';
-const source=await readFile(process.argv[1],'utf8');
-const needle='function findWasmBinary(){return binaryDecode(';
-if(!source.includes(needle)) throw new Error('Unsupported Emscripten single-file layout');
-const instrumented=source.replace(needle,'function findWasmBinary(){return globalThis.__gdal4kAuditWasm=binaryDecode(');
-const factory=(await import('data:text/javascript;base64,'+Buffer.from(instrumented).toString('base64'))).default;
-await factory();
-await writeFile(process.argv[2],globalThis.__gdal4kAuditWasm);
-'''
-        subprocess.run(['node','--input-type=module','-e',script,str(engine),str(wasm)],check=True)
-        opt=Path(os.environ['EMSDK'])/'upstream/bin'/('wasm-opt.exe' if os.name=='nt' else 'wasm-opt')
         subprocess.run([str(opt),str(wasm),'--enable-bulk-memory','--enable-sign-ext','--enable-mutable-globals','--enable-nontrapping-float-to-int','--disable-gc','--disable-threads','--disable-simd','--disable-exception-handling','--print-features','-o',str(Path(temp)/'validated.wasm')],check=True)
     dependencies=['ordinary Wasm; GC/threads/SIMD/EH disabled during validation']
 elif platform.startswith(('macos','ios')):

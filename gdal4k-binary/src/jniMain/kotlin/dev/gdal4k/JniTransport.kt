@@ -25,7 +25,7 @@ internal actual suspend fun createTransport(options: GdalOptions): GdalTransport
         @Synchronized private fun closeNow() {
             if (!closed) { bridge.destroy(handle); closed = true }
         }
-        override suspend fun call(request: String): String = withContext(Dispatchers.IO + NonCancellable) { callNow(request) }
+        override suspend fun call(request: String, attachment: Any?): String = withContext(Dispatchers.IO + NonCancellable) { require(attachment == null) { "Browser files require JS/wasmJs" }; callNow(request) }
         override suspend fun close() = withContext(Dispatchers.IO + NonCancellable) { closeNow() }
     }
 }

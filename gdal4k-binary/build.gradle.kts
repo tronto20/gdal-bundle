@@ -19,7 +19,7 @@ fun engineTask(target: String) = tasks.register<Exec>("buildEngine" + target.spl
     inputs.files(fileTree("ports") { exclude("**/__pycache__/**") })
     inputs.dir("engine")
     inputs.files(fileTree("tools") { include("*.py") })
-    inputs.dir("web/vendor")
+    inputs.dir("web")
     inputs.dir(rootProject.file("gdal4k/native"))
     outputs.file(layout.buildDirectory.file("engine/$target/manifest.json"))
     if (target == "web") outputs.dir(layout.buildDirectory.dir("generated/web"))
@@ -53,9 +53,7 @@ kotlin {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
         }
         androidMain.dependencies { api(project(":gdal4k-android-runtime")) }
-        for (target in listOf("js", "wasmJs")) {
-            getByName("${target}Main").kotlin.srcDir(engineTasks.getValue("web").map { layout.buildDirectory.dir("generated/web/kotlin") })
-        }
+        getByName("webMain").dependencies { api("org.jetbrains.kotlinx:kotlinx-browser:0.5.0") }
     }
     targets.withType<KotlinNativeTarget>().configureEach {
         val targetName = name
@@ -109,3 +107,26 @@ afterEvaluate {
 // Android's compatibility AAR carries JNI payloads; data is embedded in GDAL and PROJ themselves.
 
 tasks.withType<JavaCompile>().configureEach { options.release.set(17) }
+
+// Carry the actual JS/Wasm files in Maven, rather than Kotlin string constants.
+// KGP extracts package.json + .mjs/.wasm files as a local npm package for consumers.
+for (target in listOf("js", "wasmJs")) {
+    tasks.named<Jar>("${target}Jar") {
+        dependsOn(engineTasks.getValue("web"))
+        from(layout.buildDirectory.dir("generated/web/assets"))
+    }
+}
+for (target in listOf("js", "wasmJs")) {
+    tasks.named("${target}PackageJson") {
+        dependsOn(engineTasks.getValue("web"))
+        inputs.dir(layout.buildDirectory.dir("generated/web/assets"))
+        doLast {
+            val jsonFile = outputs.files.singleFile
+            val json = groovy.json.JsonSlurper().parse(jsonFile) as MutableMap<String, Any?>
+            json["name"] = "@gdal4k/web-engine"
+            json["main"] = "index.mjs"
+            jsonFile.writeText(groovy.json.JsonOutput.toJson(json))
+            copy { from(layout.buildDirectory.dir("generated/web/assets")) { exclude("package.json") }; into(jsonFile.parentFile) }
+        }
+    }
+}

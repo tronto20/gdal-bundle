@@ -139,6 +139,7 @@ jobs:
           path: |
             gdal4k/build/test-results/
             verification/results/published-consumer-*/
+            verification/results/web-inputs-*/
             verification/tools/vcpkg/buildtrees/*/*.log
 
   android:

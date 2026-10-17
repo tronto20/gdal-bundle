@@ -48,3 +48,9 @@ val testBinary = when {
 dependencies {
     add("jvmTestRuntimeOnly", project(mapOf("path" to ":gdal4k-jvm-binaries", "configuration" to "${testBinary}RuntimeElements")))
 }
+
+// The runtime assets are outside Kotlin IR, so changes must invalidate web tests too.
+tasks.matching { it.name in setOf("jsNodeTest", "jsBrowserTest", "wasmJsNodeTest", "wasmJsBrowserTest") }.configureEach {
+    dependsOn(":gdal4k-binary:buildEngineWeb")
+    inputs.dir(rootProject.project(":gdal4k-binary").layout.buildDirectory.dir("generated/web/assets"))
+}

@@ -82,6 +82,7 @@ def main():
         run(sys.executable, ROOT/'verification/audit-engine.py', 'web')
         for t in ['js','wasmJs']:
             publish(t);consumer(t);consumer(t,'--browser')
+            run(sys.executable, ROOT/'verification/web-inputs.py', '--repo', REPO, '--target', t)
         stage('web',['web'],['js','wasmJs'])
     elif target.startswith('android-'):
         run(sys.executable,ROOT/'gdal4k-binary/tools/build-engine.py',target)

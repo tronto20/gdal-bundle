@@ -143,14 +143,26 @@ val recordJvmRuntime = tasks.register("recordJvmRuntime") {
     val runtimeFiles = configurations.named("jvmTestRuntimeClasspath")
     inputs.files(runtimeFiles)
     val destination = layout.buildDirectory.file("jvm-runtime-files.txt")
-    outputs.file(destination)
-    doLast { destination.get().asFile.apply { parentFile.mkdirs(); writeText(runtimeFiles.get().files.joinToString("\\n") { it.name }) } }
+    val coordinates = layout.buildDirectory.file("jvm-runtime-coordinates.txt")
+    outputs.files(destination, coordinates)
+    doLast {
+        destination.get().asFile.apply { parentFile.mkdirs(); writeText(runtimeFiles.get().files.joinToString("\\n") { it.name }) }
+        val modules = runtimeFiles.get().incoming.artifacts.artifacts.mapNotNull {
+            (it.id.componentIdentifier as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)?.let { id -> "${id.group}:${id.module}:${id.version}" }
+        }.distinct()
+        coordinates.get().asFile.writeText(modules.joinToString("\\n"))
+    }
 }
 tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
 '''
  (consumer/'build.gradle.kts').write_text(build)
  (consumer/'gradle.properties').write_text('org.gradle.jvmargs=-Xmx2g\nandroid.useAndroidX=true\n')
  path=consumer/'src/commonTest/kotlin/consumer/PublishedConsumerTest.kt';path.parent.mkdir(parents=True);path.write_text(source)
+ if a.browser and target in ['js','wasmJs']:
+  browser_source = (ROOT/f'gdal4k/src/{target}Test/kotlin/dev/gdal4k/BrowserFileTest.kt').read_text()
+  browser_source = browser_source.replace('package dev.gdal4k\n', 'package consumer\nimport dev.gdal4k.Gdal4k\n')
+  browser_test = consumer/f'src/{target}Test/kotlin/consumer/BrowserFileTest.kt'
+  browser_test.parent.mkdir(parents=True,exist_ok=True);browser_test.write_text(browser_source)
  config=consumer/'karma.config.d/timeout.js';config.parent.mkdir();config.write_text('config.browserNoActivityTimeout=240000; config.client.mocha={...config.client.mocha,timeout:180000};\n')
  if target=='android' and (ROOT/'local.properties').exists():shutil.copy2(ROOT/'local.properties',consumer/'local.properties')
  # The native consumer must link the archive stored inside its published KLIB.
@@ -165,17 +177,21 @@ tasks.named("jvmTest") { dependsOn(recordJvmRuntime) }
      original.rename(moved);hidden.append((original,moved))
   run([gradle,'-p',consumer,'--console=plain','--refresh-dependencies',task],cwd=consumer)
   runtime_files = []
+  runtime_coordinates = []
   if target=='jvm':
    runtime_files = (consumer/'build/jvm-runtime-files.txt').read_text().splitlines()
-   available_payloads = {f'gdal4k-binary-{b}-{VERSION}.jar' for b in JVM_BINARIES}
-   expected_payloads = {f'gdal4k-binary-{b}-{VERSION}.jar' for b in binaries}
-   actual_payloads = set(runtime_files) & available_payloads
+   runtime_coordinates = (consumer/'build/jvm-runtime-coordinates.txt').read_text().splitlines()
+   # File names become timestamped after Maven snapshot deployment. Compare resolved
+   # component identities so the detached publisher roundtrip is checked correctly.
+   available_payloads = {'gdal4k-binary-'+b for b in JVM_BINARIES}
+   expected_payloads = {'gdal4k-binary-'+b for b in binaries}
+   actual_payloads = {coordinate.split(':')[1] for coordinate in runtime_coordinates if coordinate.startswith('dev.tronto.gdal4k:')} & available_payloads
    if actual_payloads != expected_payloads: raise RuntimeError(f'Unexpected JVM payload dependencies: {actual_payloads}; expected {expected_payloads}')
   case = '-missing' if a.expect_missing_jvm_binary and not binaries else '-wrong' if a.expect_missing_jvm_binary else '-multiple' if len(binaries)>1 else ''
   destination=ROOT/'verification/results'/('published-consumer-'+target+('-browser' if a.browser else '')+case)
   destination.mkdir(parents=True,exist_ok=True)
   for folder in ['build/test-results','build/outputs/androidTest-results','build/bin']:
    if (consumer/folder).exists():shutil.copytree(consumer/folder,destination/Path(folder).name,dirs_exist_ok=True)
-  (destination/'result.json').write_text(json.dumps({'target':target,'version':VERSION,'browser':a.browser,'compiled_only':a.compile_only,'producer_paths_hidden':bool(hidden),'jvm_binaries':binaries,'runtime_files':runtime_files,'expected_missing_binary':a.expect_missing_jvm_binary,'result':'passed'},indent=2)+'\n')
+  (destination/'result.json').write_text(json.dumps({'target':target,'version':VERSION,'browser':a.browser,'compiled_only':a.compile_only,'producer_paths_hidden':bool(hidden),'jvm_binaries':binaries,'runtime_files':runtime_files,'runtime_coordinates':runtime_coordinates,'expected_missing_binary':a.expect_missing_jvm_binary,'result':'passed'},indent=2)+'\n')
  finally:
   for original,moved in reversed(hidden):moved.rename(original)
