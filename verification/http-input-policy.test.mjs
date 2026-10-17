@@ -76,6 +76,25 @@ test('changed ETag poisons later reads, including cached-read checks', async () 
     }, ({records, send}) => { send({ETag: records.length === 1 ? '"one"' : '"two"'}); return true; });
 });
 
+test('If-Range full200 response poisons the existing provider without full-download fallback', async () => {
+    await fixture(async url => {
+        const source = await httpSource(url);
+        await assert.rejects(source.read(2, 3), /identity\/size changed/); assert.throws(source.check, /identity\/size changed/); source.close();
+    }, ({records, response, send}) => {
+        if (records.length === 1) send(); else { response.writeHead(200); response.end(bytes); }
+        return true;
+    });
+});
+
+test('operation cancellation does not close the caller-owned source for its next operation', async () => {
+    await fixture(async url => {
+        let operation = new AbortController(); const source = await httpSource(url, {}, () => operation.signal);
+        operation.abort(new Error('first operation cancelled'));
+        await assert.rejects(source.read(2, 3), /first operation cancelled/);
+        operation = new AbortController(); assert.deepEqual(await source.read(2, 3), Uint8Array.from(bytes.subarray(2, 4))); source.close();
+    });
+});
+
 test('Last-Modified fallback is explicit and strong requirement rejects weak validators', async () => {
     const modified = 'Wed, 21 Oct 2015 07:28:00 GMT';
     await fixture(async (url, records) => {

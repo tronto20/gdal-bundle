@@ -84,6 +84,7 @@ export async function httpSource(url, options = {}, currentSignal = () => null) 
                 response = await fetch(url, {headers, credentials: 'same-origin', signal: control.signal});
                 if (response.status === 404) throw new MissingInput('Input file was not found');
                 if ([408, 425, 429, 500, 502, 503, 504].includes(response.status)) throw new RetryableStatus(response.status, response.headers.get('Retry-After'));
+                if (expectedSize !== undefined && [200, 412, 416].includes(response.status)) throw new InputChanged('HTTP input identity/size changed or its range contract stopped being honored');
                 if (response.status !== 206) throw new HttpProtocolError(`HTTP input requires206 byte-range responses (received ${response.status}); full-download fallback is disabled`);
                 const total = contentRange(response.headers.get('Content-Range'), start, end, expectedSize);
                 const encoding = response.headers.get('Content-Encoding');
