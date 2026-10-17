@@ -91,3 +91,48 @@ suspend fun describe(bytes: ByteArray): String {
 바이트 입력도 `runtime.openDataset("input.tif", bytes)`로 열고 기존 `Dataset`을 사용합니다. `translate`·`warp`·`translateVector`는 이 데이터셋의 메서드입니다.
 
 [API·비동기 실행·지원 범위](gdal4k-runtime/README.md), [빌드·게시 산출물](gdal4k-engine/README.md), [별도 JVM 소비 앱](sample-cli/README.md)을 참고하세요. `verification`의 초기 접속성 probe는 과거 진단용이며, 제품 검증은 실제 라이브러리의 `commonTest`와 `verification/consumer.py`를 사용합니다.
+
+### 여러 입력의 VRT·Warp
+
+```kotlin
+runtime.buildVRT(listOf(left, right)).use { mosaic ->
+    mosaic.translateTo("mosaic.tif", driver = "COG")
+}
+runtime.warpTo(listOf(left, right), "projected.tif", target = "EPSG:3857")
+val files = runtime.warp(listOf(left, right), target = "EPSG:3857")
+```
+
+`buildVRT`는 픽셀을 복사하지 않는 live Dataset을 반환합니다. 입력 핸들을 먼저 닫아도
+VRT가 사용하는 네이티브 Dataset, 메모리 작업공간, Android URI descriptor·directory, 웹 File/HTTP/Node 입력 mount는 유지됩니다.
+마지막 의존 VRT를 닫으면 함께 해제됩니다. 원본 파일 자체를 외부에서 삭제하거나 변경하는
+동작까지 막지는 않습니다. 임시 원본 경로가 들어간 XML을 독립적인 결과물로 반환하지 않습니다.
+입력 불일치는 기본 `-strict`로 실패하며, GDAL의 입력 건너뛰기는 `-non_strict`를 명시해야 합니다.
+
+다중 입력 Warp는 목록 순서대로 처리하며 겹치는 곳은 뒤 입력의 유효 픽셀이 우선합니다.
+NoData/마스크·해상도·extent·리샘플링은 GDAL 옵션을 `arguments`로 전달합니다. `warp`는
+결과 파일을 메모리에 반환하고 `warpTo`는 경로에 직접 기록합니다. 큰 결과는 `warpTo`를
+사용합니다. 웹의 직접 출력은 Node 파일 경로 또는 브라우저 `opfs:/`를 사용합니다.
+이 두 Warp API는 실제 파일 형식에 기록하며 VRT/MEM 출력은 지원하지 않습니다.
+실패·취소 후 부분 출력 파일은 호출자가 정리합니다. 기존 단일 Dataset 변환 API는 유지됩니다.
+
+### Band 색상표·RAT·블록 접근
+
+`runtime.createColorTable()`은 수정 가능한 색상표를 만듭니다. `band.getColorTable()`은
+Band와 수명이 분리된 복사본을 반환하므로 변경을 반영하려면 `band.setColorTable(table)`을
+호출합니다. `use` 또는 `close()`로 소유한 색상표를 해제합니다.
+
+`runtime.createRasterAttributeTable()`은 Integer/Real/String 열을 가진 RAT를 만듭니다.
+`readIntegerValues(column, startRow, count)` 등의 열 구간 API는 요청한 행만 읽습니다.
+`band.getDefaultRAT()`은 전체 표를 복사하지 않는 참조입니다. Band/Dataset이 닫히거나
+`setDefaultRAT`으로 표를 교체하면 기존 참조는 무효화됩니다. 독립 사본은 `cloneTable()`로
+명시적으로 만듭니다. 변경의 파일 반영 여부는 `changesAreWrittenToFile()`과 드라이버 정책을
+따르며, 자동 반영되지 않는 표는 `setDefaultRAT`으로 다시 연결합니다. Boolean/DateTime/WKB의
+전용 RAT 접근은 아직 노출하지 않습니다. 값 읽기·쓰기는 열의 형식과 일치하는 메서드를
+사용하며 암시적인 문자열/숫자 변환을 하지 않습니다.
+
+`readBlock`/`writeBlock`은 변환 없는 **원래 픽셀 형식의 바이트**를 사용합니다. 버퍼는
+`getBlockSize()`의 폭 × 높이 × 픽셀 바이트 수를 담아야 하며 다중 바이트 값은 네이티브
+바이트 순서를 따릅니다. `getActualBlockSize`로 가장자리 유효 영역을 구할 수 있고,
+읽을 때 유효 영역 밖 패딩은 0으로 채웁니다. 큰 버퍼의 나머지는 보존합니다.
+타입 변환이나 리샘플링에는 기존 `readRaster`/`writeRaster`를 사용합니다. 직접 블록 접근
+전에 대기 중인 RasterIO 쓰기를 flush하며, 직접 쓰기는 기존 블록 캐시도 비웁니다.

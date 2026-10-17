@@ -8,7 +8,7 @@ engine target, so an API/version mismatch cannot become a published stub.
 from pathlib import Path
 import re
 ROOT = Path(__file__).resolve().parents[2]
-TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry','Group','MDArray','Dimension','FieldDomain','Relationship','Attribute']
+TYPES = ['GdalRuntime','Dataset','Driver','Band','SpatialReference','CoordinateTransformation','GCP','Layer','Feature','FeatureDefn','FieldDefn','GeomFieldDefn','Geometry','Group','MDArray','Dimension','FieldDomain','Relationship','Attribute','ColorTable','RasterAttributeTable']
 
 def methods(cls):
     text = '\n'.join(p.read_text() for p in (ROOT/'gdal4k/src/commonMain/kotlin/dev/gdal4k/runtime').glob('*.kt'))
@@ -47,6 +47,7 @@ def kt_result(typ,expr,parent):
     elif t=='List<DoubleArray>':out=f'{expr}.jsonArray.map {{ p -> p.jsonArray.map {{ it.jsonPrimitive.content.toDouble() }}.toDoubleArray() }}'
     elif t=='RasterStatistics':out=f'{expr}.jsonArray.let {{ RasterStatistics(it[0].jsonPrimitive.content.toDouble(), it[1].jsonPrimitive.content.toDouble(), it[2].jsonPrimitive.content.toDouble(), it[3].jsonPrimitive.content.toDouble()) }}'
     elif t=='RasterHistogram':out=f'{expr}.jsonObject.let {{ RasterHistogram(it.getValue("minimum").jsonPrimitive.content.toDouble(), it.getValue("maximum").jsonPrimitive.content.toDouble(), it.getValue("counts").jsonArray.map {{ n -> n.jsonPrimitive.content.toLong() }}.toLongArray()) }}'
+    elif t=='ColorEntry':out=f'{expr}.jsonArray.let {{ ColorEntry(it[0].jsonPrimitive.int, it[1].jsonPrimitive.int, it[2].jsonPrimitive.int, it[3].jsonPrimitive.int) }}'
     elif t=='MDDataType':out=f'decodeMDType({expr})'
     elif t=='FieldDomainBound':out=f'decodeDomainBound({expr})'
     elif t=='List<CodedFieldValue>':out=f'{expr}.jsonArray.map(::decodeCodedValue)'
@@ -92,6 +93,10 @@ special('GdalRuntime','createGCP','auto p=static_cast<GDAL_GCP*>(CPLCalloc(1,siz
 special('GdalRuntime','openDataset','if(a["files"].IsValid())return openMemoryDataset(r,a);auto opt=a["options"]; auto flags=GDAL_OF_VERBOSE_ERROR | (opt.GetBool("update")?GDAL_OF_UPDATE:GDAL_OF_READONLY) | opt.GetInteger("kind"); Strings list(opt.GetArray("options")); auto ds=GDALOpenEx(a["source"].ToString().c_str(),flags,nullptr,list.data(),nullptr);if(!ds) throw std::runtime_error(CPLGetLastErrorMsg());return r.result(ds,"Dataset",true);')
 special('GdalRuntime','datasetInfo','return value(datasetInfo(r.arg(a["dataset"]),a["options"].GetArray("arguments"),false));')
 special('GdalRuntime','drivers','return driverList();')
+OWNED.add(('GdalRuntime','buildVRT'))
+special('GdalRuntime','buildVRT','return buildVirtualDataset(r,a);')
+special('GdalRuntime','warp','return warpDatasets(r,a,false);')
+special('GdalRuntime','warpTo','return warpDatasets(r,a,true);')
 PARENT_OWNED={('Dataset','getRootGroup'),('Group','openGroup'),('Group','openArray'),('Group','createGroup'),('Group','createDimension'),('Group','createArray')}
 OWNED.update({('Driver','createMultidimensional'),('GdalRuntime','createGlobFieldDomain'),('GdalRuntime','createRelationship'),('Dataset','getFieldDomain'),('Dataset','getRelationship')})
 PREFIX.update({'Group':'GDALGroup','Dimension':'GDALDimension','MDArray':'GDALMDArray','FieldDomain':'OGR_FldDomain_','Relationship':'GDALRelationship'})
@@ -175,6 +180,8 @@ special('Dataset','info','return value(datasetInfo(h,a.GetArray("arguments"),tru
 special('Dataset','translate','return convertDataset(h,a,"translate");')
 special('Dataset','warp','return convertDataset(h,a,"warp");')
 special('Dataset','translateVector','return convertDataset(h,a,"vector");')
+special('Dataset','rasterize','return rasterizeDataset(h,a,false);')
+special('Dataset','rasterizeTo','return rasterizeDataset(h,a,true);')
 special('Dataset','getDriverShortName','return value(GDALGetDriverShortName(GDALGetDatasetDriver(h)));')
 special('Dataset','getDriverLongName','return value(GDALGetDriverLongName(GDALGetDatasetDriver(h)));')
 special('Dataset','getGeoTransform','double out[6]; if(GDALGetGeoTransform(h,out)!=CE_None)return nullValue();return numbers(out,6);')
@@ -258,6 +265,32 @@ special('Geometry','removeGeometry','return value(OGR_G_RemoveGeometry(h,a.GetIn
 special('Geometry','intersectsExact','return value(OGR_G_Intersects(h,r.arg(a["other"]))!=0);')
 for name,fn in [('geodesicLength','OGR_G_GeodesicLength'),('geodesicArea','OGR_G_GeodesicArea')]:special('Geometry',name,f'return value({fn}(h));')
 
+# Band structures: owned palette snapshots, borrowed RAT windows, and native block bytes.
+PREFIX.update({'ColorTable':'GDAL','RasterAttributeTable':'GDALRAT'})
+OWNED.update({('GdalRuntime','createColorTable'),('GdalRuntime','createRasterAttributeTable'),('ColorTable','cloneColorTable'),('Band','getColorTable'),('RasterAttributeTable','cloneTable'),('RasterAttributeTable','translateToColorTable')})
+special('GdalRuntime','createColorTable','auto p=a.GetInteger("paletteInterpretation");require(p>=0&&p<=3,"Invalid palette interpretation");return r.result(GDALCreateColorTable(static_cast<GDALPaletteInterp>(p)),"ColorTable",true);')
+special('GdalRuntime','createRasterAttributeTable','return r.result(GDALCreateRasterAttributeTable(),"RasterAttributeTable",true);')
+special('Band','getColorTable','auto p=GDALGetRasterColorTable(h);return r.result(p?GDALCloneColorTable(p):nullptr,"ColorTable",true);')
+special('Band','setColorTable','return value(GDALSetRasterColorTable(h,a["table"].GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(a["table"])));')
+special('Band','getDefaultRAT','return r.result(GDALGetDefaultRAT(h),"RasterAttributeTable",false,id);')
+special('Band','setDefaultRAT','auto p=a["table"].GetType()==CPLJSONObject::Type::Null?nullptr:r.arg(a["table"]);auto copy=p?GDALRATClone(p):nullptr;require(!p||copy,"Cannot clone RAT");auto code=GDALSetDefaultRAT(h,copy);GDALDestroyRasterAttributeTable(copy);if(code==CE_None)r.invalidateChildren(h,"RasterAttributeTable");return value(code);')
+special('Band','getActualBlockSize','BandBlock b(h,a);int v[2]={b.validWidth,b.validHeight};return numbers(v,2);')
+special('Band','getSuggestedBlockAccessPattern','return value(GDALRasterBand::FromHandle(h)->GetSuggestedBlockAccessPattern());')
+for op in ['readBlock','writeBlock']:special('Band',op,'return bandBlock(h,a,'+str(op=='writeBlock').lower()+');')
+for op in ['getColorEntry','getColorEntryAsRGB','setColorEntry','createColorRamp']:special('ColorTable',op,'return colorTableOperation(h,a,"'+op+'");')
+special('RasterAttributeTable','cloneTable','return r.result(GDALRATClone(h),"RasterAttributeTable",true);')
+for op in ['getNameOfCol','getTypeOfCol','getUsageOfCol']:special('RasterAttributeTable',op,'auto c=a.GetInteger("column");ratColumn(h,c);return value(GDALRAT'+op[0].upper()+op[1:]+'(h,c));')
+for op in ['getValueAsInt','getValueAsDouble','getValueAsString','setValueAsInt','setValueAsDouble','setValueAsString']:special('RasterAttributeTable',op,'return ratScalar(h,a,"'+op+'");')
+for op in ['readIntegerValues','writeIntegerValues','readDoubleValues','writeDoubleValues','readStringValues','writeStringValues']:special('RasterAttributeTable',op,'return ratValues(h,a,"'+op+'");')
+special('RasterAttributeTable','setRowCount','auto n=a.GetInteger("count");require(n>=0,"Negative RAT row count");GDALRATSetRowCount(h,n);return nullValue();')
+special('RasterAttributeTable','createColumn','auto type=a.GetInteger("type"),usage=a.GetInteger("usage");require(type>=0&&type<=2&&usage>=0&&usage<=17,"Invalid RAT column type or usage");auto name=bandString(a["name"]);return value(GDALRATCreateColumn(h,name.c_str(),static_cast<GDALRATFieldType>(type),static_cast<GDALRATFieldUsage>(usage)));')
+special('RasterAttributeTable','getColOfUsage','auto u=a.GetInteger("usage");require(u>=0&&u<=17,"Invalid RAT usage");return value(GDALRATGetColOfUsage(h,static_cast<GDALRATFieldUsage>(u)));')
+special('RasterAttributeTable','getLinearBinning','double lo=0,step=0;if(!GDALRATGetLinearBinning(h,&lo,&step))return nullValue();return numbers({lo,step});')
+special('RasterAttributeTable','setLinearBinning','auto lo=CPLAtof(a["rowZeroMinimum"].ToString().c_str()),step=CPLAtof(a["binSize"].ToString().c_str());require(std::isfinite(lo)&&std::isfinite(step)&&step>0,"Invalid RAT binning");return value(GDALRATSetLinearBinning(h,lo,step));')
+special('RasterAttributeTable','getRowOfValue','auto v=CPLAtof(a["value"].ToString().c_str());require(std::isfinite(v),"RAT lookup value must be finite");double lo=0,step=0;if(GDALRATGetLinearBinning(h,&lo,&step)){require(std::isfinite(lo)&&std::isfinite(step)&&step>0,"Invalid RAT binning");auto bin=std::floor((v-lo)/step);if(!std::isfinite(bin)||bin<0||bin>=GDALRATGetRowCount(h))return value(-1);}return value(GDALRATGetRowOfValue(h,v));')
+special('RasterAttributeTable','setTableType','auto t=a.GetInteger("type");require(t==0||t==1,"Invalid RAT table type");return value(GDALRATSetTableType(h,static_cast<GDALRATTableType>(t)));')
+special('RasterAttributeTable','translateToColorTable','auto n=a.GetInteger("entryCount");require(n==-1||n>0,"Invalid color entry count");return r.result(GDALRATTranslateToColorTable(h,n),"ColorTable",true);')
+
 cpp=[];kt=['// Generated by tools/generate-runtime.py. Edit the mapping, not this file.','package dev.gdal4k.internal','','import dev.gdal4k.runtime.*','import dev.gdal4k.*','import kotlinx.serialization.json.*','']
 for cls in TYPES:
     base='RuntimeHandle(engine, id, parent)' if cls!='GdalRuntime' else 'RuntimeHandle(engine, "0", null)'
@@ -266,12 +299,12 @@ for cls in TYPES:
     for name,params,ret in methods(cls):
         sig=key(name,params);argstr=', '.join(f'{n}: {t}' for n,t in params)
         if name=='close':kt.append('    override suspend fun close() = closeHandle()');continue
-        payload=', '.join('"bufferSize" to encode(buffer.size)' if cls in ['Band','Dataset'] and name=='readRaster' and n=='buffer'
+        payload=', '.join('"bufferSize" to encode(buffer.size)' if cls in ['Band','Dataset'] and name in ['readRaster','readBlock'] and n=='buffer'
                          else '"'+n+'" to '+kt_arg(n,t) for n,t in params)
         call=f'invoke("{cls}", "{sig}", mapOf({payload}))'
-        if cls in ['Band','Dataset'] and name in ['readRaster','writeRaster']:
+        if cls in ['Band','Dataset'] and name in ['readRaster','writeRaster','readBlock','writeBlock']:
             typ=dict(params)['buffer'];cv={'ByteArray':'toInt().toByte','ShortArray':'toInt().toShort','IntArray':'toInt','LongArray':'toLong','FloatArray':'toFloat','DoubleArray':'toDouble'}[typ]
-            body=f'val result = {call}.jsonObject; '+('if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.'+cv+'() }; ' if name=='readRaster' else '')+'return result["code"]!!.jsonPrimitive.int'
+            body=f'val result = {call}.jsonObject; '+('if (result["code"]!!.jsonPrimitive.int == 0) result["buffer"]!!.jsonArray.forEachIndexed { i, v -> buffer[i] = v.jsonPrimitive.content.'+cv+'() }; ' if name in ['readRaster','readBlock'] else '')+'return result["code"]!!.jsonPrimitive.int'
         elif cls=='CoordinateTransformation' and name=='transformPoints':
             body=f'val result = {call}.jsonArray; result.forEachIndexed {{ i, p -> p.jsonArray.forEachIndexed {{ j, v -> points[i][j] = v.jsonPrimitive.content.toDouble() }} }}'
         elif cls=='CoordinateTransformation' and name=='transformBounds':
